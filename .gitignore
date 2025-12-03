@@ -6,6 +6,18 @@ projects/
 todos/
 shell-snapshots/
 statsig/
+history.jsonl
+file-history/
+
+# Debug and diagnostic files
+debug/
+debug*.txt
+statusline-debug.txt
+statusline-output.txt
+test-input.json
+
+# IDE integration
+ide/
 
 # Node modules
 node_modules/
@@ -26,3 +38,12 @@ settings.local.json
 
 # Project-specific indexes (generated per project)
 .claude/index/
+
+# Update check timestamp
+.last-plugin-update-check
+
+# Windows artifacts
+nul
+
+# Plans (runtime generated)
+plans/

@@ -1,20 +1,20 @@
 {
-  "description": "Injects methodology instructions at critical moments and checks for updates",
+  "description": "Injects methodology instructions at critical moments and checks for updates (Windows-compatible)",
   "hooks": {
     "SessionStart": [
       {
         "type": "command",
-        "command": "cat ${CLAUDE_PLUGIN_ROOT}/claude-hook.md"
+        "command": "powershell.exe -NoProfile -Command \"Get-Content \\\"$env:USERPROFILE\\.claude\\claude-hook.md\\\"\""
       },
       {
         "type": "command",
-        "command": "${CLAUDE_PLUGIN_ROOT}/hooks/check-config-updates.sh"
+        "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"$env:USERPROFILE\\.claude\\hooks\\check-config-updates.ps1\""
       }
     ],
     "PreCompact": [
       {
         "type": "command",
-        "command": "cat ${CLAUDE_PLUGIN_ROOT}/claude-hook.md"
+        "command": "powershell.exe -NoProfile -Command \"Get-Content \\\"$env:USERPROFILE\\.claude\\claude-hook.md\\\"\""
       }
     ]
   }
