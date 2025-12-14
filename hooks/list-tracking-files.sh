@@ -9,10 +9,11 @@ PROJECT_DIR="${CLAUDE_PROJECT_DIR:-.}"
 TRACKING_DIR="${PROJECT_DIR}/.claude"
 TRACKING_FILES=$(ls -1 "${TRACKING_DIR}"/todo-*.md 2>/dev/null)
 
+echo ""
+echo "## Persistent Tracking Files"
+echo ""
+
 if [ -n "$TRACKING_FILES" ]; then
-    echo ""
-    echo "## Persistent Tracking Files"
-    echo ""
     echo "The following tracking files exist in \`.claude/\` for this project."
     echo "Read relevant files when resuming work or after compaction:"
     echo ""
@@ -24,5 +25,12 @@ if [ -n "$TRACKING_FILES" ]; then
     echo "- \`todo-adr-NNN-*.md\` - ADR implementation tracking"
     echo "- \`todo-pr-NNN.md\` - PR work/review tracking"
     echo "- \`todo-issue-NNN.md\` - Issue resolution tracking"
+else
+    echo "No tracking files in \`.claude/\` for this project."
     echo ""
+    echo "If working on multi-session work (ADR implementation, complex PR, issue resolution):"
+    echo "- Create \`.claude/todo-adr-NNN-description.md\` to persist context"
+    echo "- TodoWrite is session-scoped; tracking files survive compaction with richer detail"
+    echo "- Before compaction, consider: should current TodoWrite items be preserved?"
 fi
+echo ""
