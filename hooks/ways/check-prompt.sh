@@ -1,5 +1,17 @@
 #!/bin/bash
 # Check user prompts for keywords from way frontmatter
+#
+# TRIGGER FLOW:
+# ┌──────────────────┐     ┌─────────────────┐     ┌──────────────┐
+# │ UserPromptSubmit │────▶│ scan_ways()     │────▶│ show-way.sh  │
+# │ (hook event)     │     │ for each *.md:  │     │ (idempotent) │
+# └──────────────────┘     │  if keywords    │     └──────────────┘
+#                          │  match prompt   │
+#                          └─────────────────┘
+#
+# Multiple ways can match a single prompt - each way's show-way.sh
+# is called, but markers prevent duplicate output within session.
+# Project-local ways are scanned first (and take precedence).
 
 INPUT=$(cat)
 PROMPT=$(echo "$INPUT" | jq -r '.prompt // empty' | tr '[:upper:]' '[:lower:]')

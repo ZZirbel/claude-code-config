@@ -1,6 +1,21 @@
 #!/bin/bash
 # Show a "way" once per session (strips frontmatter)
 # Usage: show-way.sh <way-name> <session-id>
+#
+# STATE MACHINE:
+# ┌─────────────────┬────────────────────────────────────┐
+# │ Marker State    │ Action                             │
+# ├─────────────────┼────────────────────────────────────┤
+# │ not exists      │ output way, create marker          │
+# │ exists          │ no-op (idempotent)                 │
+# └─────────────────┴────────────────────────────────────┘
+#
+# This script is called by multiple hooks (check-prompt.sh,
+# check-bash-post.sh, check-file-post.sh). It may be called
+# multiple times for the same way in a single event cycle.
+# The marker file ensures idempotency - first call wins.
+#
+# Marker: /tmp/.claude-way-{wayname}-{session_id}
 
 WAY="$1"
 SESSION_ID="$2"

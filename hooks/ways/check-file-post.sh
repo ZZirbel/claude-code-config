@@ -1,5 +1,16 @@
 #!/bin/bash
 # PostToolUse: Check file operations against way frontmatter
+#
+# TRIGGER FLOW:
+# ┌───────────────────────┐     ┌─────────────────┐     ┌──────────────┐
+# │ PostToolUse:Edit/Write│────▶│ scan_ways()     │────▶│ show-way.sh  │
+# │ (hook event)          │     │ for each *.md:  │     │ (idempotent) │
+# └───────────────────────┘     │  if files match │     └──────────────┘
+#                               └─────────────────┘
+#
+# Multiple ways can match a single file path - CONTEXT accumulates
+# all matching way outputs. Markers prevent duplicate content.
+# Output is returned as additionalContext JSON for Claude to see.
 
 INPUT=$(cat)
 FP=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
