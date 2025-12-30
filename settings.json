@@ -11,7 +11,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cat ${HOME}/.claude/hooks/ways/core.md"
+            "command": "${HOME}/.claude/hooks/ways/show-core.sh"
           },
           {
             "type": "command",
@@ -28,7 +28,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cat ${HOME}/.claude/hooks/ways/core.md"
+            "command": "${HOME}/.claude/hooks/ways/show-core.sh"
           }
         ]
       }
