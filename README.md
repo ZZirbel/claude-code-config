@@ -1,221 +1,134 @@
-# Claude Code Development Config
+# Claude Code Config
 
-ADR-driven workflow with specialized subagents, GitHub-first patterns, and hook-based instruction injection.
+Contextual guidance system for Claude Code. Injects relevant knowledge just-in-time based on what you're doing.
 
-## 🚀 Installation
+## What It Does
 
-### One-liner Install
+**Ways** are bite-sized guidance that load automatically when triggered:
+
+```
+You: "let's discuss the architecture"
+→ ADR way loads (architecture decision format, workflow)
+
+You: "there's a bug in the auth"
+→ Debugging way + Security way load
+
+Claude runs: git commit
+→ Commits way loads (conventional commit format)
+```
+
+19 built-in ways covering: ADR, API design, commits, config, debugging, dependencies, documentation, error handling, GitHub, migrations, patches, performance, quality, releases, security, subagents, testing, tracking, and meta-knowledge about ways themselves.
+
+## Quick Start
 
 ```bash
+# Install
 curl -fsSL https://raw.githubusercontent.com/aaronsb/claude-code-config/main/install.sh | bash
+
+# Restart Claude Code
+# That's it - ways are active
 ```
 
-Or with wget:
-```bash
-wget -qO- https://raw.githubusercontent.com/aaronsb/claude-code-config/main/install.sh | bash
+## How It Works
+
+1. **SessionStart** loads `core.md` - a compact index of all available ways
+2. **UserPromptSubmit** scans your message for keywords
+3. **PostToolUse** scans commands, file paths, and descriptions
+4. Matching ways inject via `additionalContext` - Claude sees them
+5. Each way loads once per session (markers in `/tmp`)
+
+```
+~/.claude/hooks/ways/
+├── core.md              # Loads at startup
+├── *.md                 # Individual ways (frontmatter defines triggers)
+├── check-prompt.sh      # Keyword matching
+├── check-bash-post.sh   # Command matching
+├── check-file-post.sh   # File path matching
+└── show-way.sh          # Once-per-session gating
 ```
 
-### What It Does
+## Project-Local Ways
 
-- Clones to temporary directory
-- Copies everything (including .git) to `~/.claude/`
-- Sets up hooks, agents, and methodology files
-- Enables future updates via `git pull` from `~/.claude/`
+Projects can have custom ways in `.claude/ways/`:
 
-### Manual Installation
-
-```bash
-git clone https://github.com/aaronsb/claude-code-config /tmp/claude-install
-cd /tmp/claude-install
-./install.sh
+```
+your-project/.claude/ways/
+├── our-api.md           # Project conventions
+├── deployment.md        # How we deploy
+└── react.md             # Framework-specific guidance
 ```
 
-### Updating
+Project ways override global ways with the same name. A template is auto-created on first session.
 
-Since `.git` is installed to `~/.claude/`, you can update anytime:
+## Creating a Way
+
+Each way is self-contained with YAML frontmatter:
+
+```markdown
+---
+keywords: pattern1|pattern2|regex.*
+files: \.tsx$|components/.*
+commands: npm\ run\ build
+---
+# Way Name
+
+## Guidance
+- Compact, actionable points
+- Not exhaustive documentation
+```
+
+Drop the file in `~/.claude/hooks/ways/` (global) or `$PROJECT/.claude/ways/` (project). Done.
+
+## Built-in Ways
+
+| Way | Triggers On |
+|-----|-------------|
+| **adr** | `docs/adr/*.md`, "architect", "decision" |
+| **api** | "endpoint", "rest", "graphql" |
+| **commits** | `git commit`, "push to remote" |
+| **config** | `.env`, "environment variable" |
+| **debugging** | "bug", "broken", "investigate" |
+| **deps** | `npm install`, "dependency", "package" |
+| **docs** | `README.md`, "documentation" |
+| **errors** | "error handling", "exception" |
+| **github** | `gh`, "pull request", "issue" |
+| **knowledge** | `.claude/ways/*.md`, "ways" |
+| **migrations** | "migration", "schema" |
+| **patches** | `*.patch`, "git apply" |
+| **performance** | "slow", "optimize", "profile" |
+| **quality** | "refactor", "code review", "solid" |
+| **release** | "deploy", "version", "changelog" |
+| **security** | "auth", "secret", "token" |
+| **subagents** | "delegate", "subagent" |
+| **testing** | `pytest`, `jest`, "coverage", "tdd" |
+| **tracking** | `.claude/todo-*.md`, "multi-session" |
+
+## Also Included
+
+- **6 specialized subagents** for complex tasks (requirements, architecture, planning, review, workflow, organization)
+- **ADR-driven workflow** guidance
+- **GitHub-first patterns** (auto-detects `gh` availability)
+- **Status line** with git branch and API usage
+
+## Philosophy
+
+This is a "poor man's RAG" - retrieval-augmented generation without the infrastructure:
+
+| Traditional RAG | Ways System |
+|-----------------|-------------|
+| Vector embeddings | Keyword regex |
+| Semantic search | Pattern matching |
+| External services | Bash + jq |
+| Probabilistic | Deterministic |
+
+Simple, transparent, zero dependencies beyond standard unix tools.
+
+## Updating
 
 ```bash
 cd ~/.claude && git pull
 ```
 
-## 📋 What's Included
+## License
 
-### Core Methodology
-- **ADR-driven workflow**: Debate → Draft ADR → PR → Implement → Review → Merge
-- **Hook-based instruction injection**: Fresh context on SessionStart and PreCompact
-- **GitHub-first patterns**: Automatic `gh` command usage for issues/PRs
-
-### 6 Specialized Subagents
-
-- **requirements-analyst** - Capture complex requirements as GitHub issues
-- **system-architect** - Draft ADRs, evaluate SOLID principles
-- **task-planner** - Plan complex multi-branch implementations
-- **code-reviewer** - Review large PRs, SOLID compliance checks
-- **workflow-orchestrator** - Project status, phase coordination
-- **workspace-curator** - Organize docs/, manage .claude/ directory
-
-### GitHub Command Patterns
-
-When you say "we have an issue about X", Claude will:
-1. Detect GitHub-related trigger words
-2. Run `gh issue list --search "X"`
-3. Fall back to file search only if GitHub isn't available
-
-**Trigger words**: issue, PR, pull request, review, comments, checks
-
-### Collaborative Guidance
-
-- Ask when stuck (you're a valuable resource)
-- Verify context after compaction
-- Push back when unclear (collaborative debate, not forced challenging)
-- Acknowledge uncertainty directly
-
-## 🏗️ Architecture
-
-### Files Installed to ~/.claude/
-
-```
-~/.claude/
-├── claude-hook.md          # Full methodology instructions (injected via hooks)
-├── CLAUDE.md              # Minimal marker (not auto-loaded)
-├── agents/                # 6 specialized subagents
-│   ├── code-reviewer.md
-│   ├── requirements-analyst.md
-│   ├── system-architect.md
-│   ├── task-planner.md
-│   ├── workflow-orchestrator.md
-│   └── workspace-curator.md
-├── hooks/
-│   ├── hooks.json         # SessionStart, PreCompact injection
-│   └── check-config-updates.sh
-├── commands/              # Custom slash commands
-├── methodology/           # Documentation and guides
-├── scripts/               # Utility scripts
-└── statusline.sh          # Status line with git branch info
-```
-
-### Why Hook-Based Injection?
-
-**Problem**: CLAUDE.md instructions get ignored as context grows ([reported issues](https://github.com/anthropics/claude-code/issues/6120))
-
-**Solution**: Inject instructions via hooks at critical moments:
-- **SessionStart**: Fresh context when sessions begin
-- **PreCompact**: Fresh context after compaction events
-
-Instructions arrive as active conversation content, not distant system prompts.
-
-## 🔧 Configuration
-
-### Status Line (Optional)
-
-Enable status line in `~/.claude/settings.json`:
-
-```json
-{
-  "statusLine": {
-    "type": "command",
-    "command": "${HOME}/.claude/statusline.sh"
-  }
-}
-```
-
-Shows: `📁 directory 🔀 branch | API usage`
-
-### Hooks
-
-Hooks are auto-configured in `~/.claude/hooks/hooks.json`:
-
-```json
-{
-  "hooks": {
-    "SessionStart": [
-      {"type": "command", "command": "cat ${HOME}/.claude/claude-hook.md"}
-    ],
-    "PreCompact": [
-      {"type": "command", "command": "cat ${HOME}/.claude/claude-hook.md"}
-    ]
-  }
-}
-```
-
-## 📚 Usage
-
-### Start Working
-
-1. **Restart Claude Code** after installation
-2. **Try `/agents`** - see your specialized team
-3. **Say "we have an issue about X"** - watch it check GitHub first!
-
-### ADR Workflow
-
-```
-1. Debate/Research the problem
-2. Draft ADR in docs/adr/ADR-NNN-title.md
-3. Create PR for ADR review
-4. Merge when accepted
-5. Create branch referencing ADR
-6. Use TodoWrite to track implementation
-7. Create PR for code
-8. Review and merge
-```
-
-### Working with GitHub
-
-```bash
-# Find issues
-"we have an issue about API security"
-→ Claude runs: gh issue list --search "API security"
-
-# Check PR status
-"what's the status of PR 42?"
-→ Claude runs: gh pr view 42
-
-# Review PR
-"show me comments on the auth PR"
-→ Claude runs: gh pr view --comments
-```
-
-## 🎯 Key Features
-
-### SOLID Principles Enforcement
-- Single Responsibility: One reason to change
-- Open/Closed: Open for extension, closed for modification
-- Liskov Substitution: Subtypes substitutable for base types
-- Interface Segregation: Many specific > one general interface
-- Dependency Inversion: Depend on abstractions, not concretions
-
-### Code Quality Flags
-- Files > 500 lines → consider splitting
-- Functions > 3 nesting levels → extract methods
-- Classes > 7 public methods → consider decomposition
-- Functions > 30-50 lines → refactor for clarity
-
-### Communication Standards
-- Acknowledge uncertainty: "I don't know" over confident guesses
-- Avoid absolutes: "comprehensive", "absolutely right"
-- Present options with trade-offs, not just solutions
-- Be direct about problems and limitations
-
-## 🐛 Known Issues
-
-### Claude Code Plugin System
-
-The plugin marketplace is new (Oct 2025) and has significant issues:
-- Git submodules not initialized on install
-- CLAUDE.md instructions ignored
-- Agents not registering properly
-- Version updates unreliable
-
-**We abandoned plugins** in favor of direct `~/.claude/` installation. Works better, simpler, no headaches.
-
-## 🤝 Contributing
-
-This methodology evolves through practical use. Found a pattern that works? Open an issue or PR!
-
-## 📄 License
-
-MIT License - Build better software with Claude Code.
-
----
-
-*Built with the hook-based instruction injection approach that actually works* 🎯
+MIT
