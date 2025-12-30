@@ -23,6 +23,7 @@ Detailed guidance appears automatically (once per session) on tool use or keywor
 | **errors** | — | error handling, exception, catch |
 | **release** | — | release, deploy, version, changelog |
 | **config** | Edit `.env` | config, environment variable |
+| **ssh** | Run `ssh`, `scp`, `rsync` | ssh, remote server, sshpass |
 | **knowledge** | Edit `.claude/ways/*.md` | ways, guidance, knowledge |
 | **docs** | Edit `README.md`, `docs/*.md` | readme, documentation |
 
