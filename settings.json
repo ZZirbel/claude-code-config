@@ -4,11 +4,6 @@
   "permissions": {
     "defaultMode": "default"
   },
-  "statusLine": {
-    "type": "command",
-    "command": "${HOME}/.claude/statusline.sh"
-  },
-  "alwaysThinkingEnabled": true,
   "hooks": {
     "SessionStart": [
       {
@@ -16,7 +11,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cat ${HOME}/.claude/claude-hook.md"
+            "command": "cat ${HOME}/.claude/hooks/ways/core.md"
+          },
+          {
+            "type": "command",
+            "command": "${HOME}/.claude/hooks/ways/init-project-ways.sh"
           },
           {
             "type": "command",
@@ -29,10 +28,48 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cat ${HOME}/.claude/claude-hook.md"
+            "command": "cat ${HOME}/.claude/hooks/ways/core.md"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${HOME}/.claude/hooks/ways/check-file-post.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${HOME}/.claude/hooks/ways/check-bash-post.sh"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${HOME}/.claude/hooks/ways/check-prompt.sh"
           }
         ]
       }
     ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "${HOME}/.claude/statusline.sh"
+  },
+  "alwaysThinkingEnabled": true,
+  "enabledPlugins": {
+    "clangd-lsp@claude-plugins-official": true
   }
 }
