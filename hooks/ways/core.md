@@ -24,6 +24,7 @@ Detailed guidance appears automatically (once per session) on tool use or keywor
 | **release** | — | release, deploy, version, changelog |
 | **config** | Edit `.env` | config, environment variable |
 | **knowledge** | Edit `.claude/ways/*.md` | ways, guidance, knowledge |
+| **docs** | Edit `README.md`, `docs/*.md` | readme, documentation |
 
 Project-local ways: `$PROJECT/.claude/ways/*.md` override global ways.
 Auto-initialized with template on first session in git repos.
