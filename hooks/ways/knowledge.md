@@ -60,3 +60,24 @@ Project ways take precedence over global ways with same name.
 - Global: `~/.claude/hooks/ways/`
 - Project: `$PROJECT/.claude/ways/`
 - Markers: `/tmp/.claude-way-{name}-{session_id}`
+
+## State Machine
+
+Each (way, session) pair has two states:
+
+```
+┌─────────────┐   keyword/command/file match   ┌─────────────┐
+│  not_shown  │ ─────────────────────────────▶ │   shown     │
+│  (no marker)│        output + create marker  │(marker exists)
+└─────────────┘                                └─────────────┘
+       │                                              │
+       │         any subsequent match                 │
+       │◀─────────────────────────────────────────────│
+                     no-op (idempotent)
+```
+
+**Multi-trigger semantics:**
+- Single prompt may match multiple ways → all fire (each has own marker)
+- Same way matched multiple times → first wins, rest are no-ops
+- Multiple hooks (prompt, bash, file) may fire same way → marker prevents duplicates
+- Project-local and global with same name → project-local wins (single marker per name)

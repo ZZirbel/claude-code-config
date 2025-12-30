@@ -1,5 +1,17 @@
 #!/bin/bash
 # PostToolUse: Check bash commands against way frontmatter
+#
+# TRIGGER FLOW:
+# ┌──────────────────┐     ┌─────────────────┐     ┌──────────────┐
+# │ PostToolUse:Bash │────▶│ scan_ways()     │────▶│ show-way.sh  │
+# │ (hook event)     │     │ for each *.md:  │     │ (idempotent) │
+# └──────────────────┘     │  if commands OR │     └──────────────┘
+#                          │  keywords match │
+#                          └─────────────────┘
+#
+# Multiple ways can match a single command - CONTEXT accumulates
+# all matching way outputs. Markers prevent duplicate content.
+# Output is returned as additionalContext JSON for Claude to see.
 
 INPUT=$(cat)
 CMD=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
