@@ -10,4 +10,4 @@ Instructions are loaded at critical moments to maintain relevance:
 
 This approach ensures guidance stays active in the conversation window rather than being buried as distant system prompts.
 
-See `claude-hook.md` for the actual instruction content.
+See `hooks/ways/core.md` for the base guidance and `hooks/ways/*.md` for contextual instructions.
