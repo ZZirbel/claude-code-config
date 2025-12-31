@@ -62,6 +62,8 @@ Second match → Marker exists → No-op (silent)
 
 Markers live in `/tmp/.claude-way-{domain}-{wayname}-{session_id}`. This prevents noise - you see each way once, when first relevant, then it stays quiet.
 
+See [docs/architecture.md](docs/architecture.md) for detailed Mermaid diagrams of the trigger flow and state machine.
+
 ```
 ~/.claude/hooks/ways/
 ├── core.md                      # Loads at startup (static guidance)

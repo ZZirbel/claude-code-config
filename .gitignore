@@ -18,6 +18,7 @@
 
 # Documentation
 !docs/
+!docs/*.md
 !docs/adr/
 !docs/adr/*.md
 
