@@ -1,5 +1,6 @@
 ---
-keywords: patch|\.diff|apply.*change
+match: regex
+pattern: patch|\.diff|apply.*change
 files: \.(patch|diff)$
 commands: git\ apply|git\ diff.*\>
 ---

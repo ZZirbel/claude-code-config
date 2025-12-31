@@ -1,5 +1,6 @@
 ---
-keywords: solid.?principle|refactor|code.?review|code.?quality
+match: regex
+pattern: solid.?principle|refactor|code.?review|code.?quality
 ---
 # Code Quality Way
 

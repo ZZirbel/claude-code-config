@@ -1,5 +1,6 @@
 ---
-keywords: todo|tracking|multi.?session|cross.?session|picking.?up
+match: regex
+pattern: todo|tracking|multi.?session|cross.?session|picking.?up
 files: \.claude/todo-.*\.md$
 ---
 # Work Tracking Way

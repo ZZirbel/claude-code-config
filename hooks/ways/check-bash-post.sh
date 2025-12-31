@@ -35,15 +35,15 @@ scan_ways() {
 
     # Extract frontmatter fields
     commands=$(awk '/^---$/{p=!p; next} p && /^commands:/' "$wayfile" | sed 's/^commands: *//')
-    keywords=$(awk '/^---$/{p=!p; next} p && /^keywords:/' "$wayfile" | sed 's/^keywords: *//')
+    pattern=$(awk '/^---$/{p=!p; next} p && /^pattern:/' "$wayfile" | sed 's/^pattern: *//')
 
     # Check command patterns
     if [[ -n "$commands" && "$CMD" =~ $commands ]]; then
       CONTEXT+=$(~/.claude/hooks/ways/show-way.sh "$waypath" "$SESSION_ID")
     fi
 
-    # Check description against keywords
-    if [[ -n "$DESC" && -n "$keywords" && "$DESC" =~ $keywords ]]; then
+    # Check description against pattern (for tool description matching)
+    if [[ -n "$DESC" && -n "$pattern" && "$DESC" =~ $pattern ]]; then
       CONTEXT+=$(~/.claude/hooks/ways/show-way.sh "$waypath" "$SESSION_ID")
     fi
   done < <(find "$dir" -name "way.md" -print0 2>/dev/null)

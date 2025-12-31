@@ -1,5 +1,6 @@
 ---
-keywords: subagent|delegat|spawn.*agent
+match: regex
+pattern: subagent|delegat|spawn.*agent
 ---
 # Sub-Agents Way
 

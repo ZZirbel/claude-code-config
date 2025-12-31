@@ -1,5 +1,6 @@
 ---
-keywords: endpoint|api.?design|rest|graphql|route
+match: regex
+pattern: endpoint|api.?design|rest|graphql|route
 ---
 # API Design Way
 

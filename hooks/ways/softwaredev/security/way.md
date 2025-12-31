@@ -1,5 +1,6 @@
 ---
-keywords: auth|secret|token|password|permission|vulnerab|owasp|inject
+match: regex
+pattern: auth|secret|token|password|permission|vulnerab|owasp|inject
 ---
 # Security Way
 

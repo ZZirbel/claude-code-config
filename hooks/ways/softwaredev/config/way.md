@@ -1,5 +1,6 @@
 ---
-keywords: config|environment.?variable|\.env|settings
+match: regex
+pattern: config|environment.?variable|\.env|settings
 files: \.env|config\.(json|yaml|yml|toml)$
 ---
 # Configuration Way

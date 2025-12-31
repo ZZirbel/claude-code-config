@@ -1,5 +1,6 @@
 ---
-keywords: readme|documentation|docs|document.*project|explain.*repo
+match: regex
+pattern: readme|documentation|docs|document.*project|explain.*repo
 files: README\.md$|docs/.*\.md$
 ---
 # Documentation Way

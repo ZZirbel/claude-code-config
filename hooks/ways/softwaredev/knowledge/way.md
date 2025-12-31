@@ -1,5 +1,6 @@
 ---
-keywords: knowledge|ways|guidance|context.?inject|how.?do.?ways|skill
+match: regex
+pattern: knowledge|ways|guidance|context.?inject|how.?do.?ways|skill
 files: \.claude/ways/.*way\.md$
 ---
 # Knowledge Way
@@ -16,7 +17,7 @@ files: \.claude/ways/.*way\.md$
 | Multi-file reference docs | Session-gated (once per session) |
 | | Dynamic context (macro queries API) |
 
-They complement: Skills can't detect tool execution. Ways can't do semantic matching.
+They complement: Skills can't detect tool execution. Ways support both regex and semantic matching.
 
 ## How Ways Work
 Ways are contextual guidance that loads once per session when triggered by:
@@ -29,23 +30,37 @@ Each way lives in `{domain}/{wayname}/way.md` with YAML frontmatter:
 
 ```markdown
 ---
-keywords: pattern1|pattern2|regex.*
+match: regex              # or "semantic"
+pattern: foo|bar|regex.*  # for regex matching
 files: \.md$|docs/.*
-commands: git\ commit|npm\ test
+commands: git\ commit
 macro: prepend
 ---
 # Way Name
 
-## Guidance content here
+## Guidance
 - Compact, actionable points
-- Not exhaustive documentation
+```
+
+For semantic matching:
+```markdown
+---
+match: semantic
+description: reference text for similarity
+vocabulary: domain specific words
+threshold: 0.55           # optional, default 0.58
+---
 ```
 
 ### Frontmatter Fields
-- `keywords:` - Regex matched against user prompts
+- `match:` - `regex` (default) or `semantic`
+- `pattern:` - Regex matched against user prompts
 - `files:` - Regex matched against file paths (Edit/Write)
 - `commands:` - Regex matched against bash commands
-- `macro:` - `prepend` or `append` to run `macro.sh` for dynamic context
+- `macro:` - `prepend` or `append` to run `macro.sh`
+- `description:` - Reference text for semantic similarity
+- `vocabulary:` - Domain words for keyword counting
+- `threshold:` - NCD threshold (lower = stricter, default 0.58)
 
 ## Creating a New Way
 

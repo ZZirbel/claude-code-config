@@ -1,5 +1,6 @@
 ---
-keywords: architect|decision|design.?pattern|technical.?choice|trade.?off
+match: regex
+pattern: architect|decision|design.?pattern|technical.?choice|trade.?off
 files: docs/adr/.*\.md$
 ---
 # ADR Way

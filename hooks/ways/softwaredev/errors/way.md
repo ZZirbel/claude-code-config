@@ -1,5 +1,6 @@
 ---
-keywords: error.?handl|exception|try.?catch|throw|catch
+match: regex
+pattern: error.?handl|exception|try.?catch|throw|catch
 ---
 # Error Handling Way
 

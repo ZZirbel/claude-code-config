@@ -1,5 +1,6 @@
 ---
-keywords: migrat|schema|database.?change|alter.?table
+match: regex
+pattern: migrat|schema|database.?change|alter.?table
 ---
 # Migrations Way
 

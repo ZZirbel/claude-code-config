@@ -1,5 +1,6 @@
 ---
-keywords: slow|optimi[sz]|latency|profile|performance|speed.?up
+match: regex
+pattern: slow|optimi[sz]|latency|profile|performance|speed.?up
 ---
 # Performance Way
 

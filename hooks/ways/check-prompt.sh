@@ -33,22 +33,25 @@ scan_ways() {
 
     # Extract frontmatter fields
     frontmatter=$(awk 'NR==1 && /^---$/{p=1; next} p && /^---$/{exit} p{print}' "$wayfile")
-    keywords=$(echo "$frontmatter" | awk '/^keywords:/{gsub(/^keywords: */, ""); print}')
-    semantic=$(echo "$frontmatter" | awk '/^semantic:/{gsub(/^semantic: */, ""); print}')
-    description=$(echo "$frontmatter" | awk '/^description:/{gsub(/^description: */, ""); print}')
-    semantic_keywords=$(echo "$frontmatter" | awk '/^semantic_keywords:/{gsub(/^semantic_keywords: */, ""); print}')
-    ncd_threshold=$(echo "$frontmatter" | awk '/^ncd_threshold:/{gsub(/^ncd_threshold: */, ""); print}')
+    get_field() { echo "$frontmatter" | awk "/^$1:/"'{gsub(/^'"$1"': */, ""); print; exit}'; }
 
-    # Check for match
+    # Core fields
+    match_mode=$(get_field "match")           # "regex" or "semantic"
+    pattern=$(get_field "pattern")            # regex pattern (for match: regex)
+    description=$(get_field "description")    # reference text (for match: semantic)
+    vocabulary=$(get_field "vocabulary")      # domain words (for match: semantic)
+    threshold=$(get_field "threshold")        # NCD threshold (for match: semantic)
+
+    # Check for match based on mode
     matched=false
 
-    # Semantic matching (if enabled)
-    if [[ "$semantic" == "true" && -n "$description" && -n "$semantic_keywords" ]]; then
-      if "${WAYS_DIR}/semantic-match.sh" "$PROMPT" "$description" "$semantic_keywords" "$ncd_threshold" 2>/dev/null; then
+    if [[ "$match_mode" == "semantic" && -n "$description" && -n "$vocabulary" ]]; then
+      # Semantic matching: gzip NCD + keyword counting
+      if "${WAYS_DIR}/semantic-match.sh" "$PROMPT" "$description" "$vocabulary" "$threshold" 2>/dev/null; then
         matched=true
       fi
-    # Regex matching (fallback)
-    elif [[ -n "$keywords" && "$PROMPT" =~ $keywords ]]; then
+    elif [[ -n "$pattern" && "$PROMPT" =~ $pattern ]]; then
+      # Regex matching (default)
       matched=true
     fi
 

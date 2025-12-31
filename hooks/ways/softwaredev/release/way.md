@@ -1,5 +1,6 @@
 ---
-keywords: release|deploy|version|changelog|tag
+match: regex
+pattern: release|deploy|version|changelog|tag
 ---
 # Release Way
 

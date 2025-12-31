@@ -1,5 +1,6 @@
 ---
-keywords: test|coverage|mock|tdd|unit.?test|spec
+match: regex
+pattern: test|coverage|mock|tdd|unit.?test|spec
 commands: npm\ test|yarn\ test|jest|pytest|cargo\ test|go\ test|rspec
 ---
 # Testing Way

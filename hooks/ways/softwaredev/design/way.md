@@ -1,8 +1,8 @@
 ---
+match: semantic
 description: software system design architecture patterns database schema api modeling component
-semantic_keywords: software system design architecture pattern patterns database schema modeling api endpoint interface component modules factory observer strategy behavioral data structure
-semantic: true
-ncd_threshold: 0.55
+vocabulary: software system design architecture pattern patterns database schema modeling api endpoint interface component modules factory observer strategy behavioral data structure
+threshold: 0.55
 ---
 # Design Way
 

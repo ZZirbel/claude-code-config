@@ -1,5 +1,6 @@
 ---
-keywords: ssh|remote.?server|remote.?host|sshpass
+match: regex
+pattern: ssh|remote.?server|remote.?host|sshpass
 commands: ^ssh\ |^scp\ |^rsync.*:|\bsshpass\b
 ---
 # SSH Way

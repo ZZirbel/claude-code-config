@@ -1,5 +1,6 @@
 ---
-keywords: debug|bug|broken|investigate|troubleshoot|not.?working
+match: regex
+pattern: debug|bug|broken|investigate|troubleshoot|not.?working
 ---
 # Debugging Way
 

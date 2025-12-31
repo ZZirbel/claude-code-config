@@ -36,7 +36,7 @@ while IFS= read -r wayfile; do
 
   # Extract frontmatter fields (only from first block, stop at second ---)
   frontmatter=$(awk 'NR==1 && /^---$/{p=1; next} p && /^---$/{exit} p{print}' "$wayfile")
-  keywords=$(echo "$frontmatter" | awk '/^keywords:/{gsub(/^keywords: */, ""); print}')
+  pattern=$(echo "$frontmatter" | awk '/^pattern:/{gsub(/^pattern: */, ""); print}')
   commands=$(echo "$frontmatter" | awk '/^commands:/{gsub(/^commands: */, ""); print}')
   files=$(echo "$frontmatter" | awk '/^files:/{gsub(/^files: */, ""); print}')
 
@@ -67,11 +67,11 @@ while IFS= read -r wayfile; do
     esac
   fi
 
-  # Format keywords for display (strip regex syntax, keep readable)
+  # Format pattern for display (strip regex syntax, keep readable)
   keyword_display="—"
-  if [[ -n "$keywords" ]]; then
+  if [[ -n "$pattern" ]]; then
     # Strip regex escapes and special chars, convert | to comma
-    keyword_display=$(echo "$keywords" | sed 's/\\//g; s/\.\*//g; s/\.\?//g; s/\?//g; s/\^//g; s/\$//g; s/(/ /g; s/)//g; s/|/, /g; s/  */ /g; s/\[.*\]//g')
+    keyword_display=$(echo "$pattern" | sed 's/\\//g; s/\.\*//g; s/\.\?//g; s/\?//g; s/\^//g; s/\$//g; s/(/ /g; s/)//g; s/|/, /g; s/  */ /g; s/\[.*\]//g')
   fi
 
   echo "| **${wayname}** | ${tool_trigger} | ${keyword_display} |"

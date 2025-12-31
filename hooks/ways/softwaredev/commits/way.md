@@ -1,5 +1,6 @@
 ---
-keywords: commit|push.*(remote|origin|upstream)
+match: regex
+pattern: commit|push.*(remote|origin|upstream)
 commands: git\ commit
 ---
 # Git Commits Way

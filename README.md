@@ -86,7 +86,8 @@ Each way is self-contained with YAML frontmatter:
 
 ```markdown
 ---
-keywords: pattern1|pattern2|regex.*
+match: regex
+pattern: pattern1|pattern2|regex.*
 files: \.tsx$|components/.*
 commands: npm\ run\ build
 macro: prepend
@@ -95,7 +96,6 @@ macro: prepend
 
 ## Guidance
 - Compact, actionable points
-- Not exhaustive documentation
 ```
 
 Create a directory in `~/.claude/hooks/ways/{domain}/{wayname}/` and add `way.md`. For project-local: `$PROJECT/.claude/ways/{domain}/{wayname}/way.md`.
@@ -104,14 +104,14 @@ Create a directory in `~/.claude/hooks/ways/{domain}/{wayname}/` and add `way.md
 
 | Field | Purpose |
 |-------|---------|
-| `keywords:` | Regex matched against user prompts |
+| `match:` | `regex` (default) or `semantic` |
+| `pattern:` | Regex matched against user prompts |
 | `files:` | Regex matched against file paths (Edit/Write) |
 | `commands:` | Regex matched against bash commands |
 | `macro:` | `prepend` or `append` - run `macro.sh` for dynamic context |
-| `semantic:` | `true` to enable semantic matching (see below) |
 | `description:` | Reference text for NCD similarity (semantic mode) |
-| `semantic_keywords:` | Domain vocabulary for keyword counting (semantic mode) |
-| `ncd_threshold:` | NCD similarity threshold (default 0.58, lower = stricter) |
+| `vocabulary:` | Domain words for keyword counting (semantic mode) |
+| `threshold:` | NCD similarity threshold (default 0.58, lower = stricter) |
 
 ## Semantic Matching
 
@@ -119,10 +119,10 @@ For ambiguous triggers like "design" (software design vs UI design), ways can us
 
 ```yaml
 ---
-semantic: true
+match: semantic
 description: software system design architecture patterns database schema
-semantic_keywords: design architecture pattern schema api component factory
-ncd_threshold: 0.55  # Optional: stricter matching (default 0.58)
+vocabulary: design architecture pattern schema api component factory
+threshold: 0.55  # Optional: stricter matching (default 0.58)
 ---
 ```
 
