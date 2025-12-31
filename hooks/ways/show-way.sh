@@ -29,16 +29,26 @@ PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
 WAY_MARKER_NAME=$(echo "$WAY" | tr '/' '-')
 
 # Project-local takes precedence over global
+# SECURITY: Project-local macros only run if project is in trusted list
 WAY_DIR=""
+IS_PROJECT_LOCAL=false
 if [[ -f "$PROJECT_DIR/.claude/ways/${WAY}/way.md" ]]; then
   WAY_FILE="$PROJECT_DIR/.claude/ways/${WAY}/way.md"
   WAY_DIR="$PROJECT_DIR/.claude/ways/${WAY}"
+  IS_PROJECT_LOCAL=true
 elif [[ -f "${HOME}/.claude/hooks/ways/${WAY}/way.md" ]]; then
   WAY_FILE="${HOME}/.claude/hooks/ways/${WAY}/way.md"
   WAY_DIR="${HOME}/.claude/hooks/ways/${WAY}"
 else
   exit 0
 fi
+
+# Check if project is trusted for macro execution
+# Add trusted project paths (one per line) to ~/.claude/trusted-project-macros
+is_project_trusted() {
+  local trust_file="${HOME}/.claude/trusted-project-macros"
+  [[ -f "$trust_file" ]] && grep -qxF "$PROJECT_DIR" "$trust_file"
+}
 
 # Marker: scoped to session_id
 MARKER="/tmp/.claude-way-${WAY_MARKER_NAME}-${SESSION_ID:-$(date +%Y%m%d)}"
@@ -52,8 +62,13 @@ if [[ ! -f "$MARKER" ]]; then
   MACRO_OUT=""
 
   if [[ -n "$MACRO_POS" && -x "$MACRO_FILE" ]]; then
-    # Run macro, capture output
-    MACRO_OUT=$("$MACRO_FILE" 2>/dev/null)
+    # SECURITY: Skip project-local macros unless project is explicitly trusted
+    if $IS_PROJECT_LOCAL && ! is_project_trusted; then
+      echo "**Note**: Project-local macro skipped (add $PROJECT_DIR to ~/.claude/trusted-project-macros to enable)"
+    else
+      # Run macro, capture output
+      MACRO_OUT=$("$MACRO_FILE" 2>/dev/null)
+    fi
   fi
 
   # Output based on macro position

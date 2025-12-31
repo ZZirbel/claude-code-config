@@ -170,6 +170,14 @@ See [ADR-004](docs/adr/ADR-004-way-macros.md) for full macro documentation.
 
 Projects can have custom ways in `.claude/ways/{domain}/{wayname}/`:
 
+**Security Note**: Project-local **macros are disabled by default**. Static way content (way.md) always loads, but macro.sh scripts only run for trusted projects. To trust a project:
+
+```bash
+echo "/path/to/your/project" >> ~/.claude/trusted-project-macros
+```
+
+This prevents malicious repositories from executing code via way macros.
+
 ```
 your-project/.claude/ways/
 └── myproject/
