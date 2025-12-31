@@ -5,21 +5,22 @@
 # ┌──────────────────┐     ┌─────────────────┐     ┌──────────────┐
 # │ UserPromptSubmit │────▶│ scan_ways()     │────▶│ show-way.sh  │
 # │ (hook event)     │     │ for each way.md │     │ (idempotent) │
-# └──────────────────┘     │  if keywords    │     └──────────────┘
-#                          │  match prompt   │
+# └──────────────────┘     │  if keywords OR │     └──────────────┘
+#                          │  semantic match │
 #                          └─────────────────┘
 #
 # Ways are nested: domain/wayname/way.md (e.g., softwaredev/github/way.md)
-# Multiple ways can match a single prompt - each way's show-way.sh
-# is called, but markers prevent duplicate output within session.
+# Ways can use regex (keywords:) or semantic matching (semantic: true)
+# Semantic matching uses keyword counting + gzip NCD for better accuracy.
 # Project-local ways are scanned first (and take precedence).
 
 INPUT=$(cat)
 PROMPT=$(echo "$INPUT" | jq -r '.prompt // empty' | tr '[:upper:]' '[:lower:]')
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(echo "$INPUT" | jq -r '.cwd // empty')}"
+WAYS_DIR="${HOME}/.claude/hooks/ways"
 
-# Scan ways in a directory for keyword matches (recursive)
+# Scan ways in a directory for matches (recursive)
 scan_ways() {
   local dir="$1"
   [[ ! -d "$dir" ]] && return
@@ -30,12 +31,27 @@ scan_ways() {
     waypath="${wayfile#$dir/}"
     waypath="${waypath%/way.md}"
 
-    # Extract keywords from frontmatter
-    keywords=$(awk '/^---$/{p=!p; next} p && /^keywords:/' "$wayfile" | sed 's/^keywords: *//')
-    [[ -z "$keywords" ]] && continue
+    # Extract frontmatter fields
+    frontmatter=$(awk 'NR==1 && /^---$/{p=1; next} p && /^---$/{exit} p{print}' "$wayfile")
+    keywords=$(echo "$frontmatter" | awk '/^keywords:/{gsub(/^keywords: */, ""); print}')
+    semantic=$(echo "$frontmatter" | awk '/^semantic:/{gsub(/^semantic: */, ""); print}')
+    description=$(echo "$frontmatter" | awk '/^description:/{gsub(/^description: */, ""); print}')
+    semantic_keywords=$(echo "$frontmatter" | awk '/^semantic_keywords:/{gsub(/^semantic_keywords: */, ""); print}')
 
-    # Check if prompt matches keywords
-    if [[ "$PROMPT" =~ $keywords ]]; then
+    # Check for match
+    matched=false
+
+    # Semantic matching (if enabled)
+    if [[ "$semantic" == "true" && -n "$description" && -n "$semantic_keywords" ]]; then
+      if "${WAYS_DIR}/semantic-match.sh" "$PROMPT" "$description" "$semantic_keywords" 2>/dev/null; then
+        matched=true
+      fi
+    # Regex matching (fallback)
+    elif [[ -n "$keywords" && "$PROMPT" =~ $keywords ]]; then
+      matched=true
+    fi
+
+    if $matched; then
       ~/.claude/hooks/ways/show-way.sh "$waypath" "$SESSION_ID"
     fi
   done < <(find "$dir" -name "way.md" -print0 2>/dev/null)
