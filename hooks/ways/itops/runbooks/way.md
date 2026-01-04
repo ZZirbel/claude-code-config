@@ -1,21 +1,21 @@
 ---
 match: regex
-pattern: \bskill\b|runbook.?(as|to).?skill|skill.?(library|pattern|evolution)|pattern.?capture
+pattern: \brunbook\b|runbook.?(automation|executable)|playbook|sop.?(automation|as.?code)|operational.?procedure
 ---
-# Skills Way
+# Runbooks Way
 
-## What is a Skill?
+## What is an Executable Runbook?
 
-A reusable code pattern with documentation:
+A traditional runbook converted to agent-executable code:
 
 ```
-skills/
+runbooks/
 └── diagnose-vpn-failure/
-    ├── index.ts    # Executable code
-    └── SKILL.md    # When/how to use
+    ├── index.ts    # Executable logic
+    └── README.md   # When/how to use
 ```
 
-## Skill Structure
+## Runbook Structure
 
 **index.ts** - The executable logic:
 ```typescript
@@ -26,33 +26,33 @@ export async function diagnoseVpnFailure(userId: string) {
 }
 ```
 
-**SKILL.md** - Documentation:
+**README.md** - Documentation:
 - When to use (triggers, conditions)
 - Capabilities (what it can do)
 - Autonomy level (what requires approval)
 - Dependencies (required MCP servers)
 
-## Runbook-as-Skill Pattern
+## Traditional vs Executable Runbooks
 
-| Traditional Runbook | Skill |
-|---------------------|-------|
-| Document humans follow | Executable code |
+| Traditional Runbook | Executable Runbook |
+|---------------------|-------------------|
+| Document humans follow | Code agents execute |
 | Step-by-step text | Loops, conditionals |
 | Manual execution | Agent-invokable |
 | Knowledge in docs | Knowledge in code |
 
-## Skill Evolution Cycle
+## Evolution Cycle
 
 1. **Incident occurs** → Agent handles (or escalates)
 2. **Post-incident review** → Was handling optimal?
-3. **Skill formalization** → Code + docs + tests
-4. **Skill validation** → Shadow mode testing
-5. **Skill deployment** → Available with appropriate autonomy
+3. **Runbook formalization** → Code + docs + tests
+4. **Validation** → Shadow mode testing
+5. **Deployment** → Available with appropriate autonomy
 6. **Continuous improvement** → Update based on outcomes
 
 ## Persistence
 
-- Skills stored in R2 (survives sandbox lifecycle)
+- Stored in R2 (survives sandbox lifecycle)
 - Cross-session availability
 - Version controlled
 - Shareable across tenants (with isolation)
