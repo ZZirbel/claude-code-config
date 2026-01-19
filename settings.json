@@ -73,6 +73,20 @@
           {
             "type": "command",
             "command": "${HOME}/.claude/hooks/ways/check-prompt.sh"
+          },
+          {
+            "type": "command",
+            "command": "${HOME}/.claude/hooks/ways/check-state.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${HOME}/.claude/hooks/ways/check-response.sh"
           }
         ]
       }

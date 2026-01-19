@@ -1,6 +1,8 @@
 ---
-match: regex
-pattern: auth|secret|token|password|permission|vulnerab|owasp|inject
+match: semantic
+description: application security, authentication, secrets management, input validation, vulnerability prevention
+vocabulary: authentication secrets password credentials owasp injection xss sql sanitize vulnerability
+threshold: 0.52
 ---
 # Security Way
 

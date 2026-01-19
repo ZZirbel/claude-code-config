@@ -1,6 +1,8 @@
 ---
-match: regex
-pattern: debug|bug|broken|investigate|troubleshoot|not.?working
+match: semantic
+description: debugging code issues, troubleshooting errors, investigating broken behavior, fixing bugs
+vocabulary: debug breakpoint stacktrace investigate troubleshoot regression bisect
+threshold: 0.53
 ---
 # Debugging Way
 

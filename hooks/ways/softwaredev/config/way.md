@@ -1,7 +1,9 @@
 ---
-match: regex
-pattern: config|environment.?variable|\.env|settings
+match: semantic
+description: application configuration, environment variables, dotenv files, config file management
+vocabulary: dotenv environment configuration envvar secrets config.json config.yaml
 files: \.env|config\.(json|yaml|yml|toml)$
+threshold: 0.54
 ---
 # Configuration Way
 

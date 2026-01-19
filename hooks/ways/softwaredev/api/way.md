@@ -1,6 +1,8 @@
 ---
-match: regex
-pattern: endpoint|api.?design|rest|graphql|route
+match: semantic
+description: designing REST APIs, HTTP endpoints, API versioning, request response structure
+vocabulary: endpoint api rest graphql route http status pagination versioning
+threshold: 0.55
 ---
 # API Design Way
 

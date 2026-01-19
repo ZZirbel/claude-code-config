@@ -8,7 +8,7 @@ files: \.claude/ways/.*way\.md$
 ## Ways vs Skills
 
 **Skills** = semantically-discovered (Claude decides based on intent)
-**Ways** = pattern-triggered (keywords, commands, file edits)
+**Ways** = triggered (patterns, commands, file edits, or state conditions)
 
 | Use Skills for | Use Ways for |
 |---------------|--------------|
@@ -22,7 +22,8 @@ They complement: Skills can't detect tool execution. Ways support both regex and
 ## How Ways Work
 Ways are contextual guidance that loads once per session when triggered by:
 - **Keywords** in user prompts (UserPromptSubmit)
-- **Tool use** - commands, file paths, descriptions (PostToolUse)
+- **Tool use** - commands, file paths (PreToolUse)
+- **State conditions** - context threshold, file existence (UserPromptSubmit)
 
 ## Way File Format
 
@@ -52,15 +53,46 @@ threshold: 0.55           # optional, default 0.58
 ---
 ```
 
+For model-based classification (uses Haiku):
+```markdown
+---
+match: model
+description: security-sensitive operations, auth changes, credential handling
+---
+```
+
+For state-based triggers:
+```markdown
+---
+trigger: context-threshold
+threshold: 90             # percentage (0-100)
+---
+```
+
 ### Frontmatter Fields
-- `match:` - `regex` (default) or `semantic`
+
+**Pattern-based:**
+- `match:` - `regex` (default), `semantic`, or `model`
 - `pattern:` - Regex matched against user prompts
 - `files:` - Regex matched against file paths (Edit/Write)
 - `commands:` - Regex matched against bash commands
-- `macro:` - `prepend` or `append` to run `macro.sh`
+
+**Semantic (NCD):**
 - `description:` - Reference text for semantic similarity
 - `vocabulary:` - Domain words for keyword counting
 - `threshold:` - NCD threshold (lower = stricter, default 0.58)
+
+**Model (Haiku):**
+- `description:` - What this way covers (Haiku classifies yes/no)
+- Adds ~800ms latency but high accuracy
+
+**State-based:**
+- `trigger:` - State condition type (`context-threshold`, `file-exists`, `session-start`)
+- `threshold:` - For context-threshold: percentage (0-100)
+- `path:` - For file-exists: glob pattern relative to project
+
+**Other:**
+- `macro:` - `prepend` or `append` to run `macro.sh`
 
 ## Creating a New Way
 
@@ -97,9 +129,9 @@ Project ways take precedence over global ways with same path.
 Each (way, session) pair has two states:
 
 ```
-┌─────────────┐   keyword/command/file match   ┌─────────────┐
+┌─────────────┐  keyword/command/file/state    ┌─────────────┐
 │  not_shown  │ ─────────────────────────────▶ │   shown     │
-│  (no marker)│        output + create marker  │(marker exists)
+│  (no marker)│       output + create marker   │(marker exists)
 └─────────────┘                                └─────────────┘
        │                                              │
        │         any subsequent match                 │

@@ -20,6 +20,16 @@ SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(echo "$INPUT" | jq -r '.cwd // empty')}"
 WAYS_DIR="${HOME}/.claude/hooks/ways"
 
+# Read response topics from Stop hook (if available)
+RESPONSE_STATE="/tmp/claude-response-topics-${SESSION_ID}"
+RESPONSE_TOPICS=""
+if [[ -f "$RESPONSE_STATE" ]]; then
+  RESPONSE_TOPICS=$(jq -r '.topics // empty' "$RESPONSE_STATE" 2>/dev/null)
+fi
+
+# Combined context: user prompt + Claude's recent topics
+COMBINED_CONTEXT="$PROMPT $RESPONSE_TOPICS"
+
 # Scan ways in a directory for matches (recursive)
 scan_ways() {
   local dir="$1"
@@ -45,7 +55,12 @@ scan_ways() {
     # Check for match based on mode
     matched=false
 
-    if [[ "$match_mode" == "semantic" && -n "$description" && -n "$vocabulary" ]]; then
+    if [[ "$match_mode" == "model" && -n "$description" ]]; then
+      # Model-based classification: uses Haiku for accurate decisions
+      if "${WAYS_DIR}/model-match.sh" "$PROMPT" "$description" 2>/dev/null; then
+        matched=true
+      fi
+    elif [[ "$match_mode" == "semantic" && -n "$description" && -n "$vocabulary" ]]; then
       # Semantic matching: gzip NCD + keyword counting
       if "${WAYS_DIR}/semantic-match.sh" "$PROMPT" "$description" "$vocabulary" "$threshold" 2>/dev/null; then
         matched=true

@@ -1,7 +1,9 @@
 ---
-match: regex
-pattern: test|coverage|mock|tdd|unit.?test|spec
+match: semantic
+description: writing unit tests, test coverage, mocking dependencies, test-driven development
+vocabulary: unittest coverage mock tdd assertion jest pytest rspec testcase
 commands: npm\ test|yarn\ test|jest|pytest|cargo\ test|go\ test|rspec
+threshold: 0.54
 ---
 # Testing Way
 
