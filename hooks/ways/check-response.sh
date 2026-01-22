@@ -21,8 +21,8 @@ STOP_ACTIVE=$(echo "$INPUT" | jq -r '.stop_hook_active // false')
 STATE_FILE="/tmp/claude-response-topics-${SESSION_ID}"
 
 # Extract last assistant message from transcript (JSONL format)
-# Get the last assistant content block
-LAST_RESPONSE=$(tac "$TRANSCRIPT" | grep -m1 '"type":"assistant"' | jq -r '.message.content[]?.text // empty' 2>/dev/null | head -c 2000)
+# Use tail instead of tac to avoid reading entire file
+LAST_RESPONSE=$(tail -100 "$TRANSCRIPT" | grep '"type":"assistant"' | tail -1 | jq -r '.message.content[]?.text // empty' 2>/dev/null | head -c 2000)
 
 [[ -z "$LAST_RESPONSE" ]] && exit 0
 

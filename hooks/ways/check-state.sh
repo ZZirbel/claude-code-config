@@ -23,18 +23,37 @@ WAYS_DIR="${HOME}/.claude/hooks/ways"
 CONTEXT=""
 
 # Get transcript size since last compaction (bytes after last summary line)
+# Caches line number to avoid repeated full-file scans
 get_transcript_size() {
   [[ ! -f "$TRANSCRIPT" ]] && echo 0 && return
 
-  # Find last summary line (compaction marker)
-  local last_summary=$(grep -n '"type":"summary"' "$TRANSCRIPT" 2>/dev/null | tail -1 | cut -d: -f1)
+  local cache_file="/tmp/claude-summary-line-${SESSION_ID}"
+  local file_size=$(wc -c < "$TRANSCRIPT")
+  local cached_pos=0
+  local cached_size=0
 
-  if [[ -n "$last_summary" ]]; then
-    # Count bytes from last summary to end
-    tail -n +$last_summary "$TRANSCRIPT" | wc -c
+  # Read cache if exists
+  if [[ -f "$cache_file" ]]; then
+    read cached_pos cached_size < "$cache_file" 2>/dev/null
+  fi
+
+  # If file grew, check only new content for summary markers
+  if [[ $file_size -gt $cached_size ]]; then
+    # Check last 100KB for new summary markers (compactions are rare)
+    local new_summary=$(tail -c 100000 "$TRANSCRIPT" 2>/dev/null | grep -n '"type":"summary"' | tail -1 | cut -d: -f1)
+    if [[ -n "$new_summary" ]]; then
+      # Found new summary - recalculate from there
+      cached_pos=$(tail -c 100000 "$TRANSCRIPT" | head -n $new_summary | wc -c)
+      cached_pos=$((file_size - 100000 + cached_pos))
+    fi
+    echo "$cached_pos $file_size" > "$cache_file"
+  fi
+
+  # Return bytes since last summary
+  if [[ $cached_pos -gt 0 ]]; then
+    echo $((file_size - cached_pos))
   else
-    # No summary found, use full file
-    wc -c < "$TRANSCRIPT"
+    echo $file_size
   fi
 }
 
