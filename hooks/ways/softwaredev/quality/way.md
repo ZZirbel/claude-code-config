@@ -1,6 +1,7 @@
 ---
 match: regex
 pattern: solid.?principle|refactor|code.?review|code.?quality
+macro: append
 ---
 # Code Quality Way
 
