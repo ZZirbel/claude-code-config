@@ -42,11 +42,3 @@ When escalating, provide:
 5. **Autonomous action**: Unlock account
 6. Respond with context and next steps
 
-## Metrics
-
-| Metric | Target |
-|--------|--------|
-| Resolution rate (L0) | >40% without human |
-| MTTR (agent-resolved) | <5 minutes |
-| Escalation quality | 90% include context |
-| User satisfaction | CSAT >4.0/5.0 |

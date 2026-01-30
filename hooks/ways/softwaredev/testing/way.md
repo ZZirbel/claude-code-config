@@ -7,18 +7,33 @@ threshold: 0.54
 ---
 # Testing Way
 
-## What to Test
-- Behavior, not implementation
-- Edge cases and boundaries
-- Error paths, not just happy paths
+## What to Generate
 
-## Approach
-1. Write the test first (or at least think about it)
-2. One assertion per test when possible
-3. Tests should be independent - no shared state
-4. Name tests to describe the scenario
+For each function under test, cover:
+1. **Happy path** — expected input produces expected output
+2. **Empty/null input** — handles absence gracefully
+3. **Boundary values** — min, max, off-by-one, empty collections
+4. **Error conditions** — invalid input, dependency failures
+
+## Structure
+
+- Arrange-Act-Assert: setup, call, verify
+- Name tests: `should [behavior] when [condition]`
+- One logical assertion per test — test one behavior, not one line
+- Tests must be independent — no shared mutable state between tests
+
+## What to Assert
+
+- Observable outputs and side effects only
+- Never assert on method call counts or internal variable values
+- If you need to reach into private state, the design needs rethinking
 
 ## Mocking
-- Mock external dependencies, not internal logic
-- If mocking is painful, the design might need work
-- Prefer fakes over mocks when practical
+
+- Mock external dependencies (network, filesystem, databases)
+- Do not mock the code under test or its internal helpers
+- Prefer fakes (in-memory implementations) over mock libraries when practical
+
+## Project Detection
+
+Detect the test framework from project files (package.json, requirements.txt, Cargo.toml, go.mod). Follow its conventions for file placement and naming.

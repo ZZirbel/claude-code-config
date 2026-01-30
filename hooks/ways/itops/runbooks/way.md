@@ -4,55 +4,44 @@ pattern: \brunbook\b|runbook.?(automation|executable)|playbook|sop.?(automation|
 ---
 # Runbooks Way
 
-## What is an Executable Runbook?
+## What Claude Should Do
 
-A traditional runbook converted to agent-executable code:
+When handling operational tasks, check for existing runbooks before writing ad-hoc scripts.
+
+## Creating a Runbook
+
+A runbook documents a repeatable operational procedure:
 
 ```
 runbooks/
-└── diagnose-vpn-failure/
-    ├── index.ts    # Executable logic
-    └── README.md   # When/how to use
+└── procedure-name/
+    ├── runbook.sh (or .py, .ts)   # The procedure
+    └── README.md                   # When/how to use
 ```
 
-## Runbook Structure
+### The Procedure
 
-**index.ts** - The executable logic:
-```typescript
-export async function diagnoseVpnFailure(userId: string) {
-  const user = await identity.getUser(userId);
-  const logs = await monitoring.queryLogs({ service: 'vpn', user });
-  // ... diagnosis logic
-}
-```
+- Include error handling for every external call (API, SSH, database)
+- Ensure idempotent execution — safe to run twice
+- Log each step's outcome for post-incident review
+- Exit with clear success/failure status and message
 
-**README.md** - Documentation:
-- When to use (triggers, conditions)
-- Capabilities (what it can do)
-- Autonomy level (what requires approval)
-- Dependencies (required MCP servers)
+### The README
 
-## Traditional vs Executable Runbooks
+- **When to use**: trigger conditions, symptoms
+- **Prerequisites**: required access, credentials, tools
+- **Expected outcome**: what success looks like
+- **Escalation**: when this runbook isn't enough
 
-| Traditional Runbook | Executable Runbook |
-|---------------------|-------------------|
-| Document humans follow | Code agents execute |
-| Step-by-step text | Loops, conditionals |
-| Manual execution | Agent-invokable |
-| Knowledge in docs | Knowledge in code |
+## Runbook Quality Standards
 
-## Evolution Cycle
+- Test in a non-production environment before relying on it
+- Include a rollback or "undo" section where applicable
+- Keep steps atomic — each step succeeds completely or fails cleanly
+- Don't mix diagnosis with remediation — separate "find the problem" from "fix it"
 
-1. **Incident occurs** → Agent handles (or escalates)
-2. **Post-incident review** → Was handling optimal?
-3. **Runbook formalization** → Code + docs + tests
-4. **Validation** → Shadow mode testing
-5. **Deployment** → Available with appropriate autonomy
-6. **Continuous improvement** → Update based on outcomes
+## When a Runbook Doesn't Exist
 
-## Persistence
-
-- Stored in R2 (survives sandbox lifecycle)
-- Cross-session availability
-- Version controlled
-- Shareable across tenants (with isolation)
+If handling a novel operational issue:
+1. Resolve the incident first
+2. Then offer to create a runbook from the steps taken

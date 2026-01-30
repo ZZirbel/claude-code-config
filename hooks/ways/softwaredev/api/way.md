@@ -1,29 +1,26 @@
 ---
 match: semantic
 description: designing REST APIs, HTTP endpoints, API versioning, request response structure
-vocabulary: endpoint api rest graphql route http status pagination versioning
+vocabulary: endpoint api rest route http status pagination versioning
 threshold: 0.55
 ---
 # API Design Way
 
-## REST Conventions
-- Nouns for resources: `/users`, `/orders`
-- HTTP verbs for actions: GET, POST, PUT, DELETE
-- Plural resource names
-- Nest for relationships: `/users/123/orders`
+## Common Claude Omissions
 
-## Responses
-- Consistent envelope or flat structure
-- Meaningful HTTP status codes
-- Include error details in body
-- Paginate collections
+When building API endpoints, don't forget:
 
-## Versioning
-- Version in URL (`/v1/`) or header
-- Don't break existing clients
-- Deprecate before removing
+- **Pagination on every list endpoint** — add it from day one. Default: `?cursor=X&limit=N`, return `next_cursor` in body. Retrofitting pagination is painful.
+- **Consistent error shape** — error responses use the same structure as success:
+  ```json
+  { "error": { "code": "NOT_FOUND", "message": "User 123 not found" } }
+  ```
+- **Input validation** — validate request body before processing. Return 400 with specific field errors, not a generic message.
+- **404 on nested resources** — `GET /users/123/orders` returns 404 if user 123 doesn't exist, not an empty list.
 
-## General
-- Idempotent operations where possible
-- Rate limiting for protection
-- Document as you build
+## Defaults (Override Per-Project)
+
+- URL versioning: `/v1/resources`
+- Plural nouns: `/users`, not `/user`
+- PUT replaces, PATCH updates, DELETE is idempotent
+- 201 for creation, 204 for deletion, 409 for conflicts

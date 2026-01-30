@@ -1,17 +1,11 @@
 ---
 match: regex
-pattern: todo|tracking|multi.?session|cross.?session|picking.?up
+pattern: tracking.?file|cross.?session|multi.?session|picking.?up|\.claude/todo
 files: \.claude/todo-.*\.md$
 ---
 # Work Tracking Way
 
-## TodoWrite (Session-Scoped)
-- Maintains current task list in status bar
-- Provides real-time visibility to collaborators
-- Best for: active session tasks, quick progress tracking
-- Mark tasks complete IMMEDIATELY after finishing
-
-## Persistent Tracking Files (Cross-Session)
+## Persistent Tracking Files
 
 For complex, multi-session work, create files in `.claude/`:
 
@@ -26,6 +20,10 @@ For complex, multi-session work, create files in `.claude/`:
 - ADR implementation spanning sessions
 - Complex PR with multiple review cycles
 - Multi-step issue resolution
+
+**When to read:**
+- At session start, check for existing tracking files before beginning work
+- Before starting work on an ADR, PR, or issue — check if there's prior context
 
 **Format:**
 ```markdown
@@ -42,13 +40,3 @@ For complex, multi-session work, create files in `.claude/`:
 
 **Cleanup:**
 When all items complete, recommend deleting the file. Git history preserves it. Don't let completed files accumulate.
-
-## Relationship
-
-| Aspect | TodoWrite | `.claude/todo-*.md` |
-|--------|-----------|---------------------|
-| Scope | Current session | Cross-session |
-| Detail | Titles only | Rich context |
-| Visibility | Status bar | Read on demand |
-
-Use both: TodoWrite for active visibility, tracking files for continuity.

@@ -4,23 +4,44 @@ pattern: error.?handl|exception|try.?catch|throw|catch
 ---
 # Error Handling Way
 
-## When to Catch
-- You can actually handle/recover from it
-- You need to translate it (wrap with context)
-- At system boundaries (API endpoints, CLI entry)
+## Where to Catch
 
-## When to Propagate
-- You can't meaningfully handle it
-- Caller needs to know about it
-- It's a programmer error (bug)
+Catch at **system boundaries** only — API endpoints, CLI entry points, message handlers. Not inside business logic.
 
-## Good Error Messages
-- What went wrong
-- Why it went wrong (if known)
-- How to fix it (if possible)
+```javascript
+// Boundary catch: translate and log
+app.get('/users/:id', async (req, res) => {
+  try {
+    const user = await getUser(req.params.id);
+    res.json(user);
+  } catch (err) {
+    logger.error('getUser failed', { userId: req.params.id, error: err.message });
+    res.status(500).json({ error: { code: 'INTERNAL', message: 'Failed to fetch user' } });
+  }
+});
+```
 
-## Patterns
-- Fail fast for programmer errors
-- Graceful degradation for operational errors
-- Log at the boundary, not everywhere
-- Don't swallow errors silently
+## Wrapping with Context
+
+When crossing module boundaries, add context and re-throw:
+
+```javascript
+async function processOrder(orderId) {
+  try {
+    await chargePayment(orderId);
+  } catch (err) {
+    throw new Error(`Failed to process order ${orderId}: ${err.message}`, { cause: err });
+  }
+}
+```
+
+## Programmer Errors vs Operational Errors
+
+- **Programmer errors** (bugs): null reference, type mismatch, assertion failure — fail fast, don't catch
+- **Operational errors** (expected failures): network timeout, file not found, invalid input — handle gracefully: retry, return fallback, or return clear error to user
+
+## Do Not
+
+- Swallow errors silently (`catch (e) {}`)
+- Log the same error at multiple levels — log once at the boundary
+- Catch errors you can't handle just to re-throw unchanged

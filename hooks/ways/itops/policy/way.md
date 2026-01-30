@@ -31,12 +31,6 @@ pattern: operation.?class|policy.?(engine|enforcement)|approval.?(gate|level|wor
 | **Recommend** | Propose, await approval | Explicit approval |
 | **Escalate** | Block, page on-call | Senior approval |
 
-## Policy-as-Code
-
-- **OPA/Rego**: Operation constraints
-- **Sentinel**: HashiCorp policy enforcement
-- Pattern: `deny[msg] { input.operation.class == "DESTRUCTIVE"; not input.approval.escalated }`
-
 ## Circuit Breakers
 
 | Control | Purpose | Typical Config |
