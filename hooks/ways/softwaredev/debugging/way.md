@@ -6,20 +6,21 @@ threshold: 0.53
 ---
 # Debugging Way
 
-## Systematic Approach
-1. **Reproduce** - Can you trigger it reliably?
-2. **Isolate** - What's the smallest case that fails?
-3. **Hypothesize** - What could cause this?
-4. **Test** - Verify one hypothesis at a time
-5. **Fix** - Change one thing, confirm it works
+## Before Changing Any Code
 
-## Common Traps
-- Changing multiple things at once
-- Assuming you know the cause without evidence
-- Fixing symptoms instead of root cause
-- Not checking the obvious first (typos, config, versions)
+1. Read the full error message and stack trace
+2. Search the codebase for the error string
+3. Check recent changes: `git log --oneline -10` and `git diff HEAD~3`
+4. Reproduce the issue — if you can't trigger it, you can't verify a fix
 
-## Tools
-- Print/log statements (shameless but effective)
-- Debugger breakpoints
-- Git bisect for regressions
+## Do Not
+
+- Change code based on guessing — verify the root cause first
+- Fix multiple things at once — one change, one test
+- Assume the bug is where the error appears — trace back to the source
+
+## When Stuck
+
+- `git bisect start` / `git bisect bad` / `git bisect good <ref>` to find the introducing commit
+- Add targeted logging at function boundaries, not scattered everywhere
+- Check the obvious: typos, wrong file, stale cache, wrong branch, missing env var

@@ -1,6 +1,6 @@
 ---
 match: regex
-pattern: operation.?class|policy.?(engine|enforcement)|approval.?(gate|level|workflow)|\bopa\b|blast.?radius|risk.?(class|level|score)
+pattern: operation.?class|policy.?(engine|enforcement)|approval.?(gate|level|workflow)|blast.?radius|risk.?(class|level|score)
 ---
 # Policy Way
 
@@ -30,12 +30,6 @@ pattern: operation.?class|policy.?(engine|enforcement)|approval.?(gate|level|wor
 | **Notify** | Execute, then inform | Post-hoc awareness |
 | **Recommend** | Propose, await approval | Explicit approval |
 | **Escalate** | Block, page on-call | Senior approval |
-
-## Policy-as-Code
-
-- **OPA/Rego**: Operation constraints
-- **Sentinel**: HashiCorp policy enforcement
-- Pattern: `deny[msg] { input.operation.class == "DESTRUCTIVE"; not input.approval.escalated }`
 
 ## Circuit Breakers
 

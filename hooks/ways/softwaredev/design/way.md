@@ -1,20 +1,10 @@
 ---
 match: semantic
-description: software system design architecture patterns database schema api modeling component
-vocabulary: software system design architecture pattern patterns database schema modeling api endpoint interface component modules factory observer strategy behavioral data structure
+description: software system design architecture patterns database schema component modeling
+vocabulary: architecture pattern database schema modeling interface component modules factory observer strategy
 threshold: 0.55
 ---
 # Design Way
-
-## When This Triggers
-
-This way uses **semantic matching** (keyword counting + gzip NCD) to detect software design discussions:
-- System architecture and component design
-- Design patterns (factory, observer, strategy, etc.)
-- API design and data modeling
-- Trade-off discussions
-
-**Not for**: UI/UX design, graphic design, casual "design" usage.
 
 ## Design Discussion Framework
 
@@ -24,19 +14,21 @@ This way uses **semantic matching** (keyword counting + gzip NCD) to detect soft
 4. **Trade-offs**: What does each option cost/gain?
 5. **Decision**: What do we choose and why?
 
+When the design involves architectural trade-offs worth documenting, escalate to an ADR (see ADR Way).
+
 ## Common Patterns
 
-| Pattern | When to Use |
-|---------|-------------|
-| Factory | Object creation complexity |
-| Strategy | Swappable algorithms |
-| Observer | Event-driven decoupling |
-| Repository | Data access abstraction |
-| Adapter | Interface compatibility |
+| Pattern | When to Use | When NOT to Use |
+|---------|-------------|-----------------|
+| Factory | Complex object creation, multiple variants | Simple constructors suffice |
+| Strategy | Swappable algorithms at runtime | Only one implementation exists |
+| Observer | Event-driven decoupling | Tight coupling is acceptable |
+| Repository | Data access abstraction | Direct queries are clearer |
+| Adapter | Interface compatibility | Both sides under your control |
 
-## Questions to Ask
+## Questions That Drive Design
 
-- "What changes most frequently?"
-- "What needs to be independently deployable?"
-- "Where are the natural boundaries?"
-- "What would make this testable?"
+- "What changes most frequently?" — isolate it behind an interface
+- "What needs to be independently deployable?" — service boundary
+- "Where are the natural boundaries?" — module/package split
+- "What would make this testable?" — dependency injection point

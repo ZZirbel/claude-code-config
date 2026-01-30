@@ -1,21 +1,17 @@
 ---
 match: regex
-pattern: release|deploy|version|changelog|tag
+pattern: release|changelog|tag|version.?bump|bump.?version|npm.?publish|cargo.?publish
 ---
 # Release Way
 
-## Semantic Versioning
-- MAJOR: breaking changes
-- MINOR: new features, backward compatible
-- PATCH: bug fixes, backward compatible
+## Generate Changelog
 
-## Before Release
-- All tests passing
-- Changelog updated
-- Version bumped
-- Dependencies reviewed
+```bash
+# Commits since last tag
+git log --oneline $(git describe --tags --abbrev=0 2>/dev/null || echo "HEAD~20")..HEAD
+```
 
-## Changelog Format
+Format using Keep a Changelog:
 ```
 ## [X.Y.Z] - YYYY-MM-DD
 ### Added
@@ -24,11 +20,18 @@ pattern: release|deploy|version|changelog|tag
 ### Removed
 ```
 
-## Release Checklist
-1. Create release branch or tag
-2. Update version numbers
-3. Update changelog
-4. Build and test
-5. Tag the release
-6. Deploy
-7. Announce if needed
+## Infer Version Bump
+
+From commit messages since last tag:
+- Any `feat!:` or `BREAKING CHANGE` → **major**
+- Any `feat:` → **minor**
+- Only `fix:`, `docs:`, `chore:` → **patch**
+
+## Update Version
+
+Detect the version file (package.json, Cargo.toml, pyproject.toml, version.txt) and update it.
+
+## Do Not
+
+- Explain what semantic versioning is — just apply it
+- List human process steps (deploy, announce) — produce artifacts Claude can generate
