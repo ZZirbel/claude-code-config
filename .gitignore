@@ -22,6 +22,10 @@
 !docs/*.md
 !docs/adr/
 !docs/adr/*.md
+!docs/hooks-and-ways/
+!docs/hooks-and-ways/*.md
+!docs/hooks-and-ways/softwaredev/
+!docs/hooks-and-ways/softwaredev/*.md
 
 # Hooks and ways
 !hooks/
