@@ -26,6 +26,8 @@
 !docs/hooks-and-ways/*.md
 !docs/hooks-and-ways/softwaredev/
 !docs/hooks-and-ways/softwaredev/*.md
+!docs/hooks-and-ways/**/
+!docs/hooks-and-ways/**/*.md
 
 # Hooks and ways
 !hooks/
