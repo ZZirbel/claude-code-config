@@ -4,7 +4,7 @@ Guidance for web research, report assembly, and data collection.
 
 ## Domain Scope
 
-This covers the research-oriented work pattern: gathering information from multiple sources, synthesizing it into structured outputs, and producing deliverables (HTML reports, PDFs, datasets). This is distinct from software development - the output is knowledge artifacts, not running code.
+This covers the research-and-deliverable work pattern: gathering information from multiple sources, synthesizing it into structured outputs, and producing deliverables (HTML reports, PDFs, datasets). This spans both investigative research and consulting deliverables - assessments, POCs, scoping exercises, and client-facing reports all follow the same fundamental pattern of gather → synthesize → deliver. The output is knowledge artifacts, not running code.
 
 ## Principles
 

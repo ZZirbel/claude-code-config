@@ -87,6 +87,46 @@ flowchart TD
 | Reference | `docs/hooks-and-ways.md` | Humans + Claude | System mechanics, diagrams, data flow |
 | Machine | `hooks/ways/*/way.md` | Claude (via hooks) | Terse, directive, context-optimized guidance |
 
+## Ways vs Skills
+
+Claude Code has a built-in feature called **Skills** (`~/.claude/skills/`). Ways and Skills serve different purposes and operate at different levels of abstraction.
+
+**Ways are the procedural rules** - the process, the approach, the "how we do things here." They fire based on what's happening in the session (tools being used, files being edited, context filling up) and inject the rules of engagement for that category of work.
+
+**Skills emerge from following those rules.** When the ways are internalized - when the process is consistently applied - specific capabilities develop. A skill is a crystallized competency: "here's exactly how to do this specific thing." Claude selects skills by matching user intent to the skill's description.
+
+```mermaid
+flowchart LR
+    classDef way fill:#2196F3,stroke:#1565C0,color:#fff
+    classDef skill fill:#9C27B0,stroke:#6A1B9A,color:#fff
+    classDef action fill:#4CAF50,stroke:#2E7D32,color:#fff
+
+    W["Ways<br/><i>procedural rules</i>"]:::way
+    S["Skills<br/><i>emergent competencies</i>"]:::skill
+    A["Action<br/><i>what Claude does</i>"]:::action
+
+    W -->|"rules followed consistently"| S
+    W -->|"sets the approach"| A
+    S -->|"provides specific moves"| A
+```
+
+| | Ways | Skills |
+|--|------|--------|
+| **Nature** | Process rules | Emergent competencies |
+| **Granularity** | Category of work | Specific task |
+| **Content** | "How we approach this" | "How to do this" |
+| **Trigger** | Patterns, tools, state conditions | Semantic intent matching |
+| **Persistence** | Once per session (usually) | Always available when matched |
+| **Example** | "Cloud CLIs: verify auth, be region-explicit, flag costs" | "Query GCP billing: run `gcloud billing...`" |
+
+The relationship is generative: ways produce the conditions for skills to be effective. A skill for rotating an AWS key works better when the security way has already established "never commit secrets, always verify credentials." The skill provides the specific steps; the way provides the judgment framework around them.
+
+**When to write a way vs a skill:**
+- If the knowledge is *process* that applies across many situations → way
+- If the knowledge is a *specific capability* that emerged from practice → skill
+- If you need to trigger on *tool use or session state* → way (skills can't detect these)
+- If you need *tool restrictions* (`allowed-tools`) → skill (ways can't restrict tools)
+
 ## Adding a New Way: The Process
 
 Don't start by writing `way.md`. Start at stage 1.

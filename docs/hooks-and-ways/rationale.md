@@ -49,6 +49,16 @@ Ways can trigger on user prompts (what you ask for), tool use (what Claude is ab
 
 The system is built entirely on Claude Code's hook API - shell scripts that receive JSON and return JSON. No patches, no forks, no internal modifications. This means it survives Claude Code updates and can be shared across machines by copying `~/.claude/hooks/`.
 
+## "But Claude already knows how to do this"
+
+A fair objection: Claude's training data covers most of these topics. Why inject guidance about commit conventions or error handling when the model already has strong opinions?
+
+The answer is that ways aren't about filling knowledge gaps. They're about **encoding a specific person's developed opinions** about how work should be done. Claude knows many approaches to error handling. These ways encode *this* approach - one that was developed through actual use, refined through collaboration, and proven to work in this context.
+
+A model's training gives it breadth. Ways give it a specific posture - the opinions that emerged from what worked and what didn't across real sessions. "Here's how to handle errors" is generic training data. "Catch at boundaries only, wrap with context at module crossings, let programmer errors crash" is a developed position.
+
+This is also why ways evolve. They start as principles, get tested in practice, and get refined when they don't work. The governance docs capture the rationale so future refinements have context about why things are the way they are.
+
 ## What This Replaces
 
 Without this system, the alternatives are:
