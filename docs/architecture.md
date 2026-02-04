@@ -42,9 +42,11 @@ sequenceDiagram
     end
 
     rect rgba(230, 81, 0, 0.15)
-        Note over C,C: Claude commits the fix
-        C->>C: Bash: git commit
-        W-->>C: 📝 Commits way injected (command: git commit)
+        Note over C,C: Claude creates a PR
+        C->>C: Bash: gh pr create
+        W-->>C: 🔀 GitHub way injected (command: gh)
+        Note right of W: macro.sh runs → queries GitHub API<br/>→ "Team project (4 contributors) — PR recommended"
+        Note right of C: Way content is tailored by macro<br/>to this project's collaboration context
     end
 
     rect rgba(21, 101, 192, 0.15)
@@ -307,7 +309,7 @@ NCD("software design", "button design looks off")    = 0.63 (different)
 
 ## Macro Injection
 
-Ways with `macro: prepend|append` run dynamic scripts:
+Ways with `macro: prepend|append` run dynamic scripts that query live state:
 
 ```mermaid
 sequenceDiagram
@@ -318,29 +320,42 @@ sequenceDiagram
     participant Out as Output
 
     Hook->>Show: waypath, session_id
-    Show->>Show: Check marker
 
-    alt Marker exists
-        Show-->>Hook: (silent return)
-    else No marker
+    rect rgba(198, 40, 40, 0.12)
+        Show->>Show: Check marker
+        alt Marker exists
+            Show-->>Hook: (silent return)
+        end
+    end
+
+    rect rgba(21, 101, 192, 0.15)
+        Note over Show,Way: No marker — first time this session
         Show->>Way: Read frontmatter
 
         alt macro: prepend
-            Show->>Macro: Execute
-            Macro-->>Out: Dynamic context
+            rect rgba(106, 27, 154, 0.12)
+                Show->>Macro: Execute script
+                Note right of Macro: e.g. query GitHub API,<br/>scan files, check tooling
+                Macro-->>Out: Dynamic context
+            end
             Show->>Way: Strip frontmatter
             Way-->>Out: Static guidance
         else macro: append
             Show->>Way: Strip frontmatter
             Way-->>Out: Static guidance
-            Show->>Macro: Execute
-            Macro-->>Out: Dynamic context
+            rect rgba(106, 27, 154, 0.12)
+                Show->>Macro: Execute script
+                Macro-->>Out: Dynamic context
+            end
         else no macro
             Show->>Way: Strip frontmatter
             Way-->>Out: Static guidance
         end
+    end
 
+    rect rgba(46, 125, 50, 0.15)
         Show->>Show: Create marker
+        Note right of Show: Way won't fire again this session
     end
 ```
 
