@@ -37,6 +37,11 @@ scan_ways() {
     commands=$(awk '/^---$/{p=!p; next} p && /^commands:/' "$wayfile" | sed 's/^commands: *//')
     pattern=$(awk '/^---$/{p=!p; next} p && /^pattern:/' "$wayfile" | sed 's/^pattern: *//')
 
+    # Check scope -- skip if not agent-scoped
+    scope=$(awk '/^---$/{p=!p; next} p && /^scope:/' "$wayfile" | sed 's/^scope: *//')
+    scope="${scope:-agent}"
+    echo "$scope" | grep -qw "agent" || continue
+
     # Check command patterns
     if [[ -n "$commands" && "$CMD" =~ $commands ]]; then
       CONTEXT+=$(~/.claude/hooks/ways/show-way.sh "$waypath" "$SESSION_ID")

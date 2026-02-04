@@ -34,6 +34,11 @@ scan_ways() {
     # Extract files pattern from frontmatter
     files=$(awk '/^---$/{p=!p; next} p && /^files:/' "$wayfile" | sed 's/^files: *//')
 
+    # Check scope -- skip if not agent-scoped
+    scope=$(awk '/^---$/{p=!p; next} p && /^scope:/' "$wayfile" | sed 's/^scope: *//')
+    scope="${scope:-agent}"
+    echo "$scope" | grep -qw "agent" || continue
+
     # Check file path against pattern
     if [[ -n "$files" && "$FP" =~ $files ]]; then
       CONTEXT+=$(~/.claude/hooks/ways/show-way.sh "$waypath" "$SESSION_ID")

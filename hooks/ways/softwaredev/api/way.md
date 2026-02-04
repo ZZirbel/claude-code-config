@@ -3,6 +3,7 @@ match: semantic
 description: designing REST APIs, HTTP endpoints, API versioning, request response structure
 vocabulary: endpoint api rest route http status pagination versioning
 threshold: 0.55
+scope: agent, subagent
 ---
 # API Design Way
 

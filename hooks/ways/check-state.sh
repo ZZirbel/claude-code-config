@@ -114,6 +114,11 @@ scan_state_triggers() {
 
     [[ -z "$trigger" ]] && continue
 
+    # Check scope -- skip if not agent-scoped
+    local scope=$(awk 'NR==1 && /^---$/{p=1; next} p && /^---$/{exit} p && /^scope:/' "$wayfile" | sed 's/^scope: *//')
+    scope="${scope:-agent}"
+    echo "$scope" | grep -qw "agent" || continue
+
     # Evaluate the trigger condition
     if evaluate_trigger "$trigger" "$wayfile"; then
       case "$trigger" in

@@ -3,6 +3,7 @@ match: semantic
 description: application security, authentication, secrets management, input validation, vulnerability prevention
 vocabulary: authentication secrets password credentials owasp injection xss sql sanitize vulnerability
 threshold: 0.52
+scope: agent, subagent
 ---
 # Security Way
 

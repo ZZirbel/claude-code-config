@@ -52,6 +52,11 @@ scan_ways() {
     vocabulary=$(get_field "vocabulary")      # domain words (for match: semantic)
     threshold=$(get_field "threshold")        # NCD threshold (for match: semantic)
 
+    # Check scope -- skip if not agent-scoped
+    scope_raw=$(get_field "scope")
+    scope_raw="${scope_raw:-agent}"
+    echo "$scope_raw" | grep -qw "agent" || continue
+
     # Check for match based on mode
     matched=false
 

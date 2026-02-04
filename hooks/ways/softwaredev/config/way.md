@@ -4,6 +4,7 @@ description: application configuration, environment variables, dotenv files, con
 vocabulary: dotenv environment configuration envvar config.json config.yaml
 files: \.env|config\.(json|yaml|yml|toml)$
 threshold: 0.54
+scope: agent, subagent
 ---
 # Configuration Way
 

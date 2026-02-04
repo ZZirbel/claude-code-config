@@ -2,6 +2,7 @@
 match: regex
 pattern: readme|documentation|docs|document.*project|explain.*repo
 files: README\.md$|docs/.*\.md$
+scope: agent, subagent
 ---
 # Documentation Way
 

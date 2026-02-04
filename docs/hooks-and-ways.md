@@ -4,7 +4,7 @@ How contextual guidance gets injected into Claude Code sessions.
 
 ## Hook Events
 
-Four Claude Code hook events drive the system. Each fires shell scripts that scan for matching ways and inject their content.
+Six Claude Code hook events drive the system. Each fires shell scripts that scan for matching ways and inject their content.
 
 | Event | When | Scripts |
 |-------|------|---------|
@@ -13,14 +13,16 @@ Four Claude Code hook events drive the system. Each fires shell scripts that sca
 | **UserPromptSubmit** | Every user message | `check-prompt.sh`, `check-state.sh` |
 | **PreToolUse** (Edit\|Write) | Before file edit | `check-file-pre.sh` |
 | **PreToolUse** (Bash) | Before command | `check-bash-pre.sh` |
+| **PreToolUse** (Task) | Before subagent spawn | `check-task-pre.sh` |
 | **PreToolUse** (TaskCreate) | Before task creation | `mark-tasks-active.sh` |
+| **SubagentStart** | When subagent starts | `inject-subagent.sh` |
 | **Stop** | After Claude responds | `check-response.sh` |
 
 ## What Each Script Does
 
 ### Session Lifecycle
 
-- **`clear-markers.sh`** - Removes all `/tmp/.claude-way-*` and `/tmp/.claude-tasks-active-*` markers. Resets session state so ways can fire fresh.
+- **`clear-markers.sh`** - Removes all `/tmp/.claude-way-*`, `/tmp/.claude-tasks-active-*` markers, and `/tmp/.claude-subagent-stash-*` dirs. Resets session state so ways can fire fresh.
 - **`show-core.sh`** - Runs `macro.sh` to generate the Available Ways table, then outputs `core.md` (collaboration style, communication norms). This is the initial context Claude sees.
 - **`init-project-ways.sh`** - Creates `$PROJECT/.claude/ways/_template.md` if the project has a `.claude/` or `.git/` dir but no ways directory yet.
 - **`check-config-updates.sh`** - Once-per-day check for plugin updates.
@@ -31,6 +33,13 @@ Four Claude Code hook events drive the system. Each fires shell scripts that sca
 - **`check-bash-pre.sh`** - Scans ways for `commands:` patterns. Tests the command about to run. Also checks `pattern:` against the command description.
 - **`check-file-pre.sh`** - Scans ways for `files:` patterns. Tests the file path about to be edited.
 - **`check-state.sh`** - Evaluates `trigger:` fields (context-threshold, file-exists, session-start). See [State Triggers](#state-triggers).
+
+All trigger evaluation scripts respect the `scope:` frontmatter field - ways without `agent` scope are skipped.
+
+### Subagent Injection
+
+- **`check-task-pre.sh`** - PreToolUse:Task hook (Phase 1). Reads the Task tool's `prompt` parameter, scans ways with `scope: subagent`, matches against patterns. Writes matched way paths to `/tmp/.claude-subagent-stash-{session_id}/`. Never blocks Task creation.
+- **`inject-subagent.sh`** - SubagentStart hook (Phase 2). Reads the oldest stash file, claims it atomically, emits way content as `additionalContext`. Bypasses markers entirely - subagents get fresh context regardless of what the parent triggered.
 
 ### State Management
 
@@ -74,17 +83,32 @@ sequenceDiagram
     end
 ```
 
+## Way Scope
+
+The `scope:` frontmatter field controls where a way injects its content:
+
+| Value | Injected into | Via |
+|-------|--------------|-----|
+| `agent` | Main agent context | `check-prompt.sh`, `check-bash-pre.sh`, `check-file-pre.sh` |
+| `subagent` | Subagent context | `check-task-pre.sh` → `inject-subagent.sh` |
+| `agent, subagent` | Both | All paths |
+| *(absent)* | Main agent only | Backward compatible default |
+
+All built-in ways ship with `scope: agent, subagent`. Ways with only `subagent` scope are invisible to the main agent - useful for subagent-specific instructions.
+
+Subagent injection bypasses the marker system. A way can fire for the parent (marker-gated) AND separately for each subagent (no markers). The parent's way guidance doesn't automatically transfer to subagents because the Task prompt is a compact delegation - the scope system bridges this gap.
+
 ## Way Matching Modes
 
 Each way declares how it should be matched in its YAML frontmatter.
 
 ```mermaid
 flowchart TD
-    classDef regex fill:#4CAF50,stroke:#2E7D32,color:#fff
-    classDef semantic fill:#2196F3,stroke:#1565C0,color:#fff
-    classDef model fill:#9C27B0,stroke:#6A1B9A,color:#fff
-    classDef decision fill:#FF9800,stroke:#E65100,color:#fff
-    classDef result fill:#26A69A,stroke:#00796B,color:#fff
+    classDef regex fill:#2E7D32,stroke:#1B5E20,color:#fff
+    classDef semantic fill:#1565C0,stroke:#0D47A1,color:#fff
+    classDef model fill:#6A1B9A,stroke:#4A148C,color:#fff
+    classDef decision fill:#E65100,stroke:#BF360C,color:#fff
+    classDef result fill:#00695C,stroke:#004D40,color:#fff
 
     W[way.md frontmatter]
     W -->|"match: regex (default)"| R
@@ -190,8 +214,8 @@ Most ways fire once then go silent for the rest of the session.
 
 ```mermaid
 stateDiagram-v2
-    classDef notShown fill:#E91E63,stroke:#AD1457,color:#fff,font-weight:bold
-    classDef shown fill:#4CAF50,stroke:#2E7D32,color:#fff,font-weight:bold
+    classDef notShown fill:#C62828,stroke:#B71C1C,color:#fff,font-weight:bold
+    classDef shown fill:#2E7D32,stroke:#1B5E20,color:#fff,font-weight:bold
 
     [*] --> NotShown
     NotShown --> Shown : trigger match → output + create marker
@@ -204,7 +228,9 @@ stateDiagram-v2
     note right of Shown : Cleared on SessionStart (startup & compact)
 ```
 
-**Exception**: context-threshold triggers bypass this system entirely. They repeat until the tasks-active marker exists.
+**Exceptions**:
+- Context-threshold triggers bypass this system entirely - they repeat until the tasks-active marker exists.
+- Subagent injection (`inject-subagent.sh`) bypasses markers completely - each subagent gets fresh way content.
 
 ## The Context-Threshold Nag
 
@@ -269,43 +295,56 @@ sequenceDiagram
     participant SW as show-way.sh
     participant CB as check-bash-pre.sh
     participant CF as check-file-pre.sh
+    participant CT as check-task-pre.sh
+    participant IS as inject-subagent.sh
     participant MA as mark-tasks-active.sh
     participant CR as check-response.sh
     participant Ctx as Claude Context
 
-    rect rgba(66, 165, 245, 0.12)
+    rect rgba(21, 101, 192, 0.12)
         Note over U,Ctx: User sends message
         U->>CC: prompt
         par Prompt Triggers
             CC->>CP: UserPromptSubmit
-            CP->>CP: scan ways (regex/semantic/model)
+            CP->>CP: scan ways (regex/semantic/model, scope: agent)
             CP->>SW: matched ways
             SW->>SW: check marker → check domain → run macro
             SW->>Ctx: way content (if not shown)
         and State Triggers
             CC->>CS: UserPromptSubmit
-            CS->>CS: evaluate triggers
+            CS->>CS: evaluate triggers (scope: agent)
             CS->>Ctx: context-threshold nag (if applicable)
         end
     end
 
-    rect rgba(156, 39, 176, 0.12)
+    rect rgba(106, 27, 154, 0.12)
         Note over U,Ctx: Claude uses tools
         alt Bash command
             CC->>CB: PreToolUse:Bash
-            CB->>CB: scan commands: patterns
+            CB->>CB: scan commands: patterns (scope: agent)
             CB->>Ctx: matching way content
         else File edit
             CC->>CF: PreToolUse:Edit|Write
-            CF->>CF: scan files: patterns
+            CF->>CF: scan files: patterns (scope: agent)
             CF->>Ctx: matching way content
+        else Subagent spawn
+            CC->>CT: PreToolUse:Task
+            CT->>CT: scan task prompt (scope: subagent)
+            CT->>CT: stash matched way paths
         else Task creation
             CC->>MA: PreToolUse:TaskCreate
             MA->>MA: touch tasks-active marker
         end
     end
 
-    rect rgba(255, 152, 0, 0.12)
+    rect rgba(0, 105, 92, 0.12)
+        Note over U,Ctx: Subagent starts (if Task was used)
+        CC->>IS: SubagentStart
+        IS->>IS: read stash → emit way content
+        IS->>Ctx: additionalContext (subagent sees ways)
+    end
+
+    rect rgba(230, 81, 0, 0.12)
         Note over U,Ctx: Claude finishes responding
         CC->>CR: Stop
         CR->>CR: extract keywords from response
@@ -336,10 +375,10 @@ Projects can override or add ways at `$PROJECT/.claude/ways/{domain}/{way}/way.m
 
 ```mermaid
 flowchart TD
-    classDef project fill:#FF9800,stroke:#E65100,color:#fff
-    classDef global fill:#2196F3,stroke:#1565C0,color:#fff
-    classDef marker fill:#26A69A,stroke:#00796B,color:#fff
-    classDef result fill:#4CAF50,stroke:#2E7D32,color:#fff
+    classDef project fill:#E65100,stroke:#BF360C,color:#fff
+    classDef global fill:#1565C0,stroke:#0D47A1,color:#fff
+    classDef marker fill:#00695C,stroke:#004D40,color:#fff
+    classDef result fill:#2E7D32,stroke:#1B5E20,color:#fff
 
     T["Trigger fires for softwaredev/github"] --> PL
 

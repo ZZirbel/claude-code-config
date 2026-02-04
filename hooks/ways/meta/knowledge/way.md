@@ -2,6 +2,7 @@
 match: regex
 pattern: \bway\b|\bways\b|knowledge|guidance|context.?inject
 files: \.claude/ways/.*way\.md$
+scope: agent, subagent
 ---
 # Knowledge Way
 

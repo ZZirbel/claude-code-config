@@ -2,6 +2,7 @@
 match: regex
 pattern: ssh|remote.?server|remote.?host|sshpass
 commands: ^ssh\ |^scp\ |^rsync.*:|\bsshpass\b
+scope: agent, subagent
 ---
 # SSH Way
 

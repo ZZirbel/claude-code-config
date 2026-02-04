@@ -3,6 +3,7 @@ match: regex
 pattern: patch|\.diff|apply.*change
 files: \.(patch|diff)$
 commands: git\ apply|git\ diff.*\>
+scope: agent, subagent
 ---
 # Patch Creation Way
 

@@ -1,6 +1,7 @@
 ---
 match: regex
 pattern: error.?handl|exception|try.?catch|throw|catch
+scope: agent, subagent
 ---
 # Error Handling Way
 

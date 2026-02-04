@@ -2,6 +2,7 @@
 match: regex
 pattern: tracking.?file|cross.?session|multi.?session|picking.?up|\.claude/todo
 files: \.claude/todo-.*\.md$
+scope: agent, subagent
 ---
 # Work Tracking Way
 

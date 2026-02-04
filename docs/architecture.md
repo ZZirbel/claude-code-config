@@ -2,32 +2,175 @@
 
 Visual documentation of the ways trigger system.
 
+## How a Session Flows
+
+A typical session from the user's perspective, showing how events trigger way injections at each step:
+
+```mermaid
+sequenceDiagram
+    participant U as 👤 User
+    participant C as 🤖 Claude
+    participant W as ⚡ Ways System
+    participant S as 🔧 Subagent
+
+    Note over U,S: Session starts — core guidance loads
+
+    rect rgba(21, 101, 192, 0.15)
+        Note over U,C: User describes their task
+        U->>C: "Let's fix the auth bug and<br/>add tests for the login flow"
+        W-->>C: 🔑 Security way injected (keyword: auth)
+        W-->>C: 🧪 Testing way injected (keyword: tests)
+        W-->>C: 🐛 Debugging way injected (keyword: bug)
+        Note right of C: Claude now has security, testing,<br/>and debugging guidance in context
+    end
+
+    rect rgba(106, 27, 154, 0.15)
+        Note over C,C: Claude investigates the bug
+        C->>C: Bash: git log --oneline auth/
+        Note right of W: No way matches this command
+        C->>C: Edit: src/auth/login.ts
+        W-->>C: ⚙️ Config way injected (file: config pattern)
+    end
+
+    rect rgba(0, 105, 92, 0.15)
+        Note over C,S: Claude delegates to a subagent
+        C->>S: Task: "Review the auth module<br/>for security vulnerabilities"
+        W-->>S: 🔑 Security way injected into subagent
+        W-->>S: 🐛 Debugging way injected into subagent
+        Note right of S: Subagent works with<br/>its own way context
+        S-->>C: Review findings
+    end
+
+    rect rgba(230, 81, 0, 0.15)
+        Note over C,C: Claude commits the fix
+        C->>C: Bash: git commit
+        W-->>C: 📝 Commits way injected (command: git commit)
+    end
+
+    rect rgba(21, 101, 192, 0.15)
+        Note over U,C: User continues — ways stay quiet
+        U->>C: "Now let's also check the tests"
+        Note right of W: Testing way already shown → silent
+        Note right of C: No new injections — markers prevent repeats
+    end
+```
+
 ## Hook Flow
 
 How ways get triggered during a Claude Code session:
 
 ```mermaid
 flowchart TB
-    subgraph Session["Claude Code Session"]
-        SS[SessionStart] --> Core["show-core.sh<br/>Dynamic table + core.md"]
+    classDef event fill:#1565C0,stroke:#0D47A1,color:#fff
+    classDef script fill:#6A1B9A,stroke:#4A148C,color:#fff
+    classDef match fill:#00695C,stroke:#004D40,color:#fff
+    classDef gate fill:#E65100,stroke:#BF360C,color:#fff
+    classDef output fill:#2E7D32,stroke:#1B5E20,color:#fff
+    classDef silent fill:#78909C,stroke:#546E7A,color:#fff
 
-        UP[UserPromptSubmit] --> CP["check-prompt.sh<br/>Regex OR semantic"]
+    subgraph Session["Claude Code Session"]
+        SS[SessionStart]:::event --> Core["show-core.sh<br/>Dynamic table + core.md"]:::script
+
+        UP[UserPromptSubmit]:::event --> CP["check-prompt.sh<br/>Regex · Semantic · Model"]:::script
 
         subgraph PreTool["PreToolUse"]
-            Bash[Bash tool] --> CB["check-bash-pre.sh<br/>Scan commands"]
-            Edit[Edit/Write tool] --> CF["check-file-pre.sh<br/>Scan file paths"]
+            Bash[Bash tool]:::event --> CB["check-bash-pre.sh"]:::script
+            EditW[Edit/Write tool]:::event --> CF["check-file-pre.sh"]:::script
+            Task[Task tool]:::event --> CT["check-task-pre.sh"]:::script
         end
+
+        SA[SubagentStart]:::event --> IS["inject-subagent.sh"]:::script
     end
 
-    CP -->|match: semantic| SM["semantic-match.sh<br/>gzip NCD + keywords"]
-    CP -->|regex| SW["show-way.sh"]
+    CP -->|"match: semantic"| SM["semantic-match.sh<br/>gzip NCD + keywords"]:::match
+    CP -->|regex| SW["show-way.sh"]:::script
     SM --> SW
     CB --> SW
     CF --> SW
 
-    SW --> Check{Marker exists?}
-    Check -->|No| Output["Output way content<br/>Create marker"]
-    Check -->|Yes| Silent["No-op (silent)"]
+    SW --> Check{Marker?}:::gate
+    Check -->|No| Output["Output way content<br/>Create marker"]:::output
+    Check -->|Yes| Silent["No-op"]:::silent
+
+    CT -->|"scope: subagent"| Stash["Write stash file"]:::output
+    IS -->|read stash| Emit["Emit way content<br/>(bypass markers)"]:::output
+```
+
+## Subagent Injection
+
+Two-phase stash pattern bridges the gap between Task prompt visibility and SubagentStart injection:
+
+```mermaid
+sequenceDiagram
+    participant A as Main Agent
+    participant CT as check-task-pre.sh
+    participant S as Stash File
+    participant CC as Claude Code
+    participant IS as inject-subagent.sh
+    participant SA as Subagent
+
+    rect rgba(21, 101, 192, 0.15)
+        Note over A,CT: Phase 1: PreToolUse:Task
+        A->>CC: Task(prompt: "Review PR for security...")
+        CC->>CT: PreToolUse:Task
+        CT->>CT: Scan ways with scope: subagent
+        CT->>CT: Match prompt against patterns
+        CT->>S: Write matched way paths
+        Note right of S: /tmp/.claude-subagent-stash-{sid}/{ts}.json
+    end
+
+    rect rgba(106, 27, 154, 0.15)
+        Note over CC,SA: Phase 2: SubagentStart
+        CC->>SA: Spawn subagent
+        CC->>IS: SubagentStart
+        IS->>S: Read + claim oldest stash
+        IS->>IS: Emit way content (no markers)
+        IS->>SA: additionalContext
+        Note right of SA: Subagent sees way guidance
+        IS->>S: Delete consumed stash
+    end
+```
+
+### Scope Filtering
+
+The `scope` field controls where ways inject:
+
+```mermaid
+flowchart LR
+    classDef agent fill:#1565C0,stroke:#0D47A1,color:#fff
+    classDef sub fill:#6A1B9A,stroke:#4A148C,color:#fff
+    classDef both fill:#00695C,stroke:#004D40,color:#fff
+    classDef skip fill:#78909C,stroke:#546E7A,color:#fff
+
+    Way["way.md<br/>scope: ?"]
+
+    Way -->|"scope: agent"| AG["Agent only<br/>check-prompt / bash / file"]:::agent
+    Way -->|"scope: subagent"| SB["Subagent only<br/>check-task-pre → inject"]:::sub
+    Way -->|"scope: agent, subagent"| BOTH["Both paths<br/>(default for all built-in ways)"]:::both
+    Way -->|"no scope field"| DEF["Agent only<br/>(backward compatible)"]:::agent
+```
+
+### Parallel Subagent Handling
+
+Multiple Task tools in one message create separate stash files consumed in FIFO order:
+
+```mermaid
+sequenceDiagram
+    participant CT as check-task-pre.sh
+    participant S as Stash Dir
+    participant IS as inject-subagent.sh
+
+    rect rgba(21, 101, 192, 0.12)
+        CT->>S: Write {ts1}.json (Task A)
+        CT->>S: Write {ts2}.json (Task B)
+    end
+
+    rect rgba(106, 27, 154, 0.12)
+        IS->>S: Read {ts1}.json (oldest) → Subagent A
+        IS->>S: Read {ts2}.json (oldest) → Subagent B
+    end
+
+    Note over S: Empty after both consumed
 ```
 
 ## Way State Machine
@@ -36,6 +179,9 @@ Each (way, session) pair has exactly two states:
 
 ```mermaid
 stateDiagram-v2
+    classDef notShown fill:#C62828,stroke:#B71C1C,color:#fff,font-weight:bold
+    classDef shown fill:#2E7D32,stroke:#1B5E20,color:#fff,font-weight:bold
+
     [*] --> NotShown: Session starts
 
     NotShown: not_shown
@@ -44,11 +190,16 @@ stateDiagram-v2
     Shown: shown
     Shown: Marker file exists
 
-    NotShown --> Shown: Keyword/command/file match<br/>→ Output + create marker
-    Shown --> Shown: Any subsequent match<br/>→ No-op (idempotent)
+    NotShown --> Shown: Trigger match → output + create marker
+    Shown --> Shown: Trigger match → no-op (idempotent)
 
-    Shown --> [*]: Session ends<br/>(markers in /tmp auto-cleanup)
+    Shown --> [*]: Session ends (markers in /tmp)
+
+    state "not_shown" as NotShown:::notShown
+    state "shown" as Shown:::shown
 ```
+
+**Exception**: Subagent injection bypasses this state machine entirely. Ways injected via `inject-subagent.sh` are emitted without marker checks.
 
 ## Trigger Matching
 
@@ -56,21 +207,26 @@ How prompts and tool use get matched to ways:
 
 ```mermaid
 flowchart LR
+    classDef input fill:#1565C0,stroke:#0D47A1,color:#fff
+    classDef scan fill:#6A1B9A,stroke:#4A148C,color:#fff
+    classDef match fill:#00695C,stroke:#004D40,color:#fff
+    classDef output fill:#2E7D32,stroke:#1B5E20,color:#fff
+
     subgraph Input
-        Prompt["User prompt<br/>(lowercased)"]
-        Cmd["Bash command"]
-        File["File path"]
+        Prompt["User prompt<br/>(lowercased)"]:::input
+        Cmd["Bash command"]:::input
+        File["File path"]:::input
     end
 
     subgraph Scan["Recursive Scan"]
-        Find["find */way.md"]
-        Extract["Extract frontmatter:<br/>pattern, commands, files"]
+        Find["find */way.md"]:::scan
+        Extract["Extract frontmatter:<br/>pattern, commands, files, scope"]:::scan
     end
 
     subgraph Match["Regex Match"]
-        KW["pattern: regex"]
-        CM["commands: pattern"]
-        FL["files: pattern"]
+        KW["pattern: regex"]:::match
+        CM["commands: pattern"]:::match
+        FL["files: pattern"]:::match
     end
 
     Prompt --> Find
@@ -82,7 +238,7 @@ flowchart LR
     Extract --> CM
     Extract --> FL
 
-    KW -->|match| SW["show-way.sh waypath session_id"]
+    KW -->|match| SW["show-way.sh"]:::output
     CM -->|match| SW
     FL -->|match| SW
 ```
@@ -93,24 +249,30 @@ For ways with `match: semantic`, regex is replaced with gzip NCD + keyword count
 
 ```mermaid
 flowchart TB
+    classDef input fill:#1565C0,stroke:#0D47A1,color:#fff
+    classDef process fill:#6A1B9A,stroke:#4A148C,color:#fff
+    classDef check fill:#E65100,stroke:#BF360C,color:#fff
+    classDef yes fill:#2E7D32,stroke:#1B5E20,color:#fff
+    classDef no fill:#C62828,stroke:#B71C1C,color:#fff
+
     subgraph Input
-        Prompt["User prompt"]
-        Desc["Way description"]
-        Keywords["Domain vocabulary"]
+        Prompt["User prompt"]:::input
+        Desc["Way description"]:::input
+        Keywords["Domain vocabulary"]:::input
     end
 
     subgraph Tech1["Technique 1: Keyword Counting"]
-        Split["Split prompt into words"]
-        Filter["Remove stopwords"]
-        Count["Count matches in vocabulary"]
-        KWResult["kw_count >= 2?"]
+        Split["Split prompt into words"]:::process
+        Filter["Remove stopwords"]:::process
+        Count["Count matches in vocabulary"]:::process
+        KWResult["kw_count >= 2?"]:::check
     end
 
     subgraph Tech2["Technique 2: Gzip NCD"]
-        Compress["Compress separately:<br/>C(desc), C(prompt)"]
-        Combined["Compress together:<br/>C(desc+prompt)"]
-        Formula["NCD = (C(ab) - min) / max"]
-        NCDResult["ncd < 0.58?"]
+        Compress["Compress separately:<br/>C(desc), C(prompt)"]:::process
+        Combined["Compress together:<br/>C(desc+prompt)"]:::process
+        Formula["NCD = (C(ab) - min) / max"]:::process
+        NCDResult["ncd < threshold?"]:::check
     end
 
     Prompt --> Split
@@ -121,10 +283,10 @@ flowchart TB
     Prompt --> Compress
     Compress --> Combined --> Formula --> NCDResult
 
-    KWResult -->|Yes| Match["✓ MATCH"]
+    KWResult -->|Yes| Match["✓ MATCH"]:::yes
     NCDResult -->|Yes| Match
     KWResult -->|No| NCDResult
-    NCDResult -->|No| NoMatch["✗ No match"]
+    NCDResult -->|No| NoMatch["✗ No match"]:::no
 ```
 
 **Why gzip NCD works**: Similar texts share patterns that compress well together.
@@ -175,37 +337,62 @@ sequenceDiagram
 
 ## Directory Structure
 
+```
+~/.claude/hooks/ways/
+├── core.md                     # Base guidance (loads at startup)
+├── macro.sh                    # Generates Available Ways table
+├── show-core.sh                # Combines macro output + core.md
+├── show-way.sh                 # Once-per-session gating + output
+│
+├── check-prompt.sh             # UserPromptSubmit → scan patterns
+├── check-bash-pre.sh           # PreToolUse:Bash → scan commands
+├── check-file-pre.sh           # PreToolUse:Edit|Write → scan files
+├── check-task-pre.sh           # PreToolUse:Task → stash for subagent
+├── check-state.sh              # UserPromptSubmit → state triggers
+├── check-response.sh           # Stop → extract topics for next turn
+│
+├── inject-subagent.sh          # SubagentStart → emit stashed ways
+├── semantic-match.sh           # Gzip NCD + keyword matching
+├── model-match.sh              # Haiku subprocess classifier
+├── clear-markers.sh            # SessionStart → reset all state
+├── mark-tasks-active.sh        # PreToolUse:TaskCreate → context nag gate
+│
+├── softwaredev/                # Domain: software development
+│   ├── commits/way.md          #   git commit format
+│   ├── testing/way.md          #   test practices
+│   ├── security/way.md         #   auth, secrets, vulnerabilities
+│   ├── github/                 #   PR workflow
+│   │   ├── way.md
+│   │   └── macro.sh            #   detects solo vs team
+│   └── ...                     #   18 ways total
+├── itops/                      # Domain: IT operations
+│   └── ...                     #   4 ways
+└── meta/                       # Domain: meta-system
+    └── ...                     #   5 ways
+
+$PROJECT/.claude/ways/          # Project-local overrides
+└── {domain}/{wayname}/way.md   # Same structure, takes precedence
+```
+
+### Script Relationships
+
 ```mermaid
-flowchart TB
-    subgraph Global["~/.claude/hooks/ways/"]
-        Core[core.md]
-        Macro[macro.sh]
-        ShowCore[show-core.sh]
-        CheckP[check-prompt.sh]
-        CheckB[check-bash-post.sh]
-        CheckF[check-file-post.sh]
-        ShowW[show-way.sh]
-        Semantic[semantic-match.sh]
+flowchart LR
+    classDef trigger fill:#1565C0,stroke:#0D47A1,color:#fff
+    classDef scan fill:#6A1B9A,stroke:#4A148C,color:#fff
+    classDef output fill:#2E7D32,stroke:#1B5E20,color:#fff
+    classDef stash fill:#E65100,stroke:#BF360C,color:#fff
+    classDef util fill:#00695C,stroke:#004D40,color:#fff
 
-        subgraph Domain["softwaredev/"]
-            subgraph WayDir["github/"]
-                WayMD[way.md]
-                WayMacro[macro.sh]
-            end
-            subgraph DesignDir["design/"]
-                DesignMD["way.md<br/>(match: semantic)"]
-            end
-            Other["adr/, commits/, ..."]
-        end
-    end
+    CP["check-prompt.sh"]:::trigger --> SM["semantic-match.sh"]:::util
+    CP --> SW["show-way.sh"]:::output
+    CB["check-bash-pre.sh"]:::trigger --> SW
+    CF["check-file-pre.sh"]:::trigger --> SW
+    CS["check-state.sh"]:::trigger --> SW
 
-    subgraph Project["$PROJECT/.claude/ways/"]
-        ProjDomain["{domain}/"]
-        ProjWay["{wayname}/way.md"]
-    end
-
-    CheckP -->|semantic way| Semantic
-    ProjWay -.->|overrides| WayMD
+    CT["check-task-pre.sh"]:::trigger --> SM
+    CT --> ST[("stash file")]:::stash
+    ST --> IS["inject-subagent.sh"]:::output
 ```
 
 ## Multi-Trigger Semantics
@@ -214,27 +401,34 @@ What happens when multiple triggers fire:
 
 ```mermaid
 flowchart TB
-    Prompt["'Let's review the PR and fix the bug'"]
+    classDef prompt fill:#1565C0,stroke:#0D47A1,color:#fff
+    classDef pattern fill:#6A1B9A,stroke:#4A148C,color:#fff
+    classDef way fill:#00695C,stroke:#004D40,color:#fff
+    classDef gate fill:#E65100,stroke:#BF360C,color:#fff
+    classDef output fill:#2E7D32,stroke:#1B5E20,color:#fff
+    classDef silent fill:#78909C,stroke:#546E7A,color:#fff
 
-    Prompt --> KW1["pattern: github|pr"]
-    Prompt --> KW2["pattern: debug|bug"]
-    Prompt --> KW3["pattern: review"]
+    Prompt["'Let's review the PR and fix the bug'"]:::prompt
 
-    KW1 -->|match| GH["github way"]
-    KW2 -->|match| DB["debugging way"]
-    KW3 -->|match| QA["quality way"]
+    Prompt --> KW1["pattern: github|pr"]:::pattern
+    Prompt --> KW2["pattern: debug|bug"]:::pattern
+    Prompt --> KW3["pattern: review"]:::pattern
 
-    GH --> M1{Marker?}
-    DB --> M2{Marker?}
-    QA --> M3{Marker?}
+    KW1 -->|match| GH["github way"]:::way
+    KW2 -->|match| DB["debugging way"]:::way
+    KW3 -->|match| QA["quality way"]:::way
 
-    M1 -->|No| O1["✓ Output github"]
-    M2 -->|No| O2["✓ Output debugging"]
-    M3 -->|No| O3["✓ Output quality"]
+    GH --> M1{Marker?}:::gate
+    DB --> M2{Marker?}:::gate
+    QA --> M3{Marker?}:::gate
 
-    M1 -->|Yes| S1["✗ Silent"]
-    M2 -->|Yes| S2["✗ Silent"]
-    M3 -->|Yes| S3["✗ Silent"]
+    M1 -->|No| O1["✓ Output"]:::output
+    M2 -->|No| O2["✓ Output"]:::output
+    M3 -->|No| O3["✓ Output"]:::output
+
+    M1 -->|Yes| S1["✗ Silent"]:::silent
+    M2 -->|Yes| S2["✗ Silent"]:::silent
+    M3 -->|Yes| S3["✗ Silent"]:::silent
 ```
 
 Each way has its own marker - multiple ways can fire from one prompt, but each only fires once per session.
@@ -243,17 +437,22 @@ Each way has its own marker - multiple ways can fire from one prompt, but each o
 
 ```mermaid
 flowchart TB
+    classDef proj fill:#E65100,stroke:#BF360C,color:#fff
+    classDef global fill:#1565C0,stroke:#0D47A1,color:#fff
+    classDef marker fill:#00695C,stroke:#004D40,color:#fff
+    classDef skip fill:#78909C,stroke:#546E7A,color:#fff
+
     subgraph Scan["Way Lookup Order"]
-        P["1. Project: $PROJECT/.claude/ways/"]
-        G["2. Global: ~/.claude/hooks/ways/"]
+        P["1. Project: $PROJECT/.claude/ways/"]:::proj
+        G["2. Global: ~/.claude/hooks/ways/"]:::global
     end
 
-    P -->|found| Use["Use project way"]
+    P -->|found| Use["Use project way"]:::proj
     P -->|not found| G
-    G -->|found| UseG["Use global way"]
-    G -->|not found| Skip["No match"]
+    G -->|found| UseG["Use global way"]:::global
+    G -->|not found| Skip["No match"]:::skip
 
-    Use --> Mark["Single marker<br/>(by waypath)"]
+    Use --> Mark["Single marker<br/>(by waypath)"]:::marker
     UseG --> Mark
 ```
 

@@ -74,6 +74,15 @@
             "command": "${HOME}/.claude/hooks/ways/mark-tasks-active.sh"
           }
         ]
+      },
+      {
+        "matcher": "Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${HOME}/.claude/hooks/ways/check-task-pre.sh"
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
@@ -86,6 +95,16 @@
           {
             "type": "command",
             "command": "${HOME}/.claude/hooks/ways/check-state.sh"
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${HOME}/.claude/hooks/ways/inject-subagent.sh"
           }
         ]
       }
@@ -107,7 +126,8 @@
   },
   "enabledPlugins": {
     "clangd-lsp@claude-plugins-official": true,
-    "code-simplifier@claude-plugins-official": true
+    "code-simplifier@claude-plugins-official": true,
+    "rust-analyzer-lsp@claude-plugins-official": true
   },
   "alwaysThinkingEnabled": true
 }

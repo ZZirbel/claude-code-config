@@ -1,6 +1,7 @@
 ---
 match: regex
 pattern: migrat|schema|database.?change|alter.?table|alembic|prisma.?migrate|knex.?migrate|flyway|liquibase
+scope: agent, subagent
 ---
 # Migrations Way
 

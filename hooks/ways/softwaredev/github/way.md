@@ -3,6 +3,7 @@ match: regex
 pattern: github|\ issue|pull.?request|\ pr\ |\ pr$|review.?(pr|comment)|merge.?request
 commands: ^gh\ |^gh$
 macro: prepend
+scope: agent, subagent
 ---
 # GitHub Way
 
