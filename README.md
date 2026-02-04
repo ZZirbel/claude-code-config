@@ -53,9 +53,10 @@ chmod +x ~/.claude/hooks/**/*.sh ~/.claude/hooks/*.sh 2>/dev/null
 Then, as you work:
 
 1. **UserPromptSubmit** scans your message for pattern matches
-2. **PostToolUse** scans commands, file paths, and descriptions
-3. Matching ways inject via `additionalContext` - Claude sees them
-4. Each way loads **once per session** - marker files prevent re-triggering
+2. **PreToolUse** intercepts commands and file edits *before they execute* - Claude gets guidance while it can still act on it
+3. **SubagentStart** injects relevant ways into subagents spawned via Task
+4. Matching ways inject via `additionalContext` - Claude sees them
+5. Each way loads **once per session** - marker files prevent re-triggering
 
 ### Once-Per-Session Gating
 

@@ -29,6 +29,8 @@ Six Claude Code hook events drive the system. Each fires shell scripts that scan
 
 ### Trigger Evaluation
 
+These scripts fire on **PreToolUse** — before the tool executes, not after. This is a critical design choice: guidance must arrive while Claude can still act on it. A commit format reminder after the commit is too late. Security guidance after the file edit is too late. The "Pre" in PreToolUse means Claude sees the way content and can adjust its behavior before the action happens.
+
 - **`check-prompt.sh`** - Scans all ways for `pattern:` (regex), `match: semantic`, or `match: model` fields. Tests the user's prompt against each. Fires matching ways via `show-way.sh`.
 - **`check-bash-pre.sh`** - Scans ways for `commands:` patterns. Tests the command about to run. Also checks `pattern:` against the command description.
 - **`check-file-pre.sh`** - Scans ways for `files:` patterns. Tests the file path about to be edited.
