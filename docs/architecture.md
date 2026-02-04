@@ -53,6 +53,15 @@ sequenceDiagram
         Note right of W: Testing way already shown → silent
         Note right of C: No new injections — markers prevent repeats
     end
+
+    Note over U,S: ↻ This cycle continues until context fills up
+
+    rect rgba(198, 40, 40, 0.15)
+        Note over U,S: Auto-compact triggers — all markers cleared, ways reset
+        W->>W: clear-markers.sh → rm /tmp/.claude-way-*
+        W-->>C: Core guidance reloads (fresh session state)
+        Note right of C: All ways can fire again on next match
+    end
 ```
 
 ## Hook Flow
