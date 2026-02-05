@@ -24,9 +24,10 @@ SESSION_ID="$2"
 TRIGGER="${3:-unknown}"
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
 
-# Detect execution scope
+# Detect execution scope and team
 source "${HOME}/.claude/hooks/ways/detect-scope.sh"
 SCOPE=$(detect_scope "$SESSION_ID")
+TEAM=$(detect_team "$SESSION_ID")
 
 [[ -z "$WAY" ]] && exit 1
 
@@ -103,7 +104,8 @@ if [[ ! -f "$MARKER" ]]; then
   touch "$MARKER"
 
   # Log event
-  "${HOME}/.claude/hooks/ways/log-event.sh" \
-    event=way_fired way="$WAY" domain="$DOMAIN" \
-    trigger="$TRIGGER" scope="$SCOPE" project="$PROJECT_DIR" session="$SESSION_ID"
+  LOG_ARGS=(event=way_fired way="$WAY" domain="$DOMAIN"
+    trigger="$TRIGGER" scope="$SCOPE" project="$PROJECT_DIR" session="$SESSION_ID")
+  [[ -n "$TEAM" ]] && LOG_ARGS+=(team="$TEAM")
+  "${HOME}/.claude/hooks/ways/log-event.sh" "${LOG_ARGS[@]}"
 fi

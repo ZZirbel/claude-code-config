@@ -95,8 +95,8 @@ if [[ ${#MATCHED_WAYS[@]} -gt 0 ]]; then
   STASH_FILE="${STASH_DIR}/${TIMESTAMP}.json"
 
   WAYS_JSON=$(printf '%s\n' "${MATCHED_WAYS[@]}" | jq -R . | jq -s .)
-  jq -n --argjson ways "$WAYS_JSON" --argjson teammate "$IS_TEAMMATE" \
-    '{ways: $ways, is_teammate: $teammate}' > "$STASH_FILE"
+  jq -n --argjson ways "$WAYS_JSON" --argjson teammate "$IS_TEAMMATE" --arg team "$TEAM_NAME" \
+    '{ways: $ways, is_teammate: $teammate, team_name: $team}' > "$STASH_FILE"
 fi
 
 # Never block Task creation

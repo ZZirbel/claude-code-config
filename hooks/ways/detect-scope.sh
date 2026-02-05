@@ -3,7 +3,7 @@
 # Usage: source this file, then use $CURRENT_SCOPE
 #
 # Detection: checks for teammate marker created by inject-subagent.sh
-# Marker: /tmp/.claude-teammate-{session_id}
+# Marker: /tmp/.claude-teammate-{session_id} (contains team name if available)
 #
 # Returns scope in CURRENT_SCOPE variable and defines scope_matches() function
 
@@ -13,6 +13,15 @@ detect_scope() {
     echo "teammate"
   else
     echo "agent"
+  fi
+}
+
+# Read team name from teammate marker (empty string if not a teammate)
+detect_team() {
+  local session_id="$1"
+  local marker="/tmp/.claude-teammate-${session_id}"
+  if [[ -f "$marker" ]]; then
+    cat "$marker" 2>/dev/null
   fi
 }
 

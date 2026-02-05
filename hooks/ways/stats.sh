@@ -169,6 +169,7 @@ if $JSON_OUT; then
     by_way: ([.[] | select(.event == "way_fired") | .way] | group_by(.) | map({(.[0]): length}) | add // {}),
     by_trigger: ([.[] | select(.event == "way_fired") | .trigger] | group_by(.) | map({(.[0]): length}) | add // {}),
     by_scope: ([.[] | select(.event == "way_fired") | .scope // "unknown"] | group_by(.) | map({(.[0]): length}) | add // {}),
+    by_team: ([.[] | select(.event == "way_fired" and .team != null and .team != "") | .team] | group_by(.) | map({(.[0]): length}) | add // {}),
     by_project: ([.[] | select(.event != null) | .project] | group_by(.) | map({(.[0]): length}) | add // {})
   }'
   exit 0
@@ -215,12 +216,24 @@ else
 fi
 echo ""
 
-# By scope
-AGENT_FIRES=$(echo "$EVENTS" | jq -r 'select(.event == "way_fired" and .scope == "agent") | .way' | wc -l)
-SUBAGENT_FIRES=$(echo "$EVENTS" | jq -r 'select(.event == "way_fired" and .scope == "subagent") | .way' | wc -l)
+# By scope (dynamic - shows whatever scopes exist in data)
 echo "By scope:"
-printf "  agent      %3d    subagent  %3d\n" "$AGENT_FIRES" "$SUBAGENT_FIRES"
+echo "$EVENTS" | jq -r 'select(.event == "way_fired") | .scope // "unknown"' | sort | uniq -c | sort -rn | while read count scope; do
+  [[ -z "$scope" ]] && continue
+  printf "  %-12s %3d\n" "$scope" "$count"
+done
 echo ""
+
+# By team (if any team events exist)
+TEAM_EVENTS=$(echo "$EVENTS" | jq -r 'select(.event == "way_fired" and .team != null and .team != "") | .team')
+if [[ -n "$TEAM_EVENTS" ]]; then
+  echo "By team:"
+  echo "$TEAM_EVENTS" | sort | uniq -c | sort -rn | while read count team; do
+    [[ -z "$team" ]] && continue
+    printf "  %-30s %3d fires\n" "$team" "$count"
+  done
+  echo ""
+fi
 
 # By trigger
 echo "By trigger:"
