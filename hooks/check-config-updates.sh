@@ -16,6 +16,7 @@ UPSTREAM_REPO="aaronsb/claude-code-config"
 UPSTREAM_URL="https://github.com/${UPSTREAM_REPO}"
 CACHE_FILE="/tmp/.claude-config-update-state-$(id -u)"
 ONE_HOUR=3600
+ONE_DAY=86400
 CURRENT_TIME=$(date +%s)
 
 # --- Helpers ---
@@ -28,14 +29,17 @@ needs_refresh() {
   (( CURRENT_TIME - last_fetch >= ONE_HOUR ))
 }
 
+# Atomic cache write — write to temp then mv to avoid races between sessions
 write_cache() {
   local type="$1" behind="$2" extra="$3"
-  cat > "$CACHE_FILE" <<CACHE
-fetched=${CURRENT_TIME}
-type=${type}
-behind=${behind}
-${extra}
-CACHE
+  local tmp="${CACHE_FILE}.$$"
+  {
+    echo "fetched=${CURRENT_TIME}"
+    echo "type=${type}"
+    echo "behind=${behind}"
+    [[ -n "$extra" ]] && echo "$extra"
+  } > "$tmp"
+  mv -f "$tmp" "$CACHE_FILE"
 }
 
 read_cache() {
@@ -93,14 +97,13 @@ show_plugin_notice() {
 }
 
 # Check gh CLI availability and auth status.
-# Returns 0 if gh is ready, 1 if not (with reason cached for display).
+# Returns 0 if gh is ready, 1 if not (with reason in GH_ISSUE).
 check_gh() {
   if ! command -v gh &>/dev/null; then
     GH_ISSUE="gh CLI not installed (needed for fork detection)"
     return 1
   fi
 
-  # Check auth status
   local auth_output
   auth_output=$(gh auth status 2>&1)
   local auth_rc=$?
@@ -122,7 +125,6 @@ check_gh() {
 
 # Show a non-blocking note when gh isn't available (once per day)
 GH_NOTICE_MARKER="/tmp/.claude-gh-notice-$(id -u)"
-ONE_DAY=86400
 
 show_gh_notice() {
   if [[ -f "$GH_NOTICE_MARKER" ]]; then
@@ -146,8 +148,18 @@ show_gh_notice() {
 if git -C "$CLAUDE_DIR" rev-parse --git-dir >/dev/null 2>&1; then
   REMOTE_URL=$(git -C "$CLAUDE_DIR" remote get-url origin 2>/dev/null)
 
+  # Skip non-GitHub remotes early
+  if [[ "$REMOTE_URL" != *github.com* ]]; then
+    exit 0
+  fi
+
   # Extract owner/repo from URL (handles https and ssh formats)
   OWNER_REPO=$(echo "$REMOTE_URL" | sed -E 's#.*github\.com[:/]##; s/\.git$//')
+
+  # Validate owner/repo format to prevent path traversal in API calls
+  if [[ ! "$OWNER_REPO" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]]; then
+    exit 0
+  fi
 
   if [[ "$OWNER_REPO" == "$UPSTREAM_REPO" ]]; then
     # --- Direct clone ---
@@ -160,75 +172,66 @@ if git -C "$CLAUDE_DIR" rev-parse --git-dir >/dev/null 2>&1; then
       BEHIND="$CACHED_BEHIND"
     fi
 
-    if [[ "$BEHIND" -gt 0 ]]; then
+    if [[ "$BEHIND" =~ ^[0-9]+$ ]] && (( BEHIND > 0 )); then
       show_clone_notice "$BEHIND"
     fi
     exit 0
 
   else
     # --- Possible fork ---
-    # Need gh CLI to detect forks
-    if check_gh; then
-      if needs_refresh; then
-        # Check if this repo is a fork of ours
+    # Only call check_gh + API when cache needs refresh (avoids gh auth status latency)
+    if needs_refresh; then
+      if check_gh; then
         GH_OUTPUT=$(gh api "repos/${OWNER_REPO}" 2>&1)
         GH_RC=$?
 
         if [[ $GH_RC -ne 0 ]]; then
-          # API call failed — permission issue, rate limit, or other
           if echo "$GH_OUTPUT" | grep -qi "404\|not found"; then
-            write_cache "gh_error" "0" "reason=repo not found on GitHub (${OWNER_REPO})"
+            write_cache "gh_error" "0" "reason=repo not found on GitHub"
           elif echo "$GH_OUTPUT" | grep -qi "403\|rate limit"; then
-            write_cache "gh_error" "0" "reason=GitHub API rate limited — try again later"
+            write_cache "gh_error" "0" "reason=GitHub API rate limited"
           else
-            write_cache "gh_error" "0" "reason=$(echo "$GH_OUTPUT" | head -1)"
-          fi
-          read_cache
-          exit 0
-        fi
-
-        PARENT=$(echo "$GH_OUTPUT" | jq -r '.parent.full_name // empty' 2>/dev/null)
-
-        if [[ "$PARENT" == "$UPSTREAM_REPO" ]]; then
-          # It's a fork. Check if upstream remote exists locally.
-          HAS_UPSTREAM=false
-          if git -C "$CLAUDE_DIR" remote get-url upstream >/dev/null 2>&1; then
-            HAS_UPSTREAM=true
-          fi
-
-          # Compare local HEAD against upstream's main via ls-remote
-          UPSTREAM_HEAD=$(git ls-remote "${UPSTREAM_URL}" refs/heads/main 2>/dev/null | cut -f1)
-          LOCAL_HEAD=$(git -C "$CLAUDE_DIR" rev-parse HEAD 2>/dev/null)
-          FORK_OWNER=$(echo "$OWNER_REPO" | cut -d/ -f1)
-
-          if [[ -n "$UPSTREAM_HEAD" && "$UPSTREAM_HEAD" != "$LOCAL_HEAD" ]]; then
-            write_cache "fork" "1" "has_upstream=${HAS_UPSTREAM}
-fork_owner=${FORK_OWNER}"
-          else
-            write_cache "fork" "0" "has_upstream=${HAS_UPSTREAM}
-fork_owner=${FORK_OWNER}"
+            write_cache "gh_error" "0" "reason=$(echo "$GH_OUTPUT" | head -1 | tr -cd '[:print:]')"
           fi
         else
-          # Not a fork of ours, nothing to do
-          write_cache "unrelated" "0"
-          exit 0
+          PARENT=$(echo "$GH_OUTPUT" | jq -r '.parent.full_name // empty' 2>/dev/null)
+
+          if [[ "$PARENT" == "$UPSTREAM_REPO" ]]; then
+            HAS_UPSTREAM=false
+            if git -C "$CLAUDE_DIR" remote get-url upstream >/dev/null 2>&1; then
+              HAS_UPSTREAM=true
+            fi
+
+            UPSTREAM_HEAD=$(git ls-remote "${UPSTREAM_URL}" refs/heads/main 2>/dev/null | cut -f1)
+            LOCAL_HEAD=$(git -C "$CLAUDE_DIR" rev-parse HEAD 2>/dev/null)
+            FORK_OWNER=$(echo "$OWNER_REPO" | cut -d/ -f1)
+
+            if [[ -n "$UPSTREAM_HEAD" && "$UPSTREAM_HEAD" != "$LOCAL_HEAD" ]]; then
+              write_cache "fork" "1" "has_upstream=${HAS_UPSTREAM}
+fork_owner=${FORK_OWNER}"
+            else
+              write_cache "fork" "0" "has_upstream=${HAS_UPSTREAM}
+fork_owner=${FORK_OWNER}"
+            fi
+          else
+            write_cache "unrelated" "0"
+          fi
         fi
       else
-        read_cache
-      fi
-
-      if [[ "$CACHED_TYPE" == "fork" && "$CACHED_BEHIND" -gt 0 ]]; then
-        show_fork_notice "$CACHED_HAS_UPSTREAM"
-      fi
-      exit 0
-    else
-      # gh not available — show why (once, via cache)
-      if needs_refresh; then
         write_cache "gh_unavailable" "0" "reason=${GH_ISSUE}"
       fi
-      show_gh_notice
-      exit 0
     fi
+
+    # Always read cache for display (covers both fresh-write and cached paths)
+    read_cache
+
+    if [[ "$CACHED_TYPE" == "fork" && "$CACHED_BEHIND" =~ ^[0-9]+$ ]] && (( CACHED_BEHIND > 0 )); then
+      show_fork_notice "$CACHED_HAS_UPSTREAM"
+    elif [[ "$CACHED_TYPE" == "gh_unavailable" ]]; then
+      GH_ISSUE=$(sed -n 's/^reason=//p' "$CACHE_FILE")
+      show_gh_notice
+    fi
+    exit 0
   fi
 fi
 
@@ -238,8 +241,8 @@ if [[ -n "$CLAUDE_PLUGIN_ROOT" && -f "$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.
   INSTALLED_VERSION=$(grep -o '"version"[[:space:]]*:[[:space:]]*"[^"]*"' \
     "$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json" | cut -d'"' -f4)
 
-  if check_gh; then
-    if needs_refresh; then
+  if needs_refresh; then
+    if check_gh; then
       LATEST_VERSION=$(gh api "repos/${UPSTREAM_REPO}/releases/latest" --jq '.tag_name' 2>&1)
       GH_RC=$?
       LATEST_VERSION=$(echo "$LATEST_VERSION" | tr -d 'v')
@@ -253,15 +256,19 @@ latest=${LATEST_VERSION}"
         write_cache "plugin" "0"
       fi
     else
-      read_cache
+      write_cache "gh_unavailable" "0" "reason=${GH_ISSUE}"
     fi
+  fi
 
-    if [[ "$CACHED_TYPE" == "plugin" && "$CACHED_BEHIND" -gt 0 ]]; then
-      INSTALLED=$(sed -n 's/^installed=//p' "$CACHE_FILE")
-      LATEST=$(sed -n 's/^latest=//p' "$CACHE_FILE")
-      show_plugin_notice "$INSTALLED" "$LATEST"
-    fi
-  else
+  # Always read cache for display
+  read_cache
+
+  if [[ "$CACHED_TYPE" == "plugin" && "$CACHED_BEHIND" =~ ^[0-9]+$ ]] && (( CACHED_BEHIND > 0 )); then
+    INSTALLED=$(sed -n 's/^installed=//p' "$CACHE_FILE")
+    LATEST=$(sed -n 's/^latest=//p' "$CACHE_FILE")
+    show_plugin_notice "$INSTALLED" "$LATEST"
+  elif [[ "$CACHED_TYPE" == "gh_unavailable" ]]; then
+    GH_ISSUE=$(sed -n 's/^reason=//p' "$CACHE_FILE")
     show_gh_notice
   fi
 fi
