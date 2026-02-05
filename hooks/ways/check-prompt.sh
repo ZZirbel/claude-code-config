@@ -20,6 +20,10 @@ SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(echo "$INPUT" | jq -r '.cwd // empty')}"
 WAYS_DIR="${HOME}/.claude/hooks/ways"
 
+# Detect execution scope (agent vs teammate)
+source "${WAYS_DIR}/detect-scope.sh"
+CURRENT_SCOPE=$(detect_scope "$SESSION_ID")
+
 # Read response topics from Stop hook (if available)
 RESPONSE_STATE="/tmp/claude-response-topics-${SESSION_ID}"
 RESPONSE_TOPICS=""
@@ -52,10 +56,10 @@ scan_ways() {
     vocabulary=$(get_field "vocabulary")      # domain words (for match: semantic)
     threshold=$(get_field "threshold")        # NCD threshold (for match: semantic)
 
-    # Check scope -- skip if not agent-scoped
+    # Check scope -- skip if current scope not in way's scope list
     scope_raw=$(get_field "scope")
     scope_raw="${scope_raw:-agent}"
-    echo "$scope_raw" | grep -qw "agent" || continue
+    scope_matches "$scope_raw" "$CURRENT_SCOPE" || continue
 
     # Check for match based on mode
     matched=false

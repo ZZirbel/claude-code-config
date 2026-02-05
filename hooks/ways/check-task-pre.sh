@@ -19,6 +19,11 @@ SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(echo "$INPUT" | jq -r '.cwd // empty')}"
 WAYS_DIR="${HOME}/.claude/hooks/ways"
 
+# Detect teammate spawn (Task tool with team_name parameter)
+TEAM_NAME=$(echo "$INPUT" | jq -r '.tool_input.team_name // empty')
+IS_TEAMMATE=false
+[[ -n "$TEAM_NAME" ]] && IS_TEAMMATE=true
+
 [[ -z "$TASK_PROMPT" ]] && exit 0
 [[ -z "$SESSION_ID" ]] && exit 0
 
@@ -39,10 +44,15 @@ scan_ways_for_subagent() {
     frontmatter=$(awk 'NR==1 && /^---$/{p=1; next} p && /^---$/{exit} p{print}' "$wayfile")
     get_field() { echo "$frontmatter" | awk "/^$1:/"'{gsub(/^'"$1"': */, ""); print; exit}'; }
 
-    # Must have subagent scope
+    # Must have subagent or teammate scope
     local scope_raw=$(get_field "scope")
     scope_raw="${scope_raw:-agent}"
-    echo "$scope_raw" | grep -qw "subagent" || continue
+    if $IS_TEAMMATE; then
+      # Teammates match ways with scope: teammate OR subagent
+      echo "$scope_raw" | grep -qwE "subagent|teammate" || continue
+    else
+      echo "$scope_raw" | grep -qw "subagent" || continue
+    fi
 
     # Skip state-triggered ways (they don't match on content)
     local trigger=$(get_field "trigger")
@@ -85,7 +95,8 @@ if [[ ${#MATCHED_WAYS[@]} -gt 0 ]]; then
   STASH_FILE="${STASH_DIR}/${TIMESTAMP}.json"
 
   WAYS_JSON=$(printf '%s\n' "${MATCHED_WAYS[@]}" | jq -R . | jq -s .)
-  jq -n --argjson ways "$WAYS_JSON" '{"ways": $ways}' > "$STASH_FILE"
+  jq -n --argjson ways "$WAYS_JSON" --argjson teammate "$IS_TEAMMATE" \
+    '{ways: $ways, is_teammate: $teammate}' > "$STASH_FILE"
 fi
 
 # Never block Task creation

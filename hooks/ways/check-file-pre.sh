@@ -20,6 +20,10 @@ PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(echo "$INPUT" | jq -r '.cwd // empty')}"
 
 CONTEXT=""
 
+# Detect execution scope (agent vs teammate)
+source "${HOME}/.claude/hooks/ways/detect-scope.sh"
+CURRENT_SCOPE=$(detect_scope "$SESSION_ID")
+
 # Scan ways in a directory (recursive)
 scan_ways() {
   local dir="$1"
@@ -34,10 +38,10 @@ scan_ways() {
     # Extract files pattern from frontmatter
     files=$(awk '/^---$/{p=!p; next} p && /^files:/' "$wayfile" | sed 's/^files: *//')
 
-    # Check scope -- skip if not agent-scoped
+    # Check scope -- skip if current scope not in way's scope list
     scope=$(awk '/^---$/{p=!p; next} p && /^scope:/' "$wayfile" | sed 's/^scope: *//')
     scope="${scope:-agent}"
-    echo "$scope" | grep -qw "agent" || continue
+    scope_matches "$scope" "$CURRENT_SCOPE" || continue
 
     # Check file path against pattern
     if [[ -n "$files" && "$FP" =~ $files ]]; then

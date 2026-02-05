@@ -2,7 +2,7 @@
 trigger: context-threshold
 threshold: 80
 macro: prepend
-scope: agent, subagent
+scope: agent
 ---
 # Memory Checkpoint
 

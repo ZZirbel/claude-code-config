@@ -22,6 +22,10 @@ PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(echo "$INPUT" | jq -r '.cwd // empty')}"
 WAYS_DIR="${HOME}/.claude/hooks/ways"
 CONTEXT=""
 
+# Detect execution scope (agent vs teammate)
+source "${WAYS_DIR}/detect-scope.sh"
+CURRENT_SCOPE=$(detect_scope "$SESSION_ID")
+
 # Get transcript size since last compaction (bytes after last summary line)
 # Caches line number to avoid repeated full-file scans
 get_transcript_size() {
@@ -114,10 +118,10 @@ scan_state_triggers() {
 
     [[ -z "$trigger" ]] && continue
 
-    # Check scope -- skip if not agent-scoped
+    # Check scope -- skip if current scope not in way's scope list
     local scope=$(awk 'NR==1 && /^---$/{p=1; next} p && /^---$/{exit} p && /^scope:/' "$wayfile" | sed 's/^scope: *//')
     scope="${scope:-agent}"
-    echo "$scope" | grep -qw "agent" || continue
+    scope_matches "$scope" "$CURRENT_SCOPE" || continue
 
     # Evaluate the trigger condition
     if evaluate_trigger "$trigger" "$wayfile"; then
@@ -131,7 +135,7 @@ scan_state_triggers() {
               CONTEXT+="$output"$'\n\n'
               "${WAYS_DIR}/log-event.sh" \
                 event=way_fired way="$waypath" domain="${waypath%%/*}" \
-                trigger="state" scope=agent project="$PROJECT_DIR" session="$SESSION_ID"
+                trigger="state" scope="$CURRENT_SCOPE" project="$PROJECT_DIR" session="$SESSION_ID"
             fi
           fi
           ;;

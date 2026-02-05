@@ -24,6 +24,10 @@ SESSION_ID="$2"
 TRIGGER="${3:-unknown}"
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
 
+# Detect execution scope
+source "${HOME}/.claude/hooks/ways/detect-scope.sh"
+SCOPE=$(detect_scope "$SESSION_ID")
+
 [[ -z "$WAY" ]] && exit 1
 
 # Check if domain is disabled via ~/.claude/ways.json
@@ -101,5 +105,5 @@ if [[ ! -f "$MARKER" ]]; then
   # Log event
   "${HOME}/.claude/hooks/ways/log-event.sh" \
     event=way_fired way="$WAY" domain="$DOMAIN" \
-    trigger="$TRIGGER" scope=agent project="$PROJECT_DIR" session="$SESSION_ID"
+    trigger="$TRIGGER" scope="$SCOPE" project="$PROJECT_DIR" session="$SESSION_ID"
 fi

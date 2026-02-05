@@ -1,7 +1,7 @@
 ---
 match: regex
 pattern: subagent|delegat|spawn.*agent|review.*pr|plan.*task|organiz.*docs
-scope: agent, subagent
+scope: agent
 ---
 # Sub-Agents Way
 

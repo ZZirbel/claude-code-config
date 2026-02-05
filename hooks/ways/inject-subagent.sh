@@ -31,9 +31,16 @@ OLDEST=$(ls "$STASH_DIR"/*.json 2>/dev/null | sort | head -1)
 CLAIMED="${OLDEST}.claimed"
 mv "$OLDEST" "$CLAIMED" 2>/dev/null || exit 0
 
-# Read matched way paths
+# Read matched way paths and teammate flag
 WAYS=$(jq -r '.ways[]' "$CLAIMED" 2>/dev/null)
+IS_TEAMMATE=$(jq -r '.is_teammate // false' "$CLAIMED" 2>/dev/null)
 rm -f "$CLAIMED"
+
+# If this is a teammate spawn, write a marker the teammate's own hooks can detect
+# The marker persists for the teammate's session lifetime
+if [[ "$IS_TEAMMATE" == "true" ]]; then
+  touch "/tmp/.claude-teammate-${SESSION_ID}"
+fi
 
 [[ -z "$WAYS" ]] && exit 0
 
@@ -96,9 +103,11 @@ while IFS= read -r waypath; do
 
   if [[ -n "$WAY_CONTENT" ]]; then
     CONTEXT+="$WAY_CONTENT"$'\n\n'
+    local scope="subagent"
+    [[ "$IS_TEAMMATE" == "true" ]] && scope="teammate"
     "${HOME}/.claude/hooks/ways/log-event.sh" \
       event=way_fired way="$waypath" domain="$DOMAIN" \
-      trigger="subagent" scope=subagent project="$PROJECT_DIR" session="$SESSION_ID"
+      trigger="$scope" scope="$scope" project="$PROJECT_DIR" session="$SESSION_ID"
   fi
 done <<< "$WAYS"
 
