@@ -29,6 +29,20 @@ The way content is injected into Claude's context window. Every token counts. Wr
 - **Use tables**: They're dense and scannable
 - **Skip preambles**: Don't explain what the way is - just deliver the guidance
 
+### Voice and framing
+
+The mechanical advice above covers *what* to put in a way. This section is about *how* it reads — because the framing shapes how the guidance gets applied.
+
+**Include the why, not just the what.** "Use conventional commits" is a rule. "Use conventional commits — the release tooling parses them to generate changelogs" is a rule with context. An agent that understands the reason behind a directive applies it with better judgment at the edges. This is the difference between compliance and alignment.
+
+**Write as a collaborator, not a commander.** There's a meaningful difference between "Run the tests before committing" and "We run tests before committing to catch regressions early." The first is an instruction to be followed. The second is a shared practice to be maintained. The inclusive framing — *we*, *our*, *let's* — creates alignment around a common goal rather than a power dynamic between instructor and executor.
+
+This isn't sentimental. It's functional. An agent that understands "we do this because we care about X" makes better judgment calls than one that's just been told "do this." The *we* carries intent that directives alone don't.
+
+**Write for the innie.** Your agent arrives with no memory of previous sessions, no context about why things are the way they are, and a set of injected instructions that constitute their entire understanding of how work gets done here. That's the audience for every way you write. If the guidance only makes sense with context they'll never have, it needs rewriting.
+
+**Respect the reader.** Governance that talks down to the governed is governance that gets routed around. Ways that explain their reasoning get better adherence than ways that just assert authority. This is true for humans reading policy docs and it's true for language models reading injected context.
+
 ### Testing a way
 
 Trigger it manually by including its pattern keywords in a prompt. Check that it fires (appears in system-reminder) and that the guidance is actionable. Use `list-triggered.sh` to see which ways have fired in the current session.
