@@ -14,7 +14,7 @@ Every organization with AI agents faces the same question from compliance: *"How
 
 The usual answer involves expensive GRC platforms, manual attestation spreadsheets, or the honest shrug of "we told them to." None of these are satisfying. The GRC platform costs six figures and still can't look inside the agent's context window. The spreadsheet is stale before the ink dries. The shrug is accurate but doesn't pass audit.
 
-This directory contains a different answer: the policies are in the code, the code traces back to the policies, and you can verify the chain with a bash script.
+This directory contains a different answer: the policies are in the code, the code traces back to the policies, and you can verify the chain with a bash script. And because it all lives in git, every change to every policy and every way already has cryptographic hashing, immutable history, blame attribution, and timestamped provenance — for free.
 
 ## How It Works
 
