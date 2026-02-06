@@ -1,6 +1,8 @@
 # Contributing
 
-This is a personal project that's open source because other people might find it useful. Contributions are welcome, especially new ways for domains beyond software development.
+The recommended setup is to **fork this repo** and customize it for your own workflows. Add ways for your domain, tweak the triggers, build your own Lumon handbooks. Your fork stays yours.
+
+When you build something that would benefit everyone — a new domain, a better trigger pattern, a macro that detects something clever — we'd love a PR back to upstream. The framework improves when people bring different workflows to it.
 
 ## Adding a Way
 

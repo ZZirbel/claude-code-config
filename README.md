@@ -48,18 +48,24 @@ This repo ships with software development ways, but the mechanism is general-pur
 
 ## Quick Start
 
+**Fork first.** This repo is a starting point — you'll want to add your own ways for your own workflows. Fork it, then clone your fork:
+
 ```bash
 # Backup existing config if any
 [ -d ~/.claude ] && mv ~/.claude ~/.claude-backup-$(date +%Y%m%d)
 
-# Clone
-git clone https://github.com/aaronsb/claude-code-config ~/.claude
+# Clone your fork
+git clone https://github.com/YOUR-USERNAME/claude-code-config ~/.claude
 
 # Make hooks executable
 chmod +x ~/.claude/hooks/**/*.sh ~/.claude/hooks/*.sh 2>/dev/null
 
 # Restart Claude Code - ways are now active
 ```
+
+The built-in ways cover software development, but the framework doesn't care about the domain. Replace them, extend them, add entirely new ones. Your fork stays synced with upstream improvements while keeping your custom ways separate.
+
+> **Just want to try it?** You can clone directly (`git clone https://github.com/aaronsb/claude-code-config ~/.claude`) — the system will nudge you if you fall behind upstream.
 
 ## How It Works
 
