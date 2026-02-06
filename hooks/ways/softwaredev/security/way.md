@@ -4,6 +4,21 @@ description: application security, authentication, secrets management, input val
 vocabulary: authentication secrets password credentials owasp injection xss sql sanitize vulnerability
 threshold: 0.52
 scope: agent, subagent
+provenance:
+  policy:
+    - uri: docs/hooks-and-ways/softwaredev/operations.md
+      type: governance-doc
+  controls:
+    - OWASP Top 10 2021 A03:Injection
+    - NIST SP 800-53 IA-5 (Authenticator Management)
+    - CIS Controls v8 16.12 (Implementation of Application-Level Access)
+    - SOC 2 CC6.1 (Logical and Physical Access Controls)
+  verified: 2026-02-05
+  rationale: >
+    Detection table operationalizes OWASP injection prevention and NIST credential
+    management at code-commit time. Secrets exclusion and .env hygiene implement
+    CIS credential separation. Auth check enforcement shifts access control
+    verification left into development.
 ---
 # Security Way
 

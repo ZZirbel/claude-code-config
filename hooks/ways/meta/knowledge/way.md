@@ -3,6 +3,22 @@ match: regex
 pattern: \bway\b|\bways\b|knowledge|guidance|context.?inject
 files: \.claude/ways/.*way\.md$
 scope: agent, subagent
+provenance:
+  policy:
+    - uri: docs/hooks-and-ways/extending.md
+      type: governance-doc
+    - uri: docs/hooks-and-ways/rationale.md
+      type: governance-doc
+  controls:
+    - ISO 9001:2015 7.5 (Documented Information)
+    - ISO/IEC 27001:2022 5.2 (Policy)
+    - NIST SP 800-53 PL-2 (System Security and Privacy Plans)
+  verified: 2026-02-05
+  rationale: >
+    Guidance on writing effective ways implements ISO requirements for documented
+    information to be appropriate and suitable for use. The collaborative framing
+    pattern addresses ISO 27001 policy communication requirements — policies that
+    explain reasoning get better adherence.
 ---
 # Knowledge Way
 

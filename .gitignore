@@ -57,6 +57,12 @@
 !hooks/ways/*/*/*.yaml.template
 !hooks/ways/*/*/*
 
+# Governance traceability (separable)
+!governance/
+!governance/README.md
+!governance/*.py
+!governance/*.sh
+
 # Plugin config (not runtime data)
 !plugins/
 !plugins/config.json

@@ -276,6 +276,7 @@ This repo ships with 20 development-focused ways:
 - **ADR-driven workflow** guidance
 - **GitHub-first patterns** (auto-detects `gh` availability)
 - **Update checking** — detects direct clones, forks, and plugin installs; nudges you when behind upstream
+- **Governance traceability** — optional `provenance:` metadata on ways traces guidance back to policy documents and regulatory controls (NIST, OWASP, ISO, SOC 2). See [provenance](docs/hooks-and-ways/provenance.md).
 
 ## Ways vs Skills
 
