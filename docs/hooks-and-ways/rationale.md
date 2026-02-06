@@ -1,88 +1,160 @@
-# Rationale
+# Design Rationale: Why Ways Work This Way
 
-Why this system exists and how it's designed.
+Ways are a surprise management system. This document explains the cognitive science and practical reasoning behind the design -- not as academic argument, but as shared context for anyone maintaining or extending the system.
 
-## The Problem
+## The Core Thesis
 
-Claude Code sessions start with a blank slate. Project conventions, workflow standards, and operational guardrails need to reach the model at the right moment - not all upfront (wasting context), not too late (after mistakes are made).
+Intelligence -- biological or artificial -- is fundamentally about managing surprise. An agent that predicts well acts well. When predictions fail, something interesting is happening: a convention was unknown, a pattern was unexpected, a decision was non-obvious.
 
-Static instruction files (CLAUDE.md) solve the "always present" case but can't respond to what's actually happening in a session. A commit message reminder is useless during a debugging session. Security guidance matters when editing auth code, not when writing docs.
+We built ways around this insight. The system does two things:
 
-## Three-Layer Model
+1. **Reduces prediction error** by injecting relevant context at the moment of action -- before the agent encounters something it would otherwise get wrong.
+2. **Uses surprise as the learning signal** by capturing new knowledge only when something unexpected happened in a session.
 
-This system separates concerns into three layers, each serving a different audience and purpose:
+This isn't metaphorical. The hook system literally monitors for state transitions (tool use, commands, file edits) where prediction error is likely to spike, and injects priors that reduce it. The introspection system literally asks "was anything surprising?" and skips the entire reflection process if the answer is no.
 
-| Layer | Files | Audience | Optimized For |
-|-------|-------|----------|---------------|
-| **Policy** | `docs/hooks-and-ways/` | Humans | Understanding, rationale, 5W1H |
-| **Reference** | `docs/hooks-and-ways.md` | Human-machine bridge | How the system works, data flow |
-| **Machine guidance** | `hooks/ways/*/way.md` | Claude (LLM) | Terse, directive, context-efficient |
+Everything else in this document unpacks that core idea.
 
-**Policy** is where organizational opinions live in prose. "We use conventional commits because..." - the kind of thing a new team member reads to understand why things are done a certain way.
+## Why Not a Giant CLAUDE.md
 
-**Reference** documents the machinery: which hooks fire when, how matching works, what scripts do. It's the system manual.
+The obvious alternative to event-driven injection is to put everything in one big instruction file. We tried that. Here's why it doesn't work:
 
-**Machine guidance** is the actual content injected into Claude's context window. These read differently from normal documentation - they're short, imperative, and structured for a language model to act on. A human can read them but might find the style terse. That's by design: every token in the context window costs capacity.
+### Lost in the Middle
 
-## Design Principles
+Liu et al. (2023) demonstrated a U-shaped attention curve in language models: information at the beginning and end of context gets used reliably, but content in the middle suffers 20%+ performance degradation. A monolithic instruction file pushes most of its content into this dead zone. Worse, as context windows grow larger, the dead zone grows with them -- more capacity doesn't fix the problem, it can exacerbate it.
 
-### Just-in-time over just-in-case
+Event-driven injection sidesteps this entirely. Each way is small (typically 20-60 lines) and lands at a high-attention position -- the most recent content in the context window at the moment it's needed.
 
-Ways inject guidance when it's relevant, not preemptively. This keeps the context window lean and the guidance actionable. A 50-line testing way that appears when you run `pytest` is more effective than 50 lines permanently occupying the system prompt.
+### Context as Scarce Resource
 
-### Once per session
+Every token in the context window has an opportunity cost. Tokens spent on "just in case" instructions are tokens unavailable for the actual work -- code, conversation history, file contents. Sweller's Cognitive Load Theory calls this extraneous load: information that's present but not contributing to the task at hand.
 
-Most guidance only needs to be seen once. The marker system ensures a way fires on first match and stays silent afterward. This prevents the same guidance from consuming context on every prompt.
+Shi et al. (2023) showed this isn't just theoretical waste -- irrelevant context actively degrades reasoning even when the relevant information is also present. A 500-line CLAUDE.md that's always loaded means the model is always doing extra work filtering signal from noise.
 
-The exception is the context-threshold nag, which repeats deliberately because its purpose is enforcement, not education.
+### Just-in-Case is Waste
 
-### Trigger specificity
+The Toyota Production System recognized decades ago that inventory sitting "just in case" is waste -- it costs resources to maintain, ages, and obscures what's actually needed. The same principle applies here. A commit message format reminder that's always present is waste during a debugging session. Security guidance is noise when writing documentation.
 
-Ways can trigger on user prompts (what you ask for), tool use (what Claude is about to do), or session state (how full the context is). This means guidance arrives through the channel closest to the action:
+We borrow from the same tradition as lazy loading, event-driven architecture, and YAGNI: don't pay for what you're not using.
 
-- Prompt triggers catch intent ("I want to refactor this")
-- Command triggers catch execution (`git commit`)
-- File triggers catch targets (editing `.env`)
-- State triggers catch conditions (context 75% full)
+### Attention and Salience
 
-### Separation from Claude Code
+Signal detection theory tells us that signal-to-noise ratio degrades as the total signal grows. Simons and Chabris (1999) demonstrated inattentional blindness -- stimuli that are clearly present get missed when attention is directed elsewhere. A 50-line testing way that appears when you run `pytest` has vastly higher salience than the same 50 lines buried in a 500-line always-present file.
 
-The system is built entirely on Claude Code's hook API - shell scripts that receive JSON and return JSON. No patches, no forks, no internal modifications. This means it survives Claude Code updates and can be shared across machines by copying `~/.claude/hooks/`.
+Notification design research confirms the corollary: interruptions are most effective at natural breakpoints and task transitions, not as continuous background presence.
 
-## "But Claude already knows how to do this"
+## Cognitive Science Foundations
 
-A fair objection: Claude's training data covers most of these topics. Why inject guidance about commit conventions or error handling when the model already has strong opinions?
+The ways architecture draws on four research traditions. We're not implementing these theories academically -- we're using them as design lenses that explain why certain choices work better than alternatives.
 
-The answer is that ways aren't about filling knowledge gaps. They're about **encoding a specific person's developed opinions** about how work should be done. Claude knows many approaches to error handling. These ways encode *this* approach - one that was developed through actual use, refined through collaboration, and proven to work in this context.
+### Active Inference and the Free Energy Principle
 
-A model's training gives it breadth. Ways give it a specific posture - the opinions that emerged from what worked and what didn't across real sessions. "Here's how to handle errors" is generic training data. "Catch at boundaries only, wrap with context at module crossings, let programmer errors crash" is a developed position.
+**Core idea:** Intelligent agents minimize surprise (technically: variational free energy) through a combination of prediction and action. The brain continuously generates predictions about incoming signals and acts to reduce the gap between prediction and reality (Friston, 2010).
 
-This is also why ways evolve. They start as principles, get tested in practice, and get refined when they don't work. The governance docs capture the rationale so future refinements have context about why things are the way they are.
+**How it maps to ways:** Hook-based injection is analogous to precision-weighting -- increasing the gain on relevant prediction error at the right moment. When a way fires at `git commit`, it's the system saying "this is a moment where prediction accuracy matters, here's a high-precision prior." Loading everything upfront treats all information as equally precise at all times, which is computationally wasteful and informationally meaningless.
 
-## What This Replaces
+### Predictive Processing
 
-Without this system, the alternatives are:
+**Core idea:** The brain operates as a hierarchical prediction machine. Only prediction errors propagate upward through the hierarchy; correct predictions are silently confirmed. Cognition is largely about generating and refining top-down predictions (Clark, 2016; Rao & Ballard, 1999).
 
-- **Giant CLAUDE.md files** - Everything in one file, always in context, diluting attention
-- **Manual reminders** - Relying on the user to tell Claude about conventions
-- **Post-hoc fixes** - Catching problems in code review instead of preventing them
-- **Nothing** - Accepting inconsistency across sessions
+**How it maps to ways:** Context injection isn't just information delivery -- it's precision-weighting. The same guidance text has different cognitive impact depending on when it arrives. "We use conventional commits" landing at the moment of `git commit` functions as a high-precision prior because it's directly applicable. The same text loaded at session start has lower precision -- it's potentially relevant to something that may or may not happen.
 
-The ways system is a middle ground: automated enough to be reliable, transparent enough to be understood, and lightweight enough to not get in the way.
+### Situated and Embodied Cognition
 
-## The Cost of Bad Instructions
+**Core idea:** Cognition is shaped by the environment and what's immediately available. The mind extends into tools, notebooks, and environmental structures that participate in the cognitive process (Hutchins, 1995; Clark & Chalmers, 1998; Suchman, 1987).
 
-Every interaction with a language model has a real cost — compute, energy, money. These costs are easy to ignore because they're distributed and invisible at the individual level, but they're there.
+**How it maps to ways:** The hooks directory is a cognitive scaffold -- an external structure that participates in the agent's cognitive process. This is a direct implementation of the extended mind thesis: the agent's effective knowledge includes not just its weights and context window, but the ways directory that feeds relevant information at appropriate moments. The reliability of this coupling matters -- hooks must fire consistently, or the agent loses trust in the scaffold and falls back to less effective strategies.
 
-A vague instruction that takes three retries to get right costs three times what a clear one does. A 200-line CLAUDE.md that's always in context burns tokens on every single prompt, whether relevant or not. A way that fires at the wrong time wastes context capacity that could have been used for the actual work. A team of five agents given conflicting guidance will thrash, retry, and duplicate effort — multiplying the waste.
+### Relevance Realization
 
-This isn't hypothetical. If you've ever watched an agent go in circles because the instructions were ambiguous, or retry a task because it lacked context that could have been provided upfront, you've seen the cost. You just didn't see the meter running.
+**Core idea:** The fundamental cognitive challenge is determining what's relevant from a combinatorially explosive space of possibilities. Organisms solve this through evolved and learned mechanisms that constrain attention (Vervaeke et al., 2012; Sperber & Wilson, 1986).
 
-Good governance is resource efficiency:
+**How it maps to ways:** Trigger patterns are pre-computed relevance judgments. Instead of the agent spending context tokens figuring out which of dozens of possible conventions apply to the current task, the hook system has already encoded that judgment in regex patterns, file globs, and command matchers. The timing and selection of what gets injected communicates designer intent about what matters for a given action.
 
-- **Just-in-time delivery** means tokens aren't spent until they're needed
-- **Once-per-session gating** means guidance doesn't repeat wastefully
-- **Clear framing** means fewer misunderstandings, fewer retries, fewer wasted cycles
-- **The "we" pattern** means alignment on the first attempt, not correction on the third
+### Principles-to-Design Mapping
 
-None of this is precisely measurable at the individual session level. But across thousands of sessions, millions of prompts, and an industry of AI-assisted work, the difference between thoughtful guidance and careless instruction is real — economically and environmentally. Writing well for your agents isn't just good practice. It's good stewardship.
+| Principle | Source | Ways Implementation |
+|-----------|--------|-------------------|
+| Inject at state transitions where prediction error spikes | Active Inference | Hooks fire at tool use, session start, context thresholds |
+| Context is precision-weighting, not just information | Predictive Processing | Same guidance has different impact based on when it arrives |
+| Offload to environment, don't overload working memory | Situated Cognition | Hooks directory as external cognitive scaffold |
+| Pre-compute relevance | Relevance Realization | Trigger patterns encode relevance judgments |
+| Maximize signal-to-noise | Signal Detection Theory | Small targeted injections vs. monolithic prompt |
+| Deliver at natural breakpoints | Interruption Science | PreToolUse, UserPromptSubmit as task transition points |
+| Surprise is the learning signal | Predictive Processing | Escape hatches: capture only what was surprising |
+
+## The Surprise Test
+
+Surprise is the unifying principle of the system. It governs both directions of the knowledge loop:
+
+```mermaid
+stateDiagram-v2
+    direction LR
+
+    state "Session Running" as running
+    state "State Transition" as transition
+    state "Inject Way" as inject
+    state "Session Boundary" as boundary
+    state "Apply Surprise Test" as test
+    state "Capture Learning" as capture
+    state "Skip Reflection" as skip
+
+    running --> transition : tool use / command / keyword
+    transition --> inject : pattern matches\n(reduce prediction error)
+    inject --> running : agent continues\nwith better priors
+
+    running --> boundary : PR creation /\ncontext threshold
+    boundary --> test : was anything surprising?
+    test --> capture : yes — corrections,\nnew conventions
+    test --> skip : no — routine session
+    capture --> running : propose new ways\nfrom learnings
+```
+
+**As trigger for injection:** When the agent is about to do something where it might get surprised -- committing code, editing config files, running tests -- the hook system fires and injects guidance. The trigger patterns encode our prediction about when surprise is likely. We don't inject testing guidance during documentation work because there's no prediction error to reduce.
+
+**As escape hatch for reflection:** At session boundaries (PR creation, context threshold), the introspection system asks: was anything surprising? If the human didn't correct anything, didn't explain any conventions, didn't push back on any choices -- then the session went as predicted and there's nothing to capture. This prevents ceremony for ceremony's sake. The Memory Way and Introspection Way both gate on this same test.
+
+The beauty of this dual role is that it's self-calibrating. A system that captures everything produces noise. A system that captures nothing loses knowledge. Surprise is the signal that distinguishes the two -- it marks exactly the moments where the agent's model of the world was wrong and needs updating.
+
+## Simple Mechanisms, Effective Results
+
+The implementation uses deliberately simple detection mechanisms:
+
+- **Regex matching** for keywords, commands, and file patterns
+- **Gzip-based Normalized Compression Distance (NCD)** for semantic similarity
+- **Keyword counting** with stopword filtering for domain vocabulary
+
+There are no embedding models, no vector databases, no neural classifiers in the core matching pipeline. The semantic matcher works by comparing gzip compression ratios -- if two texts share patterns, compressing them together produces smaller output than expected from their individual sizes. It's an information-theoretic measure that runs in milliseconds with zero dependencies beyond `gzip` and `bc`.
+
+This simplicity is a feature, not a limitation. It's evidence of a design principle: **well-calibrated timing beats sophisticated detection**.
+
+The matching doesn't need to be perfect. It needs to be good enough to fire at roughly the right moment, because the value comes from the architecture -- delivering small, relevant context at state transitions -- not from the precision of the trigger. A regex that fires on `git commit|git push|conventional` doesn't need to understand natural language. It needs to reliably detect the neighborhood of an action where commit guidance is useful.
+
+When higher precision is needed, the system offers a model-based classifier (Haiku) as an opt-in upgrade, adding ~800ms of latency for more accurate classification. But most ways work fine with regex, and that tells us something important about where the leverage actually is.
+
+The matching tiers, in practice:
+
+| Mechanism | Latency | Accuracy | When We Use It |
+|-----------|---------|----------|----------------|
+| Regex | < 1ms | High for known patterns | Most ways -- keywords, commands, file paths |
+| NCD + keywords | ~5ms | Good for semantic neighborhood | Ways where exact keywords aren't predictable |
+| Model (Haiku) | ~800ms | High for ambiguous intent | Security-sensitive, high-stakes triggers |
+
+## References
+
+- Brown, J. S., Collins, A., & Duguid, P. (1989). Situated cognition and the culture of learning. *Educational Researcher*, 18(1), 32-42.
+- Clark, A. (2016). *Surfing Uncertainty: Prediction, Action, and the Embodied Mind*. Oxford University Press.
+- Clark, A., & Chalmers, D. (1998). The extended mind. *Analysis*, 58(1), 7-19.
+- Friston, K. (2010). The free-energy principle: a unified brain theory? *Nature Reviews Neuroscience*, 11(2), 127-138.
+- Godden, D. R., & Baddeley, A. D. (1975). Context-dependent memory in two natural environments: on land and underwater. *British Journal of Psychology*, 66(3), 325-331.
+- Hutchins, E. (1995). *Cognition in the Wild*. MIT Press.
+- Liu, N. F., et al. (2023). Lost in the middle: How language models use long contexts. *arXiv:2307.03172*.
+- Ohno, T. (1988). *Toyota Production System: Beyond Large-Scale Production*. Productivity Press.
+- Rao, R. P. N., & Ballard, D. H. (1999). Predictive coding in the visual cortex. *Nature Neuroscience*, 2(1), 79-87.
+- Shi, F., et al. (2023). Large language models can be easily distracted by irrelevant context. *Proceedings of ICML 2023*.
+- Simons, D. J., & Chabris, C. F. (1999). Gorillas in our midst. *Perception*, 28(9), 1059-1074.
+- Sperber, D., & Wilson, D. (1986). *Relevance: Communication and Cognition*. Harvard University Press.
+- Suchman, L. A. (1987). *Plans and Situated Actions*. Cambridge University Press.
+- Sweller, J. (1988). Cognitive load during problem solving. *Cognitive Science*, 12(2), 257-285.
+- Vervaeke, J., Lillicrap, T. P., & Richards, B. A. (2012). Relevance realization and the emerging framework in cognitive science. *Journal of Logic and Computation*, 22(1), 79-99.
+- Vygotsky, L. S. (1978). *Mind in Society: The Development of Higher Psychological Processes*. Harvard University Press.
