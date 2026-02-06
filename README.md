@@ -309,6 +309,26 @@ Claude Code has built-in **Skills** (semantically-discovered knowledge bundles).
 
 Skills can't detect tool execution. Ways now support semantic matching via gzip NCD (see above). Together they cover both intent-based and event-based guidance.
 
+## Governance
+
+Everything above is about what happens on the floor — the agents, the teams, the guidance, the triggers. But someone has to decide what the handbooks say.
+
+Ways don't emerge from nothing. They're compiled from policy — organizational opinions about how work should be done, informed by regulatory requirements, industry standards, and hard-won experience. The question enterprises will ask is: *"Can you prove your agent governance traces back to actual policy?"*
+
+The answer is yes, and it doesn't require expensive software.
+
+Every way can carry optional `provenance:` metadata linking it to policy documents and regulatory controls. The runtime ignores it completely — zero tokens, zero latency. But a governance tool can scan all your ways and produce a traceability manifest: which policies produced which guidance, which standards are covered, where the gaps are.
+
+```
+NIST SP 800-53 CM-3        →  code-lifecycle.md  →  softwaredev/commits/way.md
+OWASP Top 10 A03:Injection →  operations.md      →  softwaredev/security/way.md
+ISO 25010 Maintainability  →  code-lifecycle.md   →  softwaredev/quality/way.md
+```
+
+The built-in ways already reference 13 real standards across NIST, OWASP, ISO, SOC 2, CIS, and IEEE. Not decorative — an auditor can follow the chain from regulatory control through policy document to the specific guidance an agent receives.
+
+The [`governance/`](governance/) directory contains the tooling and is designed to be separable — tear it out, point it at your own ways and policies, verify the chain. See [ADR-005](docs/adr/ADR-005-governance-traceability.md) for the design rationale.
+
 ## Philosophy
 
 Policy-as-code for AI agents — lightweight, portable, deterministic.
