@@ -29,8 +29,13 @@ provenance:
     - uri: docs/hooks-and-ways/softwaredev/code-lifecycle.md
       type: governance-doc
   controls:
-    - NIST SP 800-53 CM-3 (Configuration Change Control)
-    - SOC 2 CC8.1 (Change Management)
+    - id: NIST SP 800-53 CM-3 (Configuration Change Control)
+      justifications:
+        - Conventional commit types classify changes by nature
+        - Atomic commits make each change independently reviewable
+    - id: SOC 2 CC8.1 (Change Management)
+      justifications:
+        - Type prefix and scope create structured change records
   verified: 2026-02-05
   rationale: >
     Conventional commits create structured change records with type

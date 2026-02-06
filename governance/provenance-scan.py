@@ -66,7 +66,6 @@ def parse_provenance_block(lines):
 
     for line in lines:
         stripped = line.strip()
-        indent = _indent_level(line)
 
         # Detect provenance block start
         if line.startswith('provenance:'):

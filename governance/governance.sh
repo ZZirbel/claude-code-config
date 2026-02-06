@@ -92,7 +92,7 @@ fi
 # Trace mode — end-to-end provenance for a single way
 # ============================================================
 if [[ "$MODE" == "trace" ]]; then
-  WAY_DATA=$(echo "$MANIFEST_DATA" | jq -e --arg w "$TRACE_WAY" '.ways[$w] // empty' 2>/dev/null)
+  WAY_DATA=$(echo "$MANIFEST_DATA" | jq --arg w "$TRACE_WAY" '.ways[$w] // empty' 2>/dev/null)
 
   if [[ -z "$WAY_DATA" ]]; then
     echo "Error: way '$TRACE_WAY' not found in manifest" >&2
@@ -283,19 +283,17 @@ if [[ "$MODE" == "active" ]]; then
   GOVERNED=$(echo "$MANIFEST_DATA" | jq -r '.coverage.with_provenance[]')
 
   if $JSON_OUT; then
-    # Build JSON: for each governed way, count fires
-    RESULT="["
-    FIRST=true
+    # Build JSON via jq: for each governed way, count fires
+    FIRE_COUNTS="{}"
     while read -r way; do
       [[ -z "$way" ]] && continue
-      FIRES=$(jq -r "select(.event == \"way_fired\" and .way == \"$way\") | .way" "$STATS_FILE" 2>/dev/null | wc -l | tr -d ' ')
-      CONTROLS=$(echo "$MANIFEST_DATA" | jq -c --arg w "$way" '[.ways[$w].provenance.controls[]?]')
-      $FIRST || RESULT+=","
-      RESULT+="{\"way\":\"$way\",\"fires\":$FIRES,\"controls\":$CONTROLS}"
-      FIRST=false
+      COUNT=$(jq -r "select(.event == \"way_fired\" and .way == \"$way\") | .way" "$STATS_FILE" 2>/dev/null | wc -l | tr -d ' ')
+      FIRE_COUNTS=$(echo "$FIRE_COUNTS" | jq --arg w "$way" --argjson c "$COUNT" '. + {($w): $c}')
     done <<< "$GOVERNED"
-    RESULT+="]"
-    echo "$RESULT" | jq .
+    echo "$MANIFEST_DATA" | jq --argjson fires "$FIRE_COUNTS" '[
+      .coverage.with_provenance[] as $way |
+      {way: $way, fires: ($fires[$way] // 0), controls: .ways[$way].provenance.controls}
+    ]'
     exit 0
   fi
 

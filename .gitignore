@@ -12,7 +12,6 @@
 !settings.json
 !statusline.sh
 !ways.json
-!governance-report
 
 # GitHub community health files
 !.github/
@@ -65,6 +64,7 @@
 !hooks/ways/*/*/*
 
 # Governance traceability (separable)
+!governance-report
 !governance/
 !governance/README.md
 !governance/*.py

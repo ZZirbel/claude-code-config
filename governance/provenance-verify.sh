@@ -14,10 +14,12 @@
 set -euo pipefail
 
 # Check dependencies
-if ! command -v jq &>/dev/null; then
-  echo "Error: jq is required but not installed." >&2
-  exit 1
-fi
+for cmd in jq python3; do
+  if ! command -v "$cmd" &>/dev/null; then
+    echo "Error: $cmd is required but not installed." >&2
+    exit 1
+  fi
+done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WAYS_DIR="${HOME}/.claude/hooks/ways"
