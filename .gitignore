@@ -25,9 +25,15 @@
 !agents/
 !agents/*.md
 
-# Commands (skills)
+# Commands (slash commands)
 !commands/
 !commands/*.md
+
+# Skills (semantic discovery)
+!skills/
+!skills/*/
+!skills/*/SKILL.md
+!skills/*/*.md
 
 # Documentation
 !docs/
