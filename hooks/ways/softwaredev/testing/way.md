@@ -5,6 +5,30 @@ vocabulary: unittest coverage mock tdd assertion jest pytest rspec testcase
 commands: npm\ test|yarn\ test|jest|pytest|cargo\ test|go\ test|rspec
 threshold: 0.54
 scope: agent, subagent
+provenance:
+  policy:
+    - uri: docs/hooks-and-ways/softwaredev/code-lifecycle.md
+      type: governance-doc
+  controls:
+    - id: NIST SP 800-53 SA-11 (Developer Testing and Evaluation)
+      justifications:
+        - Four coverage categories (happy path, empty/null, boundary, error) implement structured developer test evaluation
+        - Framework auto-detection ensures tests follow project conventions rather than ad-hoc patterns
+        - One logical assertion per test enforces precise, evaluable test cases
+    - id: IEEE 829-2008 (Test Documentation Standard)
+      justifications:
+        - Arrange-Act-Assert structure standardizes test documentation format
+        - Naming convention (should [behavior] when [condition]) creates self-documenting test specifications
+        - Test independence requirement (no shared mutable state) ensures repeatable test execution
+    - id: ISO/IEC 25010:2011 (Reliability - Maturity, Fault Tolerance)
+      justifications:
+        - Boundary value testing (min, max, off-by-one, empty collections) verifies fault tolerance
+        - Error condition coverage (invalid input, dependency failures) validates graceful degradation
+  verified: 2026-02-09
+  rationale: >
+    Structured coverage categories implement SA-11 developer testing evaluation. AAA format
+    and naming conventions address IEEE 829 test documentation standards. Boundary and error
+    condition testing directly measures ISO 25010 reliability characteristics.
 ---
 # Testing Way
 

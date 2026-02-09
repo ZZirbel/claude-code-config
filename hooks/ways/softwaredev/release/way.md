@@ -2,6 +2,29 @@
 match: regex
 pattern: release|changelog|tag|version.?bump|bump.?version|npm.?publish|cargo.?publish
 scope: agent, subagent
+provenance:
+  policy:
+    - uri: docs/hooks-and-ways/softwaredev/code-lifecycle.md
+      type: governance-doc
+  controls:
+    - id: NIST SP 800-53 CM-3 (Configuration Change Control)
+      justifications:
+        - Keep a Changelog format (Added/Changed/Fixed/Removed) classifies changes by nature for review
+        - Git log since last tag captures complete change history between releases
+        - Semantic version inference from commit types creates deterministic version progression
+    - id: SOC 2 CC8.1 (Change Management)
+      justifications:
+        - Changelog generation from commit history produces auditable release documentation
+        - Version file detection and update creates traceable release artifacts
+    - id: NIST SP 800-53 SA-10 (Developer Configuration Management)
+      justifications:
+        - Semantic versioning (major/minor/patch) from commit message analysis standardizes version identification
+        - Version file management across ecosystems (package.json, Cargo.toml, pyproject.toml) ensures consistent version tracking
+  verified: 2026-02-09
+  rationale: >
+    Keep a Changelog format and git-based change enumeration implement CM-3 change documentation.
+    Automated changelog and version file management create CC8.1 auditable release records.
+    Semantic versioning from commit analysis standardizes SA-10 version identification.
 ---
 # Release Way
 

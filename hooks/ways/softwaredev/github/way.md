@@ -4,6 +4,30 @@ pattern: github|\ issue|pull.?request|\ pr\ |\ pr$|review.?(pr|comment)|merge.?r
 commands: ^gh\ |^gh$
 macro: prepend
 scope: agent, subagent
+provenance:
+  policy:
+    - uri: docs/hooks-and-ways/softwaredev/code-lifecycle.md
+      type: governance-doc
+  controls:
+    - id: SOC 2 CC8.1 (Change Management)
+      justifications:
+        - PR-always stance ensures all changes pass through a reviewable change management gate
+        - Solo PRs still serve as decision records and CI gates even without reviewers
+        - Tiered PR depth (lightweight for solo, thorough for teams) scales change management to context
+    - id: NIST SP 800-53 CM-3 (Configuration Change Control)
+      justifications:
+        - PR as change record creates immutable audit trail of what changed and why
+        - CI checks on PRs implement automated configuration change verification
+        - Repo health macro detects missing configuration controls (branch protection, templates)
+    - id: ISO/IEC 27001:2022 A.8.32 (Change Management)
+      justifications:
+        - PR workflow (create → review → merge) implements formal change management process
+        - Issue tracking provides requirements traceability for changes
+  verified: 2026-02-09
+  rationale: >
+    PR-always stance implements CC8.1 change management even for solo projects. PR-as-record
+    with CI gates satisfies CM-3 automated change verification. Repo health checks detect
+    gaps in A.8.32 change management infrastructure.
 ---
 # GitHub Way
 

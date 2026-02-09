@@ -5,6 +5,29 @@ vocabulary: dotenv environment configuration envvar config.json config.yaml
 files: \.env|config\.(json|yaml|yml|toml)$
 threshold: 0.54
 scope: agent, subagent
+provenance:
+  policy:
+    - uri: docs/hooks-and-ways/softwaredev/operations.md
+      type: governance-doc
+  controls:
+    - id: NIST SP 800-53 CM-6 (Configuration Settings)
+      justifications:
+        - Configuration hierarchy (env vars > config files > defaults) establishes deterministic configuration precedence
+        - Fail-fast on missing required config prevents runtime configuration drift
+        - Sensible defaults for non-sensitive values reduce misconfiguration risk
+    - id: CIS Controls v8 4.1 (Establish and Maintain a Secure Configuration Process)
+      justifications:
+        - Startup validation pattern checks all required configuration before accepting traffic
+        - .env.example with placeholder values documents expected configuration shape
+    - id: NIST SP 800-53 IA-5 (Authenticator Management)
+      justifications:
+        - .env files excluded from version control via .gitignore verification
+        - Secrets handling deferred to Security Way for credential separation
+  verified: 2026-02-09
+  rationale: >
+    Configuration hierarchy and startup validation implement CM-6 configuration management.
+    .env.example documentation and secure defaults address CIS 4.1 configuration process.
+    Secrets separation via .gitignore enforces IA-5 authenticator protection.
 ---
 # Configuration Way
 
