@@ -3,6 +3,31 @@ match: regex
 pattern: ssh|remote.?server|remote.?host|sshpass
 commands: ^ssh\ |^scp\ |^rsync.*:|\bsshpass\b
 scope: agent, subagent
+provenance:
+  policy:
+    - uri: docs/hooks-and-ways/softwaredev/operations.md
+      type: governance-doc
+  controls:
+    - id: NIST SP 800-53 AC-17 (Remote Access)
+      justifications:
+        - BatchMode=yes enforces non-interactive authentication, preventing credential prompt hanging
+        - ConnectTimeout prevents indefinite connection attempts to unreachable hosts
+        - Tiered scenarios (dev/homelab/enterprise) acknowledge different remote access security postures
+    - id: NIST SP 800-53 IA-2 (Identification and Authentication)
+      justifications:
+        - Key-based authentication preferred over password authentication
+        - ssh-agent key verification before connection attempts validates identity infrastructure
+        - StrictHostKeyChecking=accept-new prevents MITM while allowing legitimate new hosts
+    - id: NIST SP 800-53 IA-5 (Authenticator Management)
+      justifications:
+        - Never-hardcode-passwords rule prevents credential exposure in source and process lists
+        - sshpass -e (environment variable) preferred over -p (command line) to reduce credential visibility
+        - SSH config file patterns centralize credential management per host class
+  verified: 2026-02-09
+  rationale: >
+    Non-interactive flags implement AC-17 remote access controls for automated sessions.
+    Key-based auth preference and agent verification address IA-2 authentication requirements.
+    Password handling guidance (env vars, never hardcoded) enforces IA-5 credential management.
 ---
 # SSH Way
 

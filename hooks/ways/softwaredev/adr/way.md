@@ -4,6 +4,29 @@ pattern: \badr\b|architect|decision|design.?pattern|technical.?choice|trade.?off
 files: docs/adr/.*\.md$
 macro: prepend
 scope: agent, subagent
+provenance:
+  policy:
+    - uri: docs/hooks-and-ways/softwaredev/code-lifecycle.md
+      type: governance-doc
+  controls:
+    - id: NIST SP 800-53 CM-3 (Configuration Change Control)
+      justifications:
+        - ADR format captures Context/Decision/Consequences for each architectural change
+        - Alternatives Considered section documents rejected options and rejection rationale
+        - Status lifecycle (Proposed → Accepted → Deprecated → Superseded) tracks decision currency
+    - id: ISO/IEC 27001:2022 A.5.1 (Policies for Information Security)
+      justifications:
+        - Structured decision records create traceable architectural policy documentation
+        - Deciders field establishes accountability for each architectural decision
+    - id: NIST SP 800-53 PL-2 (System Security and Privacy Plans)
+      justifications:
+        - ADR workflow (debate → draft → PR → review → merge) implements documented planning process
+        - Consequences section (positive/negative/neutral) documents risk acceptance for each decision
+  verified: 2026-02-09
+  rationale: >
+    ADR format with Context/Decision/Consequences implements CM-3 change documentation for
+    architectural decisions. Status lifecycle and Deciders field address ISO 27001 A.5.1
+    policy accountability. PR-based workflow satisfies PL-2 documented planning process.
 ---
 # ADR Way
 
