@@ -1,7 +1,7 @@
 ---
 match: regex
 pattern: \badr\b|architect|decision|design.?pattern|technical.?choice|trade.?off
-files: docs/adr/.*\.md$
+files: docs/architecture/.*\.md$
 macro: prepend
 scope: agent, subagent
 provenance:
@@ -39,7 +39,7 @@ provenance:
 
 ## ADR Format
 
-Store in: `docs/adr/ADR-NNN-description.md`
+Store in: `docs/architecture/ADR-NNN-description.md`
 
 ```markdown
 # ADR-NNN: Decision Title

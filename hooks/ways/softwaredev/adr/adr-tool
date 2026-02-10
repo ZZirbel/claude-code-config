@@ -248,7 +248,8 @@ def cmd_list(args):
 
     adrs.sort(key=sort_key)
 
-    print(f"\nArchitecture Decision Records ({len(adrs)} total)")
+    project = get_config().get('project_name', 'Project')
+    print(f"\n{project} — Architecture Decision Records ({len(adrs)} total)")
     print("=" * 55)
 
     def status_icon(status):
@@ -602,7 +603,8 @@ def cmd_domains(args):
     """List available domains."""
     domains = get_domains()
 
-    print("\nADR Domain Number Series")
+    project = get_config().get('project_name', 'Project')
+    print(f"\n{project} — ADR Domain Number Series")
     print("=" * 60)
     print(f"(from {relative_path(get_config_path())})")
 
