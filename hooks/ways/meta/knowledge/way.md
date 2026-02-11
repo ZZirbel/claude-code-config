@@ -153,4 +153,9 @@ Each (way, session) pair has its own marker. Multiple ways can fire per prompt. 
 
 Write as a collaborator, not an authority. Include the *why* — an agent that understands the reason applies better judgment at the edges. Write for a reader with no prior context.
 
+For state transitions and process flows, prefer Cypher-style notation over ASCII diagrams — it's compact, the model parses it natively, and it saves tokens:
+```
+(state_a)-[:EVENT {context}]->(state_b)  // what happens
+```
+
 Full authoring guide: `docs/hooks-and-ways/extending.md`
