@@ -133,69 +133,24 @@ threshold: 90             # percentage (0-100)
 
 3. Optionally add `macro.sh` for dynamic context
 
-**That's it.** No config files to update.
-
-## Writing Voice
-
-The mechanical format matters, but so does how the guidance reads. Framing shapes how it gets applied.
-
-**Include the why.** "Use conventional commits" is a rule. "We use conventional commits — the release tooling parses them for changelogs" is a shared practice with context. An agent that understands the reason applies better judgment at the edges.
-
-**Write as a collaborator.** "Run tests before committing" is an instruction. "We run tests before committing to catch regressions early" is alignment around a shared goal. The inclusive framing — *we*, *our*, *let's* — carries intent that directives alone don't. This isn't sentimental; it's functional.
-
-**Write for the innie.** Your reader arrives with no memory, no prior context, and a set of injected instructions as their entire understanding of how work gets done. If guidance only makes sense with context they'll never have, rewrite it.
-
-**Respect the reader.** Governance that talks down gets routed around. Ways that explain their reasoning get better adherence than ways that assert authority.
-
-## Project-Local Ways
-
-Projects can override or add ways:
-```
-$PROJECT/.claude/ways/
-└── myproject/
-    ├── api/way.md           # Project conventions
-    ├── deployment/way.md    # How we deploy
-    └── testing/way.md       # Override global testing way
-```
-
-Project ways take precedence over global ways with same path.
-
-## Enabling/Disabling Way Domains
-
-Control which domains are active via `~/.claude/ways.json`:
-
-```json
-{
-  "disabled": ["itops", "experimental"]
-}
-```
-
-- Add domain name to `disabled` array to deactivate all ways in that domain
-- Remove from array to reactivate
-- Empty array `[]` means all domains active
+**That's it.** No config files to update. Project ways override global ways with the same path.
 
 ## Locations
 - Global: `~/.claude/hooks/ways/{domain}/{wayname}/way.md`
 - Project: `$PROJECT/.claude/ways/{domain}/{wayname}/way.md`
-- Markers: `/tmp/.claude-way-{domain}-{wayname}-{session_id}`
+- Disable domains: `~/.claude/ways.json` → `{"disabled": ["domain"]}`
 
 ## State Machine
 
-Each (way, session) pair has two states:
-
 ```
-┌─────────────┐  keyword/command/file/state    ┌─────────────┐
-│  not_shown  │ ─────────────────────────────▶ │   shown     │
-│  (no marker)│       output + create marker   │(marker exists)
-└─────────────┘                                └─────────────┘
-       │                                              │
-       │         any subsequent match                 │
-       │◀─────────────────────────────────────────────│
-                     no-op (idempotent)
+(not_shown)-[:TRIGGER {keyword|command|file|state}]->(shown)  // output + create marker
+(shown)-[:TRIGGER]->(shown)  // no-op, idempotent
 ```
 
-**Multi-trigger semantics:**
-- Single prompt may match multiple ways → all fire (each has own marker)
-- Same way matched multiple times → first wins, rest are no-ops
-- Multiple hooks (prompt, bash, file) may fire same way → marker prevents duplicates
-- Project-local and global with same name → project-local wins (single marker per name)
+Each (way, session) pair has its own marker. Multiple ways can fire per prompt. Project-local wins over global for same name.
+
+## Writing Ways Well
+
+Write as a collaborator, not an authority. Include the *why* — an agent that understands the reason applies better judgment at the edges. Write for a reader with no prior context.
+
+Full authoring guide: `docs/hooks-and-ways/extending.md`

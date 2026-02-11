@@ -71,7 +71,14 @@ while IFS= read -r wayfile; do
   keyword_display="—"
   if [[ -n "$pattern" ]]; then
     # Strip regex syntax, word boundaries, escapes — keep human-readable keywords
-    keyword_display=$(echo "$pattern" | sed 's/\\b//g; s/\\//g; s/\.\*//g; s/\.\?//g; s/\?//g; s/\^//g; s/\$//g; s/(/ /g; s/)//g; s/|/,/g; s/\[//g; s/\]//g; s/  */ /g; s/ *, */,/g; s/,,*/,/g; s/^,//; s/,$//; s/,/, /g')
+    # 1. Replace regex connectors with space (literal dot+quantifier patterns)
+    # 2. Strip remaining regex syntax
+    # 3. Normalize whitespace and comma formatting
+    keyword_display=$(echo "$pattern" | \
+      sed 's/[.][?]/ /g; s/[.][*]/ /g; s/[.][+]/ /g' | \
+      sed 's/\\b//g; s/\\//g; s/[?]//g; s/\^//g; s/\$//g; s/(/ /g; s/)//g; s/|/,/g; s/\[//g; s/\]//g' | \
+      sed 's/  */ /g; s/ *, */,/g; s/,,*/,/g; s/^,//; s/,$//; s/,/, /g' | \
+      awk -F', ' '{for(i=1;i<=NF;i++){if(!seen[$i]++)printf "%s%s",(i>1?", ":""),$i}print""}')
   fi
 
   echo "| **${wayname}** | ${tool_trigger} | ${keyword_display} |"
