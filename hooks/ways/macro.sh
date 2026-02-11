@@ -70,8 +70,8 @@ while IFS= read -r wayfile; do
   # Format pattern for display (strip regex syntax, keep readable)
   keyword_display="—"
   if [[ -n "$pattern" ]]; then
-    # Strip regex escapes and special chars, convert | to comma
-    keyword_display=$(echo "$pattern" | sed 's/\\//g; s/\.\*//g; s/\.\?//g; s/\?//g; s/\^//g; s/\$//g; s/(/ /g; s/)//g; s/|/, /g; s/  */ /g; s/\[.*\]//g')
+    # Strip regex syntax, word boundaries, escapes — keep human-readable keywords
+    keyword_display=$(echo "$pattern" | sed 's/\\b//g; s/\\//g; s/\.\*//g; s/\.\?//g; s/\?//g; s/\^//g; s/\$//g; s/(/ /g; s/)//g; s/|/,/g; s/\[//g; s/\]//g; s/  */ /g; s/ *, */,/g; s/,,*/,/g; s/^,//; s/,$//; s/,/, /g')
   fi
 
   echo "| **${wayname}** | ${tool_trigger} | ${keyword_display} |"
