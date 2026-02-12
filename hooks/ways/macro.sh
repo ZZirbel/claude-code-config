@@ -19,9 +19,11 @@ while IFS= read -r wayfile; do
   # Skip if not in a domain subdirectory
   [[ "$relpath" != */* ]] && continue
 
-  # Extract domain and way name
+  # Extract domain (first segment) and way name (rest of path)
   domain="${relpath%%/*}"
-  wayname="${relpath##*/}"
+  subpath="${relpath#*/}"
+  # Display nested ways with > breadcrumbs (e.g., "knowledge > authoring")
+  wayname="${subpath//\// > }"
 
   # Print domain header if changed
   if [[ "$domain" != "$CURRENT_DOMAIN" ]]; then
