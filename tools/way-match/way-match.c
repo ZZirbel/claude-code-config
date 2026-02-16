@@ -474,6 +474,268 @@ static int cmd_score(const char *corpus_path, const char *query, double threshol
 }
 
 /* ========================================================================
+ * Suggest mode — analyze way.md body and suggest vocabulary improvements
+ *
+ * Reads a way.md file, tokenizes the body (stripping frontmatter),
+ * compares body term frequencies against current description+vocabulary,
+ * and outputs: gaps (body terms not covered), coverage, unused vocab terms,
+ * and a suggested vocabulary line.
+ *
+ * Pure analysis — never writes files. File mutation is the shell wrapper's job.
+ * ======================================================================== */
+
+#define MAX_BODY 65536
+
+/* Token pair: preserves original (lowercased) form alongside stem */
+typedef struct {
+    char stem[MAX_TOKEN_LEN];
+    char original[MAX_TOKEN_LEN];
+} TokenPair;
+
+typedef struct {
+    TokenPair pairs[MAX_TOKENS];
+    int count;
+} TokenPairList;
+
+/* Tokenize preserving original form before stemming */
+static void tokenize_pairs(const char *text, TokenPairList *out) {
+    out->count = 0;
+    int i = 0, len = strlen(text);
+
+    while (i < len && out->count < MAX_TOKENS) {
+        while (i < len && !isalpha((unsigned char)text[i])) i++;
+        if (i >= len) break;
+
+        char token[MAX_TOKEN_LEN];
+        int t = 0;
+        while (i < len && isalpha((unsigned char)text[i]) && t < MAX_TOKEN_LEN - 1) {
+            token[t++] = tolower((unsigned char)text[i]);
+            i++;
+        }
+        token[t] = '\0';
+
+        if (t < 3 || is_stopword(token)) continue;
+
+        /* Save lowercased original before stemming */
+        strcpy(out->pairs[out->count].original, token);
+
+        stem_word(token, &t);
+        if (t < 3) continue;
+
+        strcpy(out->pairs[out->count].stem, token);
+        out->count++;
+    }
+}
+
+/* Suggest entry: stem + best original + frequency + coverage flag */
+typedef struct {
+    char stem[MAX_TOKEN_LEN];
+    char original[MAX_TOKEN_LEN];
+    int freq;
+    int covered; /* already in description or vocabulary */
+} SuggestEntry;
+
+static int cmp_suggest_freq(const void *a, const void *b) {
+    return ((const SuggestEntry *)b)->freq - ((const SuggestEntry *)a)->freq;
+}
+
+static int cmd_suggest(const char *filepath, int min_freq) {
+    /* --- 1. Read the entire file --- */
+    FILE *f = fopen(filepath, "r");
+    if (!f) { fprintf(stderr, "error: cannot open %s\n", filepath); return 1; }
+
+    char *content = malloc(MAX_BODY);
+    if (!content) { fclose(f); fprintf(stderr, "error: out of memory\n"); return 1; }
+    int total = fread(content, 1, MAX_BODY - 1, f);
+    content[total] = '\0';
+    fclose(f);
+
+    /* --- 2. Parse frontmatter and body --- */
+    if (total < 4 || strncmp(content, "---\n", 4) != 0) {
+        fprintf(stderr, "error: no YAML frontmatter found in %s\n", filepath);
+        free(content);
+        return 1;
+    }
+
+    char *fm_start = content + 4;
+    char *fm_end = strstr(fm_start, "\n---\n");
+    if (!fm_end) {
+        fm_end = strstr(fm_start, "\n---");
+        if (!fm_end) {
+            fprintf(stderr, "error: unterminated frontmatter in %s\n", filepath);
+            free(content);
+            return 1;
+        }
+    }
+
+    /* Extract description and vocabulary from frontmatter */
+    char description[MAX_LINE] = "";
+    char vocabulary[MAX_LINE] = "";
+
+    char *line = fm_start;
+    while (line < fm_end) {
+        char *eol = strchr(line, '\n');
+        if (!eol || eol > fm_end) eol = fm_end;
+
+        if (strncmp(line, "vocabulary:", 11) == 0) {
+            char *val = line + 11;
+            while (*val == ' ') val++;
+            int vlen = eol - val;
+            if (vlen > (int)sizeof(vocabulary) - 1) vlen = sizeof(vocabulary) - 1;
+            strncpy(vocabulary, val, vlen);
+            vocabulary[vlen] = '\0';
+        }
+        if (strncmp(line, "description:", 12) == 0) {
+            char *val = line + 12;
+            while (*val == ' ') val++;
+            int vlen = eol - val;
+            if (vlen > (int)sizeof(description) - 1) vlen = sizeof(description) - 1;
+            strncpy(description, val, vlen);
+            description[vlen] = '\0';
+        }
+
+        line = eol + 1;
+    }
+
+    /* Body is everything after the closing --- */
+    char *body_start = fm_end + 5; /* skip \n---\n */
+    if (body_start > content + total) body_start = content + total;
+
+    /* --- 3. Tokenize body with original forms --- */
+    TokenPairList *body_pairs = calloc(1, sizeof(TokenPairList));
+    if (!body_pairs) { free(content); return 1; }
+    tokenize_pairs(body_start, body_pairs);
+
+    /* --- 4. Build body term frequency map --- */
+    SuggestEntry entries[MAX_TOKENS];
+    int entry_count = 0;
+
+    for (int i = 0; i < body_pairs->count; i++) {
+        int found = 0;
+        for (int j = 0; j < entry_count; j++) {
+            if (strcmp(entries[j].stem, body_pairs->pairs[i].stem) == 0) {
+                entries[j].freq++;
+                /* Keep longest original form (most readable) */
+                if ((int)strlen(body_pairs->pairs[i].original) > (int)strlen(entries[j].original))
+                    strcpy(entries[j].original, body_pairs->pairs[i].original);
+                found = 1;
+                break;
+            }
+        }
+        if (!found && entry_count < MAX_TOKENS) {
+            strcpy(entries[entry_count].stem, body_pairs->pairs[i].stem);
+            strcpy(entries[entry_count].original, body_pairs->pairs[i].original);
+            entries[entry_count].freq = 1;
+            entries[entry_count].covered = 0;
+            entry_count++;
+        }
+    }
+
+    free(body_pairs);
+
+    /* --- 5. Mark body terms covered by description + vocabulary --- */
+    char covered_text[MAX_LINE * 2];
+    snprintf(covered_text, sizeof(covered_text), "%s %s", description, vocabulary);
+    TokenList *covered_tokens = calloc(1, sizeof(TokenList));
+    if (!covered_tokens) { free(content); return 1; }
+    tokenize(covered_text, covered_tokens);
+
+    for (int i = 0; i < entry_count; i++) {
+        for (int j = 0; j < covered_tokens->count; j++) {
+            if (strcmp(entries[i].stem, covered_tokens->tokens[j]) == 0) {
+                entries[i].covered = 1;
+                break;
+            }
+        }
+    }
+
+    /* --- 6. Find vocabulary terms not appearing in body --- */
+    char vocab_words[MAX_TOKENS][MAX_TOKEN_LEN];
+    int vocab_word_count = 0;
+    {
+        char vocab_copy[MAX_LINE];
+        strncpy(vocab_copy, vocabulary, sizeof(vocab_copy) - 1);
+        vocab_copy[sizeof(vocab_copy) - 1] = '\0';
+        char *tok = strtok(vocab_copy, " \t");
+        while (tok && vocab_word_count < MAX_TOKENS) {
+            strncpy(vocab_words[vocab_word_count], tok, MAX_TOKEN_LEN - 1);
+            vocab_words[vocab_word_count][MAX_TOKEN_LEN - 1] = '\0';
+            vocab_word_count++;
+            tok = strtok(NULL, " \t");
+        }
+    }
+
+    int unused_count = 0;
+    char unused_words[MAX_TOKENS][MAX_TOKEN_LEN];
+    for (int i = 0; i < vocab_word_count; i++) {
+        char stemmed[MAX_TOKEN_LEN];
+        strncpy(stemmed, vocab_words[i], MAX_TOKEN_LEN - 1);
+        stemmed[MAX_TOKEN_LEN - 1] = '\0';
+        int slen = strlen(stemmed);
+        for (int j = 0; j < slen; j++) stemmed[j] = tolower((unsigned char)stemmed[j]);
+        stem_word(stemmed, &slen);
+
+        int in_body = 0;
+        for (int j = 0; j < entry_count; j++) {
+            if (strcmp(entries[j].stem, stemmed) == 0) {
+                in_body = 1;
+                break;
+            }
+        }
+        if (!in_body) {
+            strcpy(unused_words[unused_count++], vocab_words[i]);
+        }
+    }
+
+    free(covered_tokens);
+
+    /* --- 7. Sort entries by frequency descending --- */
+    qsort(entries, entry_count, sizeof(SuggestEntry), cmp_suggest_freq);
+
+    /* --- 8. Output report (machine-parseable sections) --- */
+
+    /* Gaps: body terms not in description/vocabulary, above min_freq */
+    int gap_count = 0;
+    printf("GAPS\n");
+    for (int i = 0; i < entry_count; i++) {
+        if (!entries[i].covered && entries[i].freq >= min_freq) {
+            printf("%s\t%d\t%s\n", entries[i].original, entries[i].freq, entries[i].stem);
+            gap_count++;
+        }
+    }
+
+    /* Coverage: vocabulary terms that appear in body */
+    printf("COVERAGE\n");
+    for (int i = 0; i < entry_count; i++) {
+        if (entries[i].covered) {
+            printf("%s\t%d\t%s\n", entries[i].original, entries[i].freq, entries[i].stem);
+        }
+    }
+
+    /* Unused: vocabulary terms not found in body */
+    printf("UNUSED\n");
+    for (int i = 0; i < unused_count; i++) {
+        printf("%s\n", unused_words[i]);
+    }
+
+    /* Suggested vocabulary line (current + gaps) */
+    printf("VOCABULARY\n");
+    printf("%s", vocabulary);
+    for (int i = 0; i < entry_count; i++) {
+        if (!entries[i].covered && entries[i].freq >= min_freq) {
+            printf(" %s", entries[i].original);
+        }
+    }
+    printf("\n");
+
+    fprintf(stderr, "suggest: %d gaps (min_freq=%d), %d covered, %d unused\n",
+            gap_count, min_freq, entry_count - gap_count, unused_count);
+
+    free(content);
+    return gap_count > 0 ? 0 : 1; /* exit 0 if suggestions exist, 1 if nothing to add */
+}
+
+/* ========================================================================
  * Usage and main
  * ======================================================================== */
 
@@ -482,8 +744,9 @@ static void usage(void) {
         "way-match %s — BM25 semantic matcher for the ways system\n"
         "\n"
         "Usage:\n"
-        "  way-match pair  --description DESC --vocabulary VOCAB --query Q [--threshold T]\n"
-        "  way-match score --corpus FILE --query Q [--threshold T]\n"
+        "  way-match pair    --description DESC --vocabulary VOCAB --query Q [--threshold T]\n"
+        "  way-match score   --corpus FILE --query Q [--threshold T]\n"
+        "  way-match suggest --file FILE [--min-freq N]\n"
         "\n"
         "Pair mode:\n"
         "  Score a single description+vocabulary against a query.\n"
@@ -494,12 +757,20 @@ static void usage(void) {
         "  Score all documents in a JSONL corpus against a query.\n"
         "  Output: id<TAB>score<TAB>description (ranked, above threshold only)\n"
         "\n"
+        "Suggest mode:\n"
+        "  Analyze a way.md file and suggest vocabulary improvements.\n"
+        "  Compares body term frequencies against current description+vocabulary.\n"
+        "  Output sections: GAPS, COVERAGE, UNUSED, VOCABULARY (tab-delimited).\n"
+        "  Exit 0 if gaps found, 1 if vocabulary is complete.\n"
+        "\n"
         "Options:\n"
         "  --description  Way description text\n"
         "  --vocabulary   Space-separated domain keywords\n"
         "  --query        User prompt to match against\n"
         "  --corpus       Path to JSONL corpus file\n"
+        "  --file         Path to way.md file (suggest mode)\n"
         "  --threshold    Minimum score to match (default: 2.0)\n"
+        "  --min-freq     Minimum term frequency for suggestions (default: 2)\n"
         "  --k1           BM25 k1 parameter (default: 1.2)\n"
         "  --b            BM25 b parameter (default: 0.75)\n"
         "  --version      Show version\n"
@@ -541,7 +812,9 @@ int main(int argc, char **argv) {
     const char *vocabulary = "";
     const char *query = NULL;
     const char *corpus_path = NULL;
+    const char *filepath = NULL;
     double threshold = 2.0;
+    int min_freq = 2;
 
     /* Parse arguments */
     for (int i = 2; i < argc; i++) {
@@ -553,8 +826,12 @@ int main(int argc, char **argv) {
             query = get_arg(argc, argv, i); i++;
         } else if (strcmp(argv[i], "--corpus") == 0) {
             corpus_path = get_arg(argc, argv, i); i++;
+        } else if (strcmp(argv[i], "--file") == 0) {
+            filepath = get_arg(argc, argv, i); i++;
         } else if (strcmp(argv[i], "--threshold") == 0) {
             threshold = atof(get_arg(argc, argv, i)); i++;
+        } else if (strcmp(argv[i], "--min-freq") == 0) {
+            min_freq = atoi(get_arg(argc, argv, i)); i++;
         } else if (strcmp(argv[i], "--k1") == 0) {
             bm25_k1 = atof(get_arg(argc, argv, i)); i++;
         } else if (strcmp(argv[i], "--b") == 0) {
@@ -583,8 +860,16 @@ int main(int argc, char **argv) {
         }
         result = cmd_score(corpus_path, query, threshold);
 
+    } else if (strcmp(command, "suggest") == 0) {
+        if (!filepath) {
+            fprintf(stderr, "error: suggest mode requires --file\n");
+            stemmer_cleanup();
+            return 1;
+        }
+        result = cmd_suggest(filepath, min_freq);
+
     } else {
-        fprintf(stderr, "error: unknown command: %s (expected 'pair' or 'score')\n", command);
+        fprintf(stderr, "error: unknown command: %s (expected 'pair', 'score', or 'suggest')\n", command);
         stemmer_cleanup();
         return 1;
     }
