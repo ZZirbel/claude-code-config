@@ -15,10 +15,11 @@ No configuration files to update. No registration step. The discovery scripts sc
 
 | If your trigger is... | Use |
 |----------------------|-----|
-| Specific keywords or commands | `match: regex` with `pattern:`, `commands:`, or `files:` |
-| A broad concept users describe variously | `match: semantic` with `description:` and `vocabulary:` |
-| Ambiguous and high-stakes | `match: model` with `description:` |
+| Specific keywords or commands | `pattern:`, `commands:`, or `files:` (regex) |
+| A broad concept users describe variously | `description:` + `vocabulary:` (BM25 semantic matching) |
 | A session condition, not content | `trigger:` with `context-threshold`, `file-exists`, or `session-start` |
+
+Matching is additive — pattern and semantic are OR'd. A way can have both a `pattern:` and `description:` + `vocabulary:`; either channel can fire it. Semantic matching uses a degradation chain: BM25 binary (fast, preferred) then gzip NCD fallback then skip.
 
 ### Writing effective guidance
 
@@ -46,7 +47,39 @@ This isn't sentimental. It's functional. An agent that understands "we do this b
 
 ### Testing a way
 
-Trigger it manually by including its pattern keywords in a prompt. Check that it fires (appears in system-reminder) and that the guidance is actionable. Use `list-triggered.sh` to see which ways have fired in the current session.
+Use `/test-way` to validate matching quality without trial-and-error:
+
+```
+/test-way score <way> "sample prompt"       # test one way against a prompt
+/test-way score-all "sample prompt"         # rank all ways — check for false positives
+/test-way suggest <way>                     # find vocabulary gaps
+/test-way suggest --all                     # survey all ways at once
+/test-way lint <way>                        # validate frontmatter
+```
+
+For semantic ways, `/test-way suggest` analyzes the way body text and recommends vocabulary additions. Not all suggestions should be added — body terms like "code" or "use" don't discriminate between ways. Add terms that are *domain-specific* words users would say.
+
+To verify the live system, include the way's keywords in a prompt and check that it fires (appears in system-reminder). Use `/ways` to see which ways have fired in the current session.
+
+## Progressive Disclosure with Sub-Ways
+
+Ways can nest: `{domain}/{parent}/{child}/way.md`. Each level adds context only when the conversation goes deeper into that topic. This keeps token cost proportional to relevance.
+
+**Example: the knowledge domain**
+
+```
+meta/knowledge/way.md                 — fires on "ways" (overview, ~60 lines)
+meta/knowledge/authoring/way.md       — fires when editing way.md files (format spec)
+meta/knowledge/optimization/way.md    — fires on "optimize vocabulary" (tuning workflow + live health via macro)
+```
+
+If you just ask "what are ways?" you get the 60-line overview. The authoring spec and optimization workflow never load. But if you start editing a way file, the authoring way fires automatically. If you discuss vocabulary tuning, the optimization way fires and its macro injects a live health dashboard of all ways.
+
+**Design principle**: Parent ways provide orientation. Child ways provide depth. Each child has its own trigger — pattern, semantic, file, or command — so it only loads when that specific sub-topic is active.
+
+**Macros for live state**: A sub-way with `macro: prepend` can run a script that injects current state. The optimization way does this — its macro runs `way-match suggest` across all semantic ways and includes the results. The agent gets both the workflow guidance and the data it needs, without constructing any ad-hoc code.
+
+This pattern is self-improving: the tools that analyze the system (`way-match suggest`, `/test-way`) are themselves documented in ways that fire when you use them. You optimize ways by talking about optimizing ways.
 
 ## Project-Local Ways
 
