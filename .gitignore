@@ -87,6 +87,10 @@
 !bin/
 !bin/*
 
+# Integration tests
+!tests/
+!tests/*.md
+
 # Plugin config (not runtime data)
 !plugins/
 !plugins/config.json
