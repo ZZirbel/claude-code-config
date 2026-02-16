@@ -19,6 +19,10 @@ SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(echo "$INPUT" | jq -r '.cwd // empty')}"
 WAYS_DIR="${HOME}/.claude/hooks/ways"
 
+# Shared matching logic (engine detection + additive match function)
+source "${WAYS_DIR}/match-way.sh"
+detect_semantic_engine
+
 # Detect teammate spawn (Task tool with team_name parameter)
 TEAM_NAME=$(echo "$INPUT" | jq -r '.tool_input.team_name // empty')
 IS_TEAMMATE=false
@@ -58,24 +62,14 @@ scan_ways_for_subagent() {
     local trigger=$(get_field "trigger")
     [[ -n "$trigger" ]] && continue
 
-    # Match against task prompt (same logic as check-prompt.sh)
-    local match_mode=$(get_field "match")
+    # Additive matching: pattern OR semantic (shared with check-prompt.sh)
     local pattern=$(get_field "pattern")
     local description=$(get_field "description")
     local vocabulary=$(get_field "vocabulary")
     local threshold=$(get_field "threshold")
 
     local matched=false
-
-    if [[ "$match_mode" == "model" && -n "$description" ]]; then
-      if "${WAYS_DIR}/model-match.sh" "$TASK_PROMPT" "$description" 2>/dev/null; then
-        matched=true
-      fi
-    elif [[ "$match_mode" == "semantic" && -n "$description" && -n "$vocabulary" ]]; then
-      if "${WAYS_DIR}/semantic-match.sh" "$TASK_PROMPT" "$description" "$vocabulary" "$threshold" 2>/dev/null; then
-        matched=true
-      fi
-    elif [[ -n "$pattern" && "$TASK_PROMPT" =~ $pattern ]]; then
+    if match_way_prompt "$TASK_PROMPT" "$pattern" "$description" "$vocabulary" "$threshold"; then
       matched=true
     fi
 
