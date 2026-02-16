@@ -238,9 +238,11 @@ static void index_document(Document *doc) {
     char combined[MAX_LINE * 2];
     snprintf(combined, sizeof(combined), "%s %s", doc->description, doc->vocabulary);
 
-    TokenList tokens;
-    tokenize(combined, &tokens);
-    build_tf(&tokens, &doc->tf);
+    TokenList *tokens = calloc(1, sizeof(TokenList));
+    if (!tokens) return;
+    tokenize(combined, tokens);
+    build_tf(tokens, &doc->tf);
+    free(tokens);
 }
 
 static void compute_avg_dl(Corpus *corpus) {
@@ -258,46 +260,60 @@ static void compute_avg_dl(Corpus *corpus) {
  *   {"id":"...", "description":"...", "vocabulary":"...", "threshold":N.N}
  * ======================================================================== */
 
-/* Extract a string value for a given key from a JSON line */
+/* Extract a string value for a given key from a JSON line.
+ * Matches "key" only in key position (followed by colon after optional whitespace),
+ * not as a substring of a value. */
 static int json_get_string(const char *json, const char *key, char *out, int maxlen) {
     char pattern[256];
     snprintf(pattern, sizeof(pattern), "\"%s\"", key);
-    const char *p = strstr(json, pattern);
-    if (!p) return 0;
+    int plen = strlen(pattern);
 
-    p += strlen(pattern);
-    /* skip whitespace and colon */
-    while (*p && (*p == ' ' || *p == ':' || *p == '\t')) p++;
-    if (*p != '"') return 0;
-    p++; /* skip opening quote */
+    const char *p = json;
+    while ((p = strstr(p, pattern)) != NULL) {
+        const char *after = p + plen;
+        /* skip whitespace, then verify colon follows (key position) */
+        while (*after == ' ' || *after == '\t') after++;
+        if (*after != ':') { p++; continue; }
+        after++; /* skip colon */
+        while (*after == ' ' || *after == '\t') after++;
+        if (*after != '"') { p++; continue; }
+        after++; /* skip opening quote */
 
-    int i = 0;
-    while (*p && *p != '"' && i < maxlen - 1) {
-        if (*p == '\\' && *(p + 1)) {
-            p++; /* skip escape */
+        int i = 0;
+        while (*after && *after != '"' && i < maxlen - 1) {
+            if (*after == '\\' && *(after + 1)) {
+                after++; /* skip escape */
+            }
+            out[i++] = *after++;
         }
-        out[i++] = *p++;
+        out[i] = '\0';
+        return 1;
     }
-    out[i] = '\0';
-    return 1;
+    return 0;
 }
 
 static double json_get_number(const char *json, const char *key, double def) {
     char pattern[256];
     snprintf(pattern, sizeof(pattern), "\"%s\"", key);
-    const char *p = strstr(json, pattern);
-    if (!p) return def;
+    int plen = strlen(pattern);
 
-    p += strlen(pattern);
-    while (*p && (*p == ' ' || *p == ':' || *p == '\t')) p++;
+    const char *p = json;
+    while ((p = strstr(p, pattern)) != NULL) {
+        const char *after = p + plen;
+        while (*after == ' ' || *after == '\t') after++;
+        if (*after != ':') { p++; continue; }
+        after++;
+        while (*after == ' ' || *after == '\t') after++;
 
-    char buf[64];
-    int i = 0;
-    while (*p && (isdigit((unsigned char)*p) || *p == '.' || *p == '-') && i < 63) {
-        buf[i++] = *p++;
+        char buf[64];
+        int i = 0;
+        while (*after && (isdigit((unsigned char)*after) || *after == '.' || *after == '-') && i < 63) {
+            buf[i++] = *after++;
+        }
+        buf[i] = '\0';
+        return i > 0 ? atof(buf) : def;
     }
-    buf[i] = '\0';
-    return i > 0 ? atof(buf) : def;
+    return def;
 }
 
 static int load_corpus_jsonl(const char *path, Corpus *corpus) {
@@ -598,7 +614,8 @@ static int cmd_suggest(const char *filepath, int min_freq) {
     }
 
     /* Body is everything after the closing --- */
-    char *body_start = fm_end + 5; /* skip \n---\n */
+    char *body_start = fm_end + 4; /* skip \n--- */
+    if (body_start < content + total && *body_start == '\n') body_start++;
     if (body_start > content + total) body_start = content + total;
 
     /* --- 3. Tokenize body with original forms --- */
@@ -607,7 +624,8 @@ static int cmd_suggest(const char *filepath, int min_freq) {
     tokenize_pairs(body_start, body_pairs);
 
     /* --- 4. Build body term frequency map --- */
-    SuggestEntry entries[MAX_TOKENS];
+    SuggestEntry *entries = calloc(MAX_TOKENS, sizeof(SuggestEntry));
+    if (!entries) { free(body_pairs); free(content); return 1; }
     int entry_count = 0;
 
     for (int i = 0; i < body_pairs->count; i++) {
@@ -650,7 +668,14 @@ static int cmd_suggest(const char *filepath, int min_freq) {
     }
 
     /* --- 6. Find vocabulary terms not appearing in body --- */
-    char vocab_words[MAX_TOKENS][MAX_TOKEN_LEN];
+    typedef char WordBuf[MAX_TOKEN_LEN];
+    WordBuf *vocab_words = calloc(MAX_TOKENS, sizeof(WordBuf));
+    WordBuf *unused_words = calloc(MAX_TOKENS, sizeof(WordBuf));
+    if (!vocab_words || !unused_words) {
+        free(vocab_words); free(unused_words);
+        free(entries); free(covered_tokens); free(content);
+        return 1;
+    }
     int vocab_word_count = 0;
     {
         char vocab_copy[MAX_LINE];
@@ -666,7 +691,6 @@ static int cmd_suggest(const char *filepath, int min_freq) {
     }
 
     int unused_count = 0;
-    char unused_words[MAX_TOKENS][MAX_TOKEN_LEN];
     for (int i = 0; i < vocab_word_count; i++) {
         char stemmed[MAX_TOKEN_LEN];
         strncpy(stemmed, vocab_words[i], MAX_TOKEN_LEN - 1);
@@ -731,6 +755,9 @@ static int cmd_suggest(const char *filepath, int min_freq) {
     fprintf(stderr, "suggest: %d gaps (min_freq=%d), %d covered, %d unused\n",
             gap_count, min_freq, entry_count - gap_count, unused_count);
 
+    free(vocab_words);
+    free(unused_words);
+    free(entries);
     free(content);
     return gap_count > 0 ? 0 : 1; /* exit 0 if suggestions exist, 1 if nothing to add */
 }
