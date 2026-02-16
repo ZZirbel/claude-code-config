@@ -101,10 +101,18 @@ If you're asking a coding agent (Claude, Copilot, Cursor, etc.) to install this 
 There are several ways to install — pick whichever fits your comfort level:
 
 ```bash
-# Clone and run the installer
+# Clone and run the installer (interactive — prompts on conflicts)
 TMPDIR=$(mktemp -d)
 git clone https://github.com/aaronsb/claude-code-config "$TMPDIR/claude-code-config"
 "$TMPDIR/claude-code-config/scripts/install.sh" "$TMPDIR/claude-code-config"
+rm -rf "$TMPDIR"
+```
+
+```bash
+# Non-interactive (for coding agents — applies defaults without prompting)
+TMPDIR=$(mktemp -d)
+git clone https://github.com/aaronsb/claude-code-config "$TMPDIR/claude-code-config"
+"$TMPDIR/claude-code-config/scripts/install.sh" --auto "$TMPDIR/claude-code-config"
 rm -rf "$TMPDIR"
 ```
 
@@ -118,10 +126,10 @@ rm -rf "$TMPDIR"
 
 ```bash
 # Or one-line bootstrap (clones, verifies, then runs install.sh from the clone)
-curl -sL https://raw.githubusercontent.com/aaronsb/claude-code-config/main/scripts/install.sh | bash
+curl -sL https://raw.githubusercontent.com/aaronsb/claude-code-config/main/scripts/install.sh | bash -s -- --bootstrap
 ```
 
-The install script adds conflict resolution — it diffs changed files and lets you choose what to keep. The manual `cp -a` is simpler but overwrites everything. The `curl | bash` option is a bootstrap only: it clones to a temp directory, verifies the clone is clean, then re-executes itself from the verified copy so the actual install logic runs from git-tracked code.
+The install script adds conflict resolution — it diffs changed files and lets you choose what to keep. With `--auto`, defaults are applied without prompting (safe for coding agents). The manual `cp -a` is simpler but overwrites everything. The `curl | bash` option is a bootstrap only: it clones to a temp directory, verifies the clone is clean, then re-executes itself from the verified copy so the actual install logic runs from git-tracked code.
 
 Restart Claude Code after any of these — ways are now active.
 

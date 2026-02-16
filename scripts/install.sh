@@ -4,42 +4,91 @@
 # infrastructure files recommend update with option to skip.
 #
 # Usage:
-#   scripts/install.sh [source_dir]     # install from a local clone
-#   scripts/install.sh                  # auto-clone latest and install
-#   curl -sL <raw-url> | bash           # self-bootstrap from internet
+#   scripts/install.sh <source_dir>     # install from a local clone
+#   scripts/install.sh --auto <dir>     # non-interactive (apply defaults)
+#   scripts/install.sh --bootstrap      # clone latest and install
+#   scripts/install.sh                  # show help
+#   curl ... | bash -s -- --bootstrap   # self-bootstrap from internet
+#   NONINTERACTIVE=1 scripts/install.sh # also non-interactive
 #
-# When run without a source_dir (or via pipe), the script clones the latest
-# release to a temp directory, verifies the clone, then re-executes itself
-# from the verified copy. This means the curl|bash pattern only bootstraps —
-# the actual install logic runs from auditable, git-tracked code.
+# With --bootstrap, the script clones the latest release to a temp directory,
+# verifies the clone, then re-executes itself from the verified copy.
+# The curl|bash pattern only bootstraps — the actual install logic always
+# runs from auditable, git-tracked code.
 
 set -euo pipefail
 
 UPSTREAM_REPO="aaronsb/claude-code-config"
 UPSTREAM_URL="https://github.com/${UPSTREAM_REPO}"
 
+# --- Help ---
+
+show_help() {
+  cat <<'HELP'
+claude-code-config installer
+
+Usage:
+  scripts/install.sh <source_dir>              Install from a local clone
+  scripts/install.sh --auto <source_dir>       Non-interactive (apply defaults)
+  scripts/install.sh --bootstrap               Clone latest and install
+  scripts/install.sh --bootstrap --auto        Clone latest, non-interactive
+  NONINTERACTIVE=1 scripts/install.sh <dir>    Also non-interactive
+  curl -sL <raw-url> | bash -s -- --bootstrap  Self-bootstrap from internet
+
+Examples:
+  # Clone to temp, then install with conflict resolution
+  TMPDIR=$(mktemp -d)
+  git clone https://github.com/aaronsb/claude-code-config "$TMPDIR/ccc"
+  scripts/install.sh "$TMPDIR/ccc"
+  rm -rf "$TMPDIR"
+
+  # Let a coding agent install non-interactively
+  TMPDIR=$(mktemp -d)
+  git clone https://github.com/aaronsb/claude-code-config "$TMPDIR/ccc"
+  "$TMPDIR/ccc/scripts/install.sh" --auto "$TMPDIR/ccc"
+  rm -rf "$TMPDIR"
+
+  # Auto-clone and install
+  scripts/install.sh --bootstrap
+
+File conflict handling:
+  User config (CLAUDE.md, settings.json, ways.json)  → default: keep yours
+  Ways content (way.md files)                         → default: keep yours
+  Infrastructure (*.sh, docs, plumbing)               → default: update
+
+In non-interactive mode, defaults are applied without prompting.
+In interactive mode, you choose per-file: keep, replace, diff, or merge.
+HELP
+}
+
 # --- Self-bootstrap ---
 #
-# If no source_dir was provided and we're not already inside a clone,
-# fetch the latest version and re-exec from there. This handles:
-#   - curl | bash (stdin, no filesystem context)
-#   - Running the script directly without cloning first
+# When piped via curl|bash or invoked with --bootstrap, clone the latest
+# release to a temp directory, verify it, then run from the verified copy.
 
 needs_bootstrap() {
-  # Explicit source dir provided — no bootstrap needed
-  [[ $# -gt 0 ]] && return 1
-
-  # Check if we're inside a valid repo already
-  local script_dir
-  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd)" || return 0
-  [[ -f "$script_dir/../hooks/check-config-updates.sh" ]] && return 1
-
-  return 0
+  for arg in "$@"; do
+    [[ "$arg" == "--bootstrap" ]] && return 0
+  done
+  return 1
 }
+
+# No source dir and no --bootstrap → show help
+has_source_dir() {
+  for arg in "$@"; do
+    [[ "$arg" != --* ]] && return 0
+  done
+  return 1
+}
+
+if ! needs_bootstrap "$@" && ! has_source_dir "$@"; then
+  show_help
+  exit 0
+fi
 
 if needs_bootstrap "$@"; then
   echo ""
-  echo "No source directory provided — fetching latest from ${UPSTREAM_REPO}..."
+  echo "Fetching latest from ${UPSTREAM_REPO}..."
   echo ""
 
   if ! command -v git &>/dev/null; then
@@ -75,15 +124,40 @@ if needs_bootstrap "$@"; then
   echo "Verified clone: ${CLONE_HEAD}"
   echo ""
 
-  # Run from the verified clone, then clean up
-  bash "$CLONE/scripts/install.sh" "$CLONE"
+  # Forward flags (minus --bootstrap) to the verified copy
+  FORWARD_ARGS=()
+  for arg in "$@"; do
+    [[ "$arg" != "--bootstrap" ]] && FORWARD_ARGS+=("$arg")
+  done
+
+  # Run from the verified clone, then clean up via trap
+  bash "$CLONE/scripts/install.sh" "${FORWARD_ARGS[@]}" "$CLONE"
   exit $?
 fi
 
 # --- Config ---
 
 DEST="${HOME}/.claude"
-SRC="${1:-$(cd "$(dirname "$0")/.." && pwd)}"
+
+# Parse arguments: flags (--auto) and positional (source_dir)
+INTERACTIVE=true
+SRC=""
+for arg in "$@"; do
+  case "$arg" in
+    --auto) INTERACTIVE=false ;;
+    --*) ;;  # ignore unknown flags
+    *) SRC="$arg" ;;
+  esac
+done
+[[ -z "$SRC" ]] && SRC="$(cd "$(dirname "$0")/.." && pwd)"
+
+# Non-interactive mode: also activated by env var or missing tty.
+[[ "${NONINTERACTIVE:-}" == "1" ]] && INTERACTIVE=false
+if ! exec 9< /dev/tty 2>/dev/null; then
+  INTERACTIVE=false
+else
+  exec 9<&-
+fi
 
 # Colors (disabled if not a terminal)
 if [[ -t 1 ]]; then
@@ -158,6 +232,12 @@ prompt_content_conflict() {
   echo ""
   echo -e "${YELLOW}CONFLICT:${RESET} ${BOLD}${relpath}${RESET}"
   echo -e "  Local file differs from upstream."
+
+  if [[ "$INTERACTIVE" != "true" ]]; then
+    echo -e "  ${GREEN}Kept${RESET} local version. (non-interactive)"
+    return 1
+  fi
+
   echo ""
 
   while true; do
@@ -212,6 +292,12 @@ prompt_infra_conflict() {
   echo ""
   echo -e "${CYAN}UPDATE:${RESET} ${BOLD}${relpath}${RESET}"
   echo -e "  Infrastructure file has changed upstream."
+
+  if [[ "$INTERACTIVE" != "true" ]]; then
+    echo -e "  Updated. (non-interactive)"
+    return 0
+  fi
+
   echo ""
 
   while true; do
