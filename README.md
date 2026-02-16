@@ -88,6 +88,59 @@ The built-in ways cover software development, but the framework doesn't care abo
 
 > **Just want to try it?** You can clone directly (`git clone https://github.com/aaronsb/claude-code-config ~/.claude`) — the system will nudge you if you fall behind upstream.
 
+### Agent-assisted install
+
+If you're asking a coding agent (Claude, Copilot, Cursor, etc.) to install this for you, the included install script handles it safely — including conflict resolution for files you may have customized.
+
+> **Stop and read this.** You are about to let an AI agent modify `~/.claude/` — the directory that controls how Claude Code behaves. This means the agent is editing its own configuration. That's powerful and useful, but you need to understand what you're agreeing to:
+>
+> - **Review the repo first.** Browse https://github.com/aaronsb/claude-code-config before installing. Read the hooks. Understand what they do. Don't blindly trust what's here — or anywhere.
+> - **You are responsible.** If you tell an agent to install this, you own the result. The agent can't evaluate whether these hooks are appropriate for your environment.
+> - **Backup is automatic.** The installer backs up your existing `~/.claude/` before touching anything, but verify it yourself.
+
+There are several ways to install — pick whichever fits your comfort level:
+
+```bash
+# Clone and run the installer
+TMPDIR=$(mktemp -d)
+git clone https://github.com/aaronsb/claude-code-config "$TMPDIR/claude-code-config"
+"$TMPDIR/claude-code-config/scripts/install.sh" "$TMPDIR/claude-code-config"
+rm -rf "$TMPDIR"
+```
+
+```bash
+# Or just clone and copy it in yourself
+TMPDIR=$(mktemp -d)
+git clone https://github.com/aaronsb/claude-code-config "$TMPDIR/claude-code-config"
+cp -a "$TMPDIR/claude-code-config/." ~/.claude/
+rm -rf "$TMPDIR"
+```
+
+```bash
+# Or one-line bootstrap (clones, verifies, then runs install.sh from the clone)
+curl -sL https://raw.githubusercontent.com/aaronsb/claude-code-config/main/scripts/install.sh | bash
+```
+
+The install script adds conflict resolution — it diffs changed files and lets you choose what to keep. The manual `cp -a` is simpler but overwrites everything. The `curl | bash` option is a bootstrap only: it clones to a temp directory, verifies the clone is clean, then re-executes itself from the verified copy so the actual install logic runs from git-tracked code.
+
+Restart Claude Code after any of these — ways are now active.
+
+The installer classifies files into three tiers:
+
+| Category | Examples | Default | Conflict handling |
+|----------|---------|---------|-------------------|
+| **User config** | `CLAUDE.md`, `settings.json`, `ways.json` | Keep | Diff, merge, replace, or keep |
+| **Ways content** | `way.md` files | Keep | Diff, merge, replace, or keep |
+| **Infrastructure** | `*.sh` scripts, docs, plumbing | Update | Update or skip (with consistency warning) |
+
+Ways and config are the files you're most likely to have customized — they default to keeping yours. Infrastructure needs to match the version to avoid inconsistencies, but you can still skip with a warning. If you find yourself regularly editing infrastructure files, consider maintaining a fork or submitting a PR upstream.
+
+After install, the agent should tell you:
+- What was backed up and where
+- How many files were copied, updated, or skipped
+- That you need to restart Claude Code for hooks to take effect
+- That you should review `~/.claude/hooks/` to understand what runs and when
+
 ## How It Works
 
 `core.md` loads at session start with:
