@@ -85,7 +85,7 @@ flowchart TB
     subgraph Session["Claude Code Session"]
         SS[SessionStart]:::event --> Core["show-core.sh<br/>Dynamic table + core.md"]:::script
 
-        UP[UserPromptSubmit]:::event --> CP["check-prompt.sh<br/>Regex · Semantic · Model"]:::script
+        UP[UserPromptSubmit]:::event --> CP["check-prompt.sh<br/>Regex · BM25 Semantic"]:::script
 
         subgraph PreTool["PreToolUse"]
             Bash[Bash tool]:::event --> CB["check-bash-pre.sh"]:::script
@@ -368,6 +368,7 @@ sequenceDiagram
 ├── show-core.sh                # Combines macro output + core.md
 ├── show-way.sh                 # Once-per-session gating + output
 │
+├── match-way.sh                # Shared matching: detect engine + match function
 ├── check-prompt.sh             # UserPromptSubmit → scan patterns
 ├── check-bash-pre.sh           # PreToolUse:Bash → scan commands
 ├── check-file-pre.sh           # PreToolUse:Edit|Write → scan files
@@ -375,7 +376,7 @@ sequenceDiagram
 ├── check-state.sh              # UserPromptSubmit → state triggers
 ├── check-response.sh           # Stop → extract topics for next turn
 │
-├── inject-subagent.sh          # SubagentStart → emit stashed ways
+├── inject-subagent.sh          # SubagentStart → emit stashed ways (JSON hookSpecificOutput)
 ├── semantic-match.sh           # Gzip NCD fallback (when way-match binary unavailable)
 ├── clear-markers.sh            # SessionStart → reset all state
 ├── mark-tasks-active.sh        # PreToolUse:TaskCreate → context nag gate
@@ -402,18 +403,21 @@ $PROJECT/.claude/ways/          # Project-local overrides
 ```mermaid
 flowchart LR
     classDef trigger fill:#1565C0,stroke:#0D47A1,color:#fff
-    classDef scan fill:#6A1B9A,stroke:#4A148C,color:#fff
+    classDef shared fill:#6A1B9A,stroke:#4A148C,color:#fff
     classDef output fill:#2E7D32,stroke:#1B5E20,color:#fff
     classDef stash fill:#E65100,stroke:#BF360C,color:#fff
     classDef util fill:#00695C,stroke:#004D40,color:#fff
 
-    CP["check-prompt.sh"]:::trigger --> WM["way-match (BM25)"]:::util
+    MW["match-way.sh<br/>(shared matching)"]:::shared --> WM["way-match (BM25)"]:::util
+    MW -.->|"fallback"| NCD["semantic-match.sh<br/>(gzip NCD)"]:::util
+
+    CP["check-prompt.sh"]:::trigger --> MW
     CP --> SW["show-way.sh"]:::output
     CB["check-bash-pre.sh"]:::trigger --> SW
     CF["check-file-pre.sh"]:::trigger --> SW
     CS["check-state.sh"]:::trigger --> SW
 
-    CT["check-task-pre.sh"]:::trigger --> SM
+    CT["check-task-pre.sh"]:::trigger --> MW
     CT --> ST[("stash file")]:::stash
     ST --> IS["inject-subagent.sh"]:::output
 ```
