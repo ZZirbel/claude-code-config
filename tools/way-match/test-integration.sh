@@ -122,17 +122,18 @@ for test_case in "${TEST_CASES[@]}"; do
       --threshold 0.0 2>&1 | grep -oP 'score=\K[0-9.]+')
     if (( $(echo "$score > 0" | bc -l 2>/dev/null || echo 0) )); then
       bm25_scores="$bm25_scores $way_id=$score"
-      # Check against default threshold (0.4)
-      if (( $(echo "$score >= 0.4" | bc -l 2>/dev/null || echo 0) )); then
+      # Check against per-way threshold from way.md
+      thresh="${WAY_THRESH[$way_id]}"
+      if (( $(echo "$score >= $thresh" | bc -l 2>/dev/null || echo 0) )); then
         bm25_matches+=("$way_id")
       fi
     fi
   done
 
-  # Score against all ways with NCD
+  # Score against all ways with NCD (uses fixed NCD threshold, not BM25 threshold)
   ncd_matches=()
   for way_id in "${!WAY_DESC[@]}"; do
-    if bash "$NCD_SCRIPT" "$prompt" "${WAY_DESC[$way_id]}" "${WAY_VOCAB[$way_id]}" "${WAY_THRESH[$way_id]}" 2>/dev/null; then
+    if bash "$NCD_SCRIPT" "$prompt" "${WAY_DESC[$way_id]}" "${WAY_VOCAB[$way_id]}" "0.55" 2>/dev/null; then
       ncd_matches+=("$way_id")
     fi
   done

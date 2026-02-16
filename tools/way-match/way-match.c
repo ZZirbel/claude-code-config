@@ -335,19 +335,19 @@ static int load_corpus_jsonl(const char *path, Corpus *corpus) {
  * document if it's not already one of these. */
 static const struct { const char *id; const char *desc; const char *vocab; } BUILTIN_WAYS[] = {
     {"testing",     "writing unit tests, test coverage, mocking dependencies, test-driven development",
-                    "unittest coverage mock tdd assertion jest pytest rspec testcase"},
+                    "unittest coverage mock tdd assertion jest pytest rspec testcase spec fixture describe expect verify"},
     {"api",         "designing REST APIs, HTTP endpoints, API versioning, request response structure",
-                    "endpoint api rest route http status pagination versioning"},
+                    "endpoint api rest route http status pagination versioning graphql request response header payload crud webhook"},
     {"debugging",   "debugging code issues, troubleshooting errors, investigating broken behavior, fixing bugs",
-                    "debug breakpoint stacktrace investigate troubleshoot regression bisect"},
+                    "debug breakpoint stacktrace investigate troubleshoot regression bisect crash error fail bug log trace exception segfault hang timeout"},
     {"security",    "application security, authentication, secrets management, input validation, vulnerability prevention",
-                    "authentication secrets password credentials owasp injection xss sql sanitize vulnerability"},
+                    "authentication secrets password credentials owasp injection xss sql sanitize vulnerability bcrypt hash encrypt token cert ssl tls csrf cors rotate login expose"},
     {"design",      "software system design architecture patterns database schema component modeling",
-                    "architecture pattern database schema modeling interface component modules factory observer strategy"},
+                    "architecture pattern database schema modeling interface component modules factory observer strategy monolith microservice domain layer coupling cohesion abstraction singleton"},
     {"config",      "application configuration, environment variables, dotenv files, config file management",
-                    "dotenv environment configuration envvar config.json config.yaml"},
+                    "dotenv environment configuration envvar config.json config.yaml connection port host url setting variable"},
     {"adr-context", "planning how to implement a feature, deciding an approach, understanding existing project decisions, starting work on an item, investigating why something was built a certain way",
-                    "plan approach debate implement build work pick understand investigate why how decision context"},
+                    "plan approach debate implement build work pick understand investigate why how decision context tradeoff evaluate option consider scope"},
     {NULL, NULL, NULL}
 };
 
@@ -499,7 +499,7 @@ static void usage(void) {
         "  --vocabulary   Space-separated domain keywords\n"
         "  --query        User prompt to match against\n"
         "  --corpus       Path to JSONL corpus file\n"
-        "  --threshold    Minimum score to match (default: 0.4)\n"
+        "  --threshold    Minimum score to match (default: 2.0)\n"
         "  --k1           BM25 k1 parameter (default: 1.2)\n"
         "  --b            BM25 b parameter (default: 0.75)\n"
         "  --version      Show version\n"
@@ -541,7 +541,7 @@ int main(int argc, char **argv) {
     const char *vocabulary = "";
     const char *query = NULL;
     const char *corpus_path = NULL;
-    double threshold = 0.4;
+    double threshold = 2.0;
 
     /* Parse arguments */
     for (int i = 2; i < argc; i++) {

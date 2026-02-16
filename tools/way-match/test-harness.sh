@@ -17,32 +17,32 @@ BM25_BINARY="$SCRIPT_DIR/../../bin/way-match"
 # Way corpus: id|description|vocabulary|threshold
 declare -A WAY_DESC WAY_VOCAB WAY_THRESH
 WAY_DESC[softwaredev-testing]="writing unit tests, test coverage, mocking dependencies, test-driven development"
-WAY_VOCAB[softwaredev-testing]="unittest coverage mock tdd assertion jest pytest rspec testcase"
-WAY_THRESH[softwaredev-testing]="0.54"
+WAY_VOCAB[softwaredev-testing]="unittest coverage mock tdd assertion jest pytest rspec testcase spec fixture describe expect verify"
+WAY_THRESH[softwaredev-testing]="2.0"
 
 WAY_DESC[softwaredev-api]="designing REST APIs, HTTP endpoints, API versioning, request response structure"
-WAY_VOCAB[softwaredev-api]="endpoint api rest route http status pagination versioning"
-WAY_THRESH[softwaredev-api]="0.55"
+WAY_VOCAB[softwaredev-api]="endpoint api rest route http status pagination versioning graphql request response header payload crud webhook"
+WAY_THRESH[softwaredev-api]="2.0"
 
 WAY_DESC[softwaredev-debugging]="debugging code issues, troubleshooting errors, investigating broken behavior, fixing bugs"
-WAY_VOCAB[softwaredev-debugging]="debug breakpoint stacktrace investigate troubleshoot regression bisect"
-WAY_THRESH[softwaredev-debugging]="0.53"
+WAY_VOCAB[softwaredev-debugging]="debug breakpoint stacktrace investigate troubleshoot regression bisect crash error fail bug log trace exception segfault hang timeout"
+WAY_THRESH[softwaredev-debugging]="2.0"
 
 WAY_DESC[softwaredev-security]="application security, authentication, secrets management, input validation, vulnerability prevention"
-WAY_VOCAB[softwaredev-security]="authentication secrets password credentials owasp injection xss sql sanitize vulnerability"
-WAY_THRESH[softwaredev-security]="0.52"
+WAY_VOCAB[softwaredev-security]="authentication secrets password credentials owasp injection xss sql sanitize vulnerability bcrypt hash encrypt token cert ssl tls csrf cors rotate login expose"
+WAY_THRESH[softwaredev-security]="2.0"
 
 WAY_DESC[softwaredev-design]="software system design architecture patterns database schema component modeling"
-WAY_VOCAB[softwaredev-design]="architecture pattern database schema modeling interface component modules factory observer strategy"
-WAY_THRESH[softwaredev-design]="0.55"
+WAY_VOCAB[softwaredev-design]="architecture pattern database schema modeling interface component modules factory observer strategy monolith microservice domain layer coupling cohesion abstraction singleton"
+WAY_THRESH[softwaredev-design]="2.0"
 
 WAY_DESC[softwaredev-config]="application configuration, environment variables, dotenv files, config file management"
-WAY_VOCAB[softwaredev-config]="dotenv environment configuration envvar config.json config.yaml"
-WAY_THRESH[softwaredev-config]="0.54"
+WAY_VOCAB[softwaredev-config]="dotenv environment configuration envvar config.json config.yaml connection port host url setting variable"
+WAY_THRESH[softwaredev-config]="2.0"
 
 WAY_DESC[softwaredev-adr-context]="planning how to implement a feature, deciding an approach, understanding existing project decisions, starting work on an item, investigating why something was built a certain way"
-WAY_VOCAB[softwaredev-adr-context]="plan approach debate implement build work pick understand investigate why how decision context"
-WAY_THRESH[softwaredev-adr-context]="0.55"
+WAY_VOCAB[softwaredev-adr-context]="plan approach debate implement build work pick understand investigate why how decision context tradeoff evaluate option consider scope"
+WAY_THRESH[softwaredev-adr-context]="2.0"
 
 WAY_IDS=(softwaredev-testing softwaredev-api softwaredev-debugging softwaredev-security softwaredev-design softwaredev-config softwaredev-adr-context)
 
@@ -80,9 +80,10 @@ ncd_matches_way() {
   local prompt="$1" way_id="$2"
   local desc="${WAY_DESC[$way_id]}"
   local vocab="${WAY_VOCAB[$way_id]}"
-  local thresh="${WAY_THRESH[$way_id]}"
+  # NCD uses distance metric (0-1), not BM25 score threshold
+  local ncd_thresh="0.55"
 
-  if bash "$NCD_SCRIPT" "$prompt" "$desc" "$vocab" "$thresh" 2>/dev/null; then
+  if bash "$NCD_SCRIPT" "$prompt" "$desc" "$vocab" "$ncd_thresh" 2>/dev/null; then
     return 0
   else
     return 1
