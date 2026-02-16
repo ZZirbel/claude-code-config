@@ -1,9 +1,9 @@
 ---
 match: semantic
 description: application configuration, environment variables, dotenv files, config file management
-vocabulary: dotenv environment configuration envvar config.json config.yaml
+vocabulary: dotenv environment configuration envvar config.json config.yaml connection port host url setting variable
 files: \.env|config\.(json|yaml|yml|toml)$
-threshold: 0.54
+threshold: 2.0
 scope: agent, subagent
 provenance:
   policy:

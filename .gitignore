@@ -20,6 +20,8 @@
 !.github/pull_request_template.md
 !.github/ISSUE_TEMPLATE/
 !.github/ISSUE_TEMPLATE/*.md
+!.github/workflows/
+!.github/workflows/*.yml
 
 # Agents
 !agents/
@@ -73,6 +75,17 @@
 !governance/README.md
 !governance/*.py
 !governance/*.sh
+
+# Tools (source, tests, build artifacts)
+!tools/
+!tools/way-match/
+!tools/way-match/*
+!tools/way-match/snowball/
+!tools/way-match/snowball/*
+
+# Built binaries (checked in, cross-platform APE)
+!bin/
+!bin/*
 
 # Plugin config (not runtime data)
 !plugins/
