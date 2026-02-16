@@ -127,16 +127,25 @@ scan_state_triggers() {
     if evaluate_trigger "$trigger" "$wayfile"; then
       case "$trigger" in
         context-threshold)
-          # Repeat on every prompt until tasks-active marker exists
-          local tasks_marker="/tmp/.claude-tasks-active-${SESSION_ID}"
-          if [[ ! -f "$tasks_marker" ]]; then
-            local output=$(awk 'BEGIN{fm=0} /^---$/{fm++; next} fm!=1' "$wayfile")
-            if [[ -n "$output" ]]; then
-              CONTEXT+="$output"$'\n\n'
-              "${WAYS_DIR}/log-event.sh" \
-                event=way_fired way="$waypath" domain="${waypath%%/*}" \
-                trigger="state" scope="$CURRENT_SCOPE" project="$PROJECT_DIR" session="$SESSION_ID"
+          # Check if way wants repeat behavior (default: one-shot)
+          local repeat=$(awk 'NR==1 && /^---$/{p=1; next} p && /^---$/{exit} p && /^repeat:/' "$wayfile" | sed 's/^repeat: *//')
+
+          if [[ "$repeat" == "true" ]]; then
+            # Repeating way: fires every prompt until tasks-active marker set
+            local tasks_marker="/tmp/.claude-tasks-active-${SESSION_ID}"
+            if [[ ! -f "$tasks_marker" ]]; then
+              local output=$(awk 'BEGIN{fm=0} /^---$/{fm++; next} fm!=1' "$wayfile")
+              if [[ -n "$output" ]]; then
+                CONTEXT+="$output"$'\n\n'
+                "${WAYS_DIR}/log-event.sh" \
+                  event=way_fired way="$waypath" domain="${waypath%%/*}" \
+                  trigger="state" scope="$CURRENT_SCOPE" project="$PROJECT_DIR" session="$SESSION_ID"
+              fi
             fi
+          else
+            # One-shot way: use standard marker-based gating via show-way.sh
+            local output=$("${WAYS_DIR}/show-way.sh" "$waypath" "$SESSION_ID" "state")
+            [[ -n "$output" ]] && CONTEXT+="$output"$'\n\n'
           fi
           ;;
         *)
