@@ -38,23 +38,16 @@ macro: prepend
 - Compact, actionable points
 ```
 
-For semantic matching:
+For semantic matching (BM25 — preferred):
 ```markdown
 ---
-match: semantic
-description: reference text for similarity
-vocabulary: domain specific words
-threshold: 0.55           # optional, default 0.58
+description: what this way covers, in natural language
+vocabulary: domain specific keywords users would say
+threshold: 2.0            # BM25 score threshold (higher = stricter)
 ---
 ```
 
-For model-based classification (uses Haiku):
-```markdown
----
-match: model
-description: security-sensitive operations, auth changes, credential handling
----
-```
+No `match:` field needed — the presence of `description:` + `vocabulary:` enables semantic matching automatically. Matching is additive: pattern OR semantic (either fires the way).
 
 For state-based triggers:
 ```markdown
@@ -67,19 +60,15 @@ threshold: 90             # percentage (0-100)
 ### Frontmatter Fields
 
 **Pattern-based:**
-- `match:` - `regex` (default), `semantic`, or `model`
 - `pattern:` - Regex matched against user prompts
 - `files:` - Regex matched against file paths (Edit/Write)
 - `commands:` - Regex matched against bash commands
 
-**Semantic (NCD):**
-- `description:` - Reference text for semantic similarity
-- `vocabulary:` - Domain words for keyword counting
-- `threshold:` - NCD threshold (lower = stricter, default 0.58)
-
-**Model (Haiku):**
-- `description:` - What this way covers (Haiku classifies yes/no)
-- Adds ~800ms latency but high accuracy
+**Semantic (BM25):**
+- `description:` - Natural language reference text for what this way covers
+- `vocabulary:` - Space-separated domain keywords users would say
+- `threshold:` - BM25 score threshold (default 2.0, higher = stricter)
+- Degradation: BM25 binary → gzip NCD fallback → skip
 
 **State-based:**
 - `trigger:` - State condition type (`context-threshold`, `file-exists`, `session-start`)
@@ -87,7 +76,8 @@ threshold: 90             # percentage (0-100)
 - `path:` - For file-exists: glob pattern relative to project
 
 **Other:**
-- `macro:` - `prepend` or `append` to run `macro.sh`
+- `macro:` - `prepend` or `append` to run `macro.sh` for dynamic context
+- `scope:` - `agent`, `subagent`, `teammate` (comma-separated, default: agent)
 
 ## Creating a New Way
 
@@ -109,5 +99,15 @@ For state transitions and process flows, prefer Cypher-style notation over ASCII
 ```
 (state_a)-[:EVENT {context}]->(state_b)  // what happens
 ```
+
+## Testing Your Way
+
+Use `/test-way` to validate matching quality:
+- `/test-way score <way> "sample prompt"` — test a specific way
+- `/test-way score-all "sample prompt"` — rank all ways against a prompt
+- `/test-way suggest <way>` — analyze vocabulary gaps
+- `/test-way lint <way>` — validate frontmatter
+
+For vocabulary tuning workflows, see the optimization sub-way (triggers on vocabulary/optimization discussion).
 
 Full authoring guide: `docs/hooks-and-ways/extending.md`
