@@ -18,6 +18,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* Snowball Porter2 English stemmer (BSD-3-Clause, snowballstem.org) */
+#include "snowball/api.h"
+#include "snowball/stem_UTF_8_english.h"
+
 #define VERSION "0.1.0"
 #define MAX_TOKENS    4096
 #define MAX_TOKEN_LEN 128
@@ -48,13 +52,39 @@ static int is_stopword(const char *word) {
 }
 
 /* ========================================================================
- * Tokenizer — whitespace + punctuation split, lowercase
+ * Tokenizer — whitespace + punctuation split, lowercase, Porter2 stem
  * ======================================================================== */
 
 typedef struct {
     char tokens[MAX_TOKENS][MAX_TOKEN_LEN];
     int count;
 } TokenList;
+
+/* Global stemmer instance (created once, reused) */
+static struct SN_env *g_stemmer = NULL;
+
+static void stemmer_init(void) {
+    if (!g_stemmer) g_stemmer = english_UTF_8_create_env();
+}
+
+static void stemmer_cleanup(void) {
+    if (g_stemmer) { english_UTF_8_close_env(g_stemmer); g_stemmer = NULL; }
+}
+
+/* Stem a word in-place using Snowball Porter2 English stemmer */
+static void stem_word(char *word, int *len) {
+    if (!g_stemmer || *len < 3) return;
+
+    SN_set_current(g_stemmer, *len, (const symbol *)word);
+    english_UTF_8_stem(g_stemmer);
+
+    int slen = g_stemmer->l;
+    if (slen > 0 && slen < MAX_TOKEN_LEN) {
+        memcpy(word, g_stemmer->p, slen);
+        word[slen] = '\0';
+        *len = slen;
+    }
+}
 
 static void tokenize(const char *text, TokenList *out) {
     out->count = 0;
@@ -66,7 +96,6 @@ static void tokenize(const char *text, TokenList *out) {
         if (i >= len) break;
 
         /* collect alpha characters */
-        int start = i;
         char token[MAX_TOKEN_LEN];
         int t = 0;
         while (i < len && isalpha((unsigned char)text[i]) && t < MAX_TOKEN_LEN - 1) {
@@ -75,9 +104,15 @@ static void tokenize(const char *text, TokenList *out) {
         }
         token[t] = '\0';
 
-        /* skip short words and stopwords */
+        /* skip short words and stopwords before stemming */
         if (t < 3) continue;
         if (is_stopword(token)) continue;
+
+        /* Porter2 English stemming via Snowball */
+        stem_word(token, &t);
+
+        /* skip if stemming reduced to <3 chars */
+        if (t < 3) continue;
 
         strcpy(out->tokens[out->count], token);
         out->count++;
@@ -498,6 +533,9 @@ int main(int argc, char **argv) {
         }
     }
 
+    /* Initialize Snowball stemmer */
+    stemmer_init();
+
     const char *command = argv[1];
     const char *description = NULL;
     const char *vocabulary = "";
@@ -528,22 +566,29 @@ int main(int argc, char **argv) {
     }
 
     /* Dispatch */
+    int result;
     if (strcmp(command, "pair") == 0) {
         if (!description || !query) {
             fprintf(stderr, "error: pair mode requires --description and --query\n");
+            stemmer_cleanup();
             return 1;
         }
-        return cmd_pair(description, vocabulary, query, threshold);
+        result = cmd_pair(description, vocabulary, query, threshold);
 
     } else if (strcmp(command, "score") == 0) {
         if (!corpus_path || !query) {
             fprintf(stderr, "error: score mode requires --corpus and --query\n");
+            stemmer_cleanup();
             return 1;
         }
-        return cmd_score(corpus_path, query, threshold);
+        result = cmd_score(corpus_path, query, threshold);
 
     } else {
         fprintf(stderr, "error: unknown command: %s (expected 'pair' or 'score')\n", command);
+        stemmer_cleanup();
         return 1;
     }
+
+    stemmer_cleanup();
+    return result;
 }
