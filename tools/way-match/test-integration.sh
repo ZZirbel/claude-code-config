@@ -33,9 +33,6 @@ echo "Scanning for semantic ways..."
 echo ""
 
 while IFS= read -r wayfile; do
-  match_mode=$(sed -n 's/^match: *//p' "$wayfile")
-  [[ "$match_mode" != "semantic" ]] && continue
-
   # Derive way ID from path
   rel=$(echo "$wayfile" | sed "s|$WAYS_DIR/||;s|/way\.md$||")
   way_id=$(echo "$rel" | tr '/' '-')
@@ -44,14 +41,15 @@ while IFS= read -r wayfile; do
   vocab=$(sed -n 's/^vocabulary: *//p' "$wayfile")
   thresh=$(sed -n 's/^threshold: *//p' "$wayfile")
 
-  [[ -z "$desc" ]] && continue
+  # Skip ways without semantic matching fields
+  [[ -z "$desc" || -z "$vocab" ]] && continue
 
   WAY_DESC[$way_id]="$desc"
   WAY_VOCAB[$way_id]="$vocab"
-  WAY_THRESH[$way_id]="${thresh:-0.58}"
+  WAY_THRESH[$way_id]="${thresh:-2.0}"
   WAY_PATH[$way_id]="$wayfile"
 
-  printf "  %-30s thresh=%-5s  %s\n" "$way_id" "${thresh:-0.58}" "$(echo "$desc" | cut -c1-60)"
+  printf "  %-30s thresh=%-5s  %s\n" "$way_id" "${thresh:-2.0}" "$(echo "$desc" | cut -c1-60)"
 done < <(find "$WAYS_DIR" -name "way.md" -type f | sort)
 
 echo ""

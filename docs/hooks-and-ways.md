@@ -409,3 +409,19 @@ flowchart TD
 ```
 
 Checked by `show-way.sh` before outputting any way.
+
+## Testing
+
+Three test layers verify the matching and injection pipeline. See [tests/README.md](../tests/README.md) for full details.
+
+| Layer | Command | What it tests |
+|-------|---------|---------------|
+| **Fixture** | `bash tools/way-match/test-harness.sh` | BM25 vs NCD scorer accuracy (32 prompts, fixed corpus) |
+| **Integration** | `bash tools/way-match/test-integration.sh` | Real way files, frontmatter extraction, multi-way discrimination |
+| **Activation** | `read and run the activation test at tests/way-activation-test.md` | Live hook pipeline: regex, BM25, negative control, subagent injection |
+
+The `/test-way` skill provides ad-hoc scoring for vocabulary tuning:
+
+```
+/test-way "write some unit tests for this module"
+```
