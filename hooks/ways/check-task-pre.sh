@@ -58,8 +58,7 @@ scan_ways_for_subagent() {
     local trigger=$(get_field "trigger")
     [[ -n "$trigger" ]] && continue
 
-    # Match against task prompt (same logic as check-prompt.sh)
-    local match_mode=$(get_field "match")
+    # Match against task prompt (same additive logic as check-prompt.sh)
     local pattern=$(get_field "pattern")
     local description=$(get_field "description")
     local vocabulary=$(get_field "vocabulary")
@@ -67,16 +66,27 @@ scan_ways_for_subagent() {
 
     local matched=false
 
-    if [[ "$match_mode" == "model" && -n "$description" ]]; then
-      if "${WAYS_DIR}/model-match.sh" "$TASK_PROMPT" "$description" 2>/dev/null; then
-        matched=true
-      fi
-    elif [[ "$match_mode" == "semantic" && -n "$description" && -n "$vocabulary" ]]; then
-      if "${WAYS_DIR}/semantic-match.sh" "$TASK_PROMPT" "$description" "$vocabulary" "$threshold" 2>/dev/null; then
-        matched=true
-      fi
-    elif [[ -n "$pattern" && "$TASK_PROMPT" =~ $pattern ]]; then
+    # Channel 1: Regex pattern match
+    if [[ -n "$pattern" && "$TASK_PROMPT" =~ $pattern ]]; then
       matched=true
+    fi
+
+    # Channel 2: Semantic match (only if description+vocabulary present)
+    if ! $matched && [[ -n "$description" && -n "$vocabulary" ]]; then
+      local WAY_MATCH_BIN="${HOME}/.claude/bin/way-match"
+      if [[ -x "$WAY_MATCH_BIN" ]]; then
+        if "$WAY_MATCH_BIN" pair \
+            --description "$description" \
+            --vocabulary "$vocabulary" \
+            --query "$TASK_PROMPT" \
+            --threshold "${threshold:-2.0}" 2>/dev/null; then
+          matched=true
+        fi
+      elif command -v gzip >/dev/null 2>&1 && command -v bc >/dev/null 2>&1; then
+        if "${WAYS_DIR}/semantic-match.sh" "$TASK_PROMPT" "$description" "$vocabulary" "0.58" 2>/dev/null; then
+          matched=true
+        fi
+      fi
     fi
 
     if $matched; then

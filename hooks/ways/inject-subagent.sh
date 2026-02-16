@@ -104,16 +104,22 @@ while IFS= read -r waypath; do
 
   if [[ -n "$WAY_CONTENT" ]]; then
     CONTEXT+="$WAY_CONTENT"$'\n\n'
-    local scope="subagent"
+    scope="subagent"
     [[ "$IS_TEAMMATE" == "true" ]] && scope="teammate"
-    local log_args=(event=way_fired way="$waypath" domain="$DOMAIN"
+    log_args=(event=way_fired way="$waypath" domain="$DOMAIN"
       trigger="$scope" scope="$scope" project="$PROJECT_DIR" session="$SESSION_ID")
     [[ -n "$TEAM_NAME" ]] && log_args+=(team="$TEAM_NAME")
     "${HOME}/.claude/hooks/ways/log-event.sh" "${log_args[@]}"
   fi
 done <<< "$WAYS"
 
-# Output for SubagentStart
+# Output JSON for SubagentStart (additionalContext format)
 if [[ -n "$CONTEXT" ]]; then
-  echo "${CONTEXT%$'\n\n'}"
+  TRIMMED="${CONTEXT%$'\n\n'}"
+  jq -n --arg ctx "$TRIMMED" '{
+    hookSpecificOutput: {
+      hookEventName: "SubagentStart",
+      additionalContext: $ctx
+    }
+  }'
 fi
