@@ -14,14 +14,8 @@ on:
 
 jobs:
   build:
-    name: Build (${{ matrix.os }})
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-        # ubuntu-latest  = linux amd64
-        # macos-latest   = macos arm64 (Apple Silicon)
-        # cosmocc doesn't run on Windows; APE binaries built here work on Windows
-    runs-on: ${{ matrix.os }}
+    name: Build and test
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -39,54 +33,15 @@ jobs:
       - name: Verify binary runs
         run: bin/way-match --version
 
-      - name: Upload binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: way-match-${{ matrix.os }}
-          path: bin/way-match
-
-  test:
-    name: Test (${{ matrix.os }})
-    needs: build
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-        # Windows excluded: test harness uses bash features
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download binary
-        uses: actions/download-artifact@v4
-        with:
-          name: way-match-${{ matrix.os }}
-          path: bin/
-
-      - name: Make binary executable
-        run: chmod +x bin/way-match
-
-      - name: Install bash 5 (macOS)
-        if: runner.os == 'macOS'
-        run: brew install bash
-
       - name: Run test harness (BM25 vs NCD)
-        run: |
-          # macOS ships bash 3.2 which lacks associative arrays; use bash 5 if available
-          BASH_BIN=$(command -v bash)
-          if [[ -x /opt/homebrew/bin/bash ]]; then BASH_BIN=/opt/homebrew/bin/bash; fi
-          "$BASH_BIN" tools/way-match/test-harness.sh --verbose
+        run: bash tools/way-match/test-harness.sh --verbose
 
-      - name: Run test harness (BM25 only, check exit code)
+      - name: Run test harness (BM25 accuracy gate)
         run: |
-          # BM25 should beat NCD baseline of 50% accuracy
-          BASH_BIN=$(command -v bash)
-          if [[ -x /opt/homebrew/bin/bash ]]; then BASH_BIN=/opt/homebrew/bin/bash; fi
-          "$BASH_BIN" tools/way-match/test-harness.sh --bm25-only 2>&1 | tee /tmp/results.txt
-          # Extract accuracy
+          bash tools/way-match/test-harness.sh --bm25-only 2>&1 | tee /tmp/results.txt
           accuracy=$(grep "BM25:" /tmp/results.txt | sed -n 's/.*accuracy=\([0-9]*\/[0-9]*\).*/\1/p')
           correct=$(echo "$accuracy" | cut -d/ -f1)
           total=$(echo "$accuracy" | cut -d/ -f2)
-          # Fail if BM25 accuracy is below 75%
           threshold=$((total * 75 / 100))
           if [ "$correct" -lt "$threshold" ]; then
             echo "FAIL: BM25 accuracy $accuracy is below 75% threshold ($threshold/$total)"
@@ -94,7 +49,13 @@ jobs:
           fi
           echo "PASS: BM25 accuracy $accuracy meets 75% threshold"
 
-  # NOTE: verify job (compare checked-in binary vs cosmocc build) removed.
-  # The checked-in binary is a local gcc build for development convenience.
-  # CI builds cross-platform APE binaries as artifacts above.
-  # TODO: Replace checked-in binary with cosmocc APE when toolchain is available locally.
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: way-match-ape
+          path: bin/way-match
+
+  # NOTE: cosmocc cross-compiles on Linux to produce APE (Actually Portable Executable)
+  # binaries that run on Linux, macOS, Windows, FreeBSD, and OpenBSD natively.
+  # No need for multi-platform build matrix — one build covers all targets.
+  # The checked-in bin/way-match is a local gcc build for development convenience.
