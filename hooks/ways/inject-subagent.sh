@@ -116,10 +116,13 @@ done <<< "$WAYS"
 # Output JSON for SubagentStart (additionalContext format)
 if [[ -n "$CONTEXT" ]]; then
   TRIMMED="${CONTEXT%$'\n\n'}"
-  jq -n --arg ctx "$TRIMMED" '{
-    hookSpecificOutput: {
-      hookEventName: "SubagentStart",
-      additionalContext: $ctx
-    }
-  }'
+  # Guard against whitespace-only content from malformed ways
+  if [[ -n "${TRIMMED// /}" ]]; then
+    jq -n --arg ctx "$TRIMMED" '{
+      hookSpecificOutput: {
+        hookEventName: "SubagentStart",
+        additionalContext: $ctx
+      }
+    }'
+  fi
 fi
