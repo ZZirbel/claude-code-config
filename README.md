@@ -55,12 +55,15 @@ Runs on **Linux** and **macOS**. The hooks are all bash and lean on standard POS
 | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | The agent this configures | `npm install -g @anthropic-ai/claude-code` |
 | `git` | Version control, update checking | Usually pre-installed |
 | `jq` | JSON parsing (hook inputs, configs, API responses) | **Must install** |
+| `cc` | Build BM25 matcher from source (`make local`) | Usually pre-installed; see below |
 | `gzip` | Fallback semantic matching (NCD, when BM25 binary unavailable) | Usually pre-installed |
 | `bc` | Math for NCD fallback scoring | Usually pre-installed (not in Arch `base`) |
 | `python3` | Governance traceability tooling | Stdlib only — no pip packages |
 | [`gh`](https://cli.github.com/) | GitHub API (update checks, repo macros) | Recommended, not required — degrades gracefully |
 
 Standard utilities (`bash`, `awk`, `sed`, `grep`, `find`, `timeout`, `tr`, `sort`, `wc`, `date`) are assumed present via coreutils.
+
+**BM25 semantic matcher:** The primary matching engine is a C binary at `bin/way-match` (source in `tools/way-match/`). Build it with `make local` (uses system `cc`) or `make` (uses [Cosmopolitan](https://cosmo.zip/) for cross-platform binaries). If the binary isn't present, matching degrades gracefully: BM25 → gzip NCD fallback → regex only.
 
 **Platform install guides:**
 [macOS (Homebrew)](docs/prerequisites-macos.md) · [Arch Linux](docs/prerequisites-arch.md) · [Debian / Ubuntu](docs/prerequisites-debian.md) · [Fedora / RHEL](docs/prerequisites-fedora.md)
