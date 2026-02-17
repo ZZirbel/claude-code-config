@@ -172,8 +172,7 @@ The provenance layer serves a different audience entirely. The way content prime
 Ways use four matching strategies instead of embeddings:
 
 1. **Regex** (default, fast): pattern matching against prompts, commands, file paths
-2. **Semantic** (gzip NCD): Normalized Compression Distance + vocabulary keyword counting — no embeddings, no infrastructure dependency
-3. **Model** (Haiku classification): LLM yes/no classification for high-precision matching (~800ms latency)
+2. **Semantic** (BM25): Term-frequency scoring with IDF weighting — no embeddings, no infrastructure dependency. Falls back to gzip NCD when binary unavailable
 4. **State triggers**: session conditions (context threshold, file existence, session start)
 
 ### Session-Gating
@@ -198,7 +197,7 @@ Skills and ways complement at the edges and overlap in the middle.
 
 ### Where they overlap
 
-Both can inject contextual guidance when relevant. Both support dynamic context (macros vs `!`command``). Both do semantic matching (gzip NCD vs description-based). Pure reference-content ways with semantic matching and no macro, no governance, no scope filtering are functionally similar to `user-invocable: false` skills.
+Both can inject contextual guidance when relevant. Both support dynamic context (macros vs `!`command``). Both do semantic matching (BM25 vs description-based). Pure reference-content ways with semantic matching and no macro, no governance, no scope filtering are functionally similar to `user-invocable: false` skills.
 
 ### Why the overlap doesn't invalidate ways
 

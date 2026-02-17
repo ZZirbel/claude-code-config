@@ -55,8 +55,8 @@ Runs on **Linux** and **macOS**. The hooks are all bash and lean on standard POS
 | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | The agent this configures | `npm install -g @anthropic-ai/claude-code` |
 | `git` | Version control, update checking | Usually pre-installed |
 | `jq` | JSON parsing (hook inputs, configs, API responses) | **Must install** |
-| `gzip` | Compression-based semantic matching (NCD) | Usually pre-installed |
-| `bc` | Math for NCD similarity scoring | Usually pre-installed (not in Arch `base`) |
+| `gzip` | Fallback semantic matching (NCD, when BM25 binary unavailable) | Usually pre-installed |
+| `bc` | Math for NCD fallback scoring | Usually pre-installed (not in Arch `base`) |
 | `python3` | Governance traceability tooling | Stdlib only — no pip packages |
 | [`gh`](https://cli.github.com/) | GitHub API (update checks, repo macros) | Recommended, not required — degrades gracefully |
 
@@ -186,7 +186,7 @@ See [docs/architecture.md](docs/architecture.md) for detailed Mermaid diagrams o
 ├── check-bash-pre.sh            # Command matching (PreToolUse:Bash)
 ├── check-file-pre.sh            # File path matching (PreToolUse:Edit|Write)
 ├── show-way.sh                  # Once-per-session gating
-├── semantic-match.sh            # Gzip NCD similarity scoring
+├── semantic-match.sh            # Gzip NCD fallback scorer
 └── {domain}/                    # Domain directories
     └── {wayname}/
         ├── way.md               # Frontmatter + guidance
@@ -385,7 +385,7 @@ Claude Code has built-in **Skills** (semantically-discovered knowledge bundles).
 - Session-gated delivery (show once, not repeatedly)
 - Dynamic context (query GitHub API for contributor count)
 
-Skills can't detect tool execution. Ways now support semantic matching via gzip NCD (see above). Together they cover both intent-based and event-based guidance.
+Skills can't detect tool execution. Ways support semantic matching via BM25 (with gzip NCD fallback). Together they cover both intent-based and event-based guidance.
 
 **The governance-cite skill** is a concrete example of this complement: ways push governance *in* (automatic injection when triggers match), while the skill lets Claude pull governance *out* (active citation of controls and justifications when explaining why a practice matters). The same provenance data serves both directions.
 

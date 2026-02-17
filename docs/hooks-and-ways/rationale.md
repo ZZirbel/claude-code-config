@@ -121,24 +121,22 @@ The beauty of this dual role is that it's self-calibrating. A system that captur
 The implementation uses deliberately simple detection mechanisms:
 
 - **Regex matching** for keywords, commands, and file patterns
-- **Gzip-based Normalized Compression Distance (NCD)** for semantic similarity
-- **Keyword counting** with stopword filtering for domain vocabulary
+- **BM25 term-frequency scoring** for semantic similarity (primary)
+- **Gzip NCD** as fallback when the BM25 binary isn't available
 
-There are no embedding models, no vector databases, no neural classifiers in the core matching pipeline. The semantic matcher works by comparing gzip compression ratios -- if two texts share patterns, compressing them together produces smaller output than expected from their individual sizes. It's an information-theoretic measure that runs in milliseconds with zero dependencies beyond `gzip` and `bc`.
+There are no embedding models, no vector databases, no neural classifiers in the core matching pipeline. The BM25 matcher scores term importance across the way corpus — common words contribute less, domain-specific vocabulary contributes more. It runs in milliseconds with a single compiled binary (`bin/way-match`). When the binary isn't available, the system falls back to gzip NCD (compression-ratio similarity) using only `gzip` and `bc`.
 
 This simplicity is a feature, not a limitation. It's evidence of a design principle: **well-calibrated timing beats sophisticated detection**.
 
 The matching doesn't need to be perfect. It needs to be good enough to fire at roughly the right moment, because the value comes from the architecture -- delivering small, relevant context at state transitions -- not from the precision of the trigger. A regex that fires on `git commit|git push|conventional` doesn't need to understand natural language. It needs to reliably detect the neighborhood of an action where commit guidance is useful.
-
-When higher precision is needed, the system offers a model-based classifier (Haiku) as an opt-in upgrade, adding ~800ms of latency for more accurate classification. But most ways work fine with regex, and that tells us something important about where the leverage actually is.
 
 The matching tiers, in practice:
 
 | Mechanism | Latency | Accuracy | When We Use It |
 |-----------|---------|----------|----------------|
 | Regex | < 1ms | High for known patterns | Most ways -- keywords, commands, file paths |
-| NCD + keywords | ~5ms | Good for semantic neighborhood | Ways where exact keywords aren't predictable |
-| Model (Haiku) | ~800ms | High for ambiguous intent | Security-sensitive, high-stakes triggers |
+| BM25 | ~5ms | Good for semantic neighborhood | Ways where exact keywords aren't predictable |
+| Gzip NCD | ~5ms | Adequate | Fallback when BM25 binary unavailable |
 
 ## References
 
