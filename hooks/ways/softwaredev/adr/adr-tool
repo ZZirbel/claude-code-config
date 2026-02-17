@@ -109,6 +109,28 @@ def get_legacy_range() -> tuple:
     legacy = get_config().get('legacy', {})
     return legacy.get('range', (1, 99))
 
+def _detect_git_user() -> Optional[str]:
+    """Detect current git user (GitHub username or git config name)."""
+    # Try GitHub username from gh CLI
+    try:
+        result = subprocess.run(
+            ['gh', 'api', 'user', '--jq', '.login'],
+            capture_output=True, text=True, timeout=5)
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+    # Fall back to git config user.name
+    try:
+        result = subprocess.run(
+            ['git', 'config', 'user.name'],
+            capture_output=True, text=True, timeout=5)
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+    return None
+
 # ============================================================================
 # Data Classes
 # ============================================================================
@@ -404,6 +426,12 @@ def cmd_new(args):
     today = date.today().isoformat()
     default_status = defaults.get('status', 'Draft')
     default_deciders = defaults.get('deciders', [])
+
+    # Auto-detect current user if no deciders configured
+    if not default_deciders:
+        git_user = _detect_git_user()
+        if git_user:
+            default_deciders = [git_user]
 
     deciders_yaml = '\n'.join(f'  - {d}' for d in default_deciders) if default_deciders else '  - # add deciders'
 

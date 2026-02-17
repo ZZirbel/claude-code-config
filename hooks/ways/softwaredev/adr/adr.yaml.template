@@ -44,7 +44,7 @@ statuses:
 
 # Default values for new ADRs
 defaults:
-  deciders: []    # Add GitHub usernames: [alice, bob]
+  deciders: []    # Add GitHub usernames: [alice, bob]. Empty = auto-detect from gh/git
   status: Draft
 
 # Legacy ADR range (pre-domain numbering)
