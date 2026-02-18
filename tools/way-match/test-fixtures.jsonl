@@ -39,7 +39,7 @@
 {"prompt": "transfer files to the remote host with rsync", "expected": "softwaredev-environment-ssh", "match": true, "category": "direct"}
 {"prompt": "write a README for this project", "expected": "softwaredev-docs", "match": true, "category": "direct"}
 {"prompt": "add a mermaid diagram to the documentation", "expected": "softwaredev-docs", "match": true, "category": "direct"}
-{"prompt": "speed up the SQL queries", "expected": "softwaredev-architecture-design", "match": true, "category": "synonym", "note": "NCD likely misses: no shared bytes with design description"}
+{"prompt": "speed up the SQL queries", "expected": "softwaredev-code-performance", "match": true, "category": "synonym", "note": "optimization prompt - performance not design"}
 {"prompt": "harden the login endpoints against brute force", "expected": "softwaredev-code-security", "match": true, "category": "synonym", "note": "NCD likely misses: harden not in vocabulary"}
 {"prompt": "the app crashes when you submit the form", "expected": "softwaredev-environment-debugging", "match": true, "category": "synonym", "note": "NCD likely misses: crash/submit not in debugging vocabulary"}
 {"prompt": "verify the service handles bad input gracefully", "expected": "softwaredev-code-testing", "match": true, "category": "synonym", "note": "NCD likely misses: verify/gracefully not in testing vocabulary"}
@@ -66,5 +66,9 @@
 {"prompt": "define accessibility guidelines for the frontend", "expected": "softwaredev-docs-standards", "match": true, "category": "direct"}
 {"prompt": "write an RFC for the new caching architecture", "expected": "softwaredev-architecture-design", "match": true, "category": "direct", "note": "RFC vocabulary expansion"}
 {"prompt": "sketch out a proposal for the event-driven refactoring", "expected": "softwaredev-architecture-design", "match": true, "category": "synonym", "note": "design way RFC/proposal expansion"}
+{"prompt": "review the authentication trust boundaries and fix the token validation", "expected": ["softwaredev-architecture-threat-modeling", "softwaredev-code-security"], "match": true, "category": "coactivation", "note": "threat-modeling trust boundary + security authentication token"}
+{"prompt": "model the attack surface for the new microservice architecture", "expected": ["softwaredev-architecture-threat-modeling", "softwaredev-architecture-design"], "match": true, "category": "coactivation", "note": "threat-modeling attack surface + design architecture microservice"}
+{"prompt": "establish testing conventions and define our coverage philosophy", "expected": ["softwaredev-docs-standards", "softwaredev-code-testing"], "match": true, "category": "coactivation", "note": "standards convention philosophy + testing coverage"}
+{"prompt": "write a dependency evaluation policy with vulnerability audit criteria", "expected": ["softwaredev-docs-standards", "softwaredev-environment-deps"], "match": true, "category": "coactivation", "note": "standards policy guideline + deps dependency audit vulnerability"}
 {"prompt": "what are the risks of going to the beach today", "expected": null, "match": false, "category": "negative", "note": "risk is in threat-modeling but context is non-technical"}
 {"prompt": "follow the standard operating procedure for checkout", "expected": null, "match": false, "category": "negative", "note": "standard is in standards way but context is non-technical"}

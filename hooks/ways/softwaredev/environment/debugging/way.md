@@ -1,6 +1,6 @@
 ---
-description: debugging code issues, troubleshooting failures, investigating broken behavior, fixing bugs
-vocabulary: debug breakpoint stacktrace investigate troubleshoot regression bisect crash error fail bug log trace exception segfault hang timeout
+description: debugging, troubleshooting failures, investigating broken behavior
+vocabulary: debug breakpoint stacktrace investigate troubleshoot regression bisect crash crashes crashing error fail bug log trace exception segfault hang timeout step broken
 threshold: 2.0
 scope: agent, subagent
 ---

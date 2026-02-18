@@ -24,20 +24,20 @@ WAY_DESC[softwaredev-docs-api]="designing REST APIs, HTTP endpoints, API version
 WAY_VOCAB[softwaredev-docs-api]="endpoint api rest route http status pagination versioning graphql request response header payload crud webhook"
 WAY_THRESH[softwaredev-docs-api]="2.0"
 
-WAY_DESC[softwaredev-environment-debugging]="debugging code issues, troubleshooting failures, investigating broken behavior, fixing bugs"
-WAY_VOCAB[softwaredev-environment-debugging]="debug breakpoint stacktrace investigate troubleshoot regression bisect crash error fail bug log trace exception segfault hang timeout"
+WAY_DESC[softwaredev-environment-debugging]="debugging, troubleshooting failures, investigating broken behavior"
+WAY_VOCAB[softwaredev-environment-debugging]="debug breakpoint stacktrace investigate troubleshoot regression bisect crash crashes crashing error fail bug log trace exception segfault hang timeout step broken"
 WAY_THRESH[softwaredev-environment-debugging]="2.0"
 
-WAY_DESC[softwaredev-code-security]="application security, authentication, secrets management, input validation, vulnerability prevention"
-WAY_VOCAB[softwaredev-code-security]="authentication secrets password credentials owasp injection xss sql sanitize vulnerability bcrypt hash encrypt token cert ssl tls csrf cors rotate login expose"
+WAY_DESC[softwaredev-code-security]="security, authentication, secrets management, input validation"
+WAY_VOCAB[softwaredev-code-security]="authentication secrets password credentials owasp injection xss sql sanitize vulnerability bcrypt hash encrypt token cert ssl tls csrf cors rotate login expose exposed harden"
 WAY_THRESH[softwaredev-code-security]="2.0"
 
-WAY_DESC[softwaredev-architecture-design]="software system design architecture patterns database schema component modeling"
-WAY_VOCAB[softwaredev-architecture-design]="architecture pattern database schema modeling interface component modules factory observer strategy monolith microservice domain layer coupling cohesion abstraction singleton proposal rfc sketch deliberation whiteboard"
+WAY_DESC[softwaredev-architecture-design]="software system design, architecture patterns, database schema, component modeling, proposals, RFCs, design deliberation"
+WAY_VOCAB[softwaredev-architecture-design]="architecture pattern database schema modeling interface component modules factory observer strategy monolith microservice microservices domain layer coupling cohesion abstraction singleton proposal rfc sketch deliberation whiteboard"
 WAY_THRESH[softwaredev-architecture-design]="2.0"
 
-WAY_DESC[softwaredev-environment-config]="application configuration, environment variables, dotenv files, config file management"
-WAY_VOCAB[softwaredev-environment-config]="dotenv environment configuration envvar config.json config.yaml connection port host url setting variable"
+WAY_DESC[softwaredev-environment-config]="configuration, environment variables, dotenv files, connection settings"
+WAY_VOCAB[softwaredev-environment-config]="dotenv environment configuration envvar config.json config.yaml connection port host url setting variable string"
 WAY_THRESH[softwaredev-environment-config]="2.0"
 
 WAY_DESC[softwaredev-architecture-adr-context]="planning how to implement a feature, deciding an approach, understanding existing project decisions, starting work on an item, investigating why something was built a certain way"
@@ -72,8 +72,8 @@ WAY_DESC[softwaredev-code-quality]="code quality, refactoring, SOLID principles,
 WAY_VOCAB[softwaredev-code-quality]="refactor quality solid principle decompose extract method responsibility coupling cohesion maintainability readability"
 WAY_THRESH[softwaredev-code-quality]="2.0"
 
-WAY_DESC[softwaredev-code-performance]="performance optimization, profiling, benchmarking, latency reduction, memory efficiency"
-WAY_VOCAB[softwaredev-code-performance]="optimize profile benchmark latency throughput memory cache bottleneck flamegraph allocation heap"
+WAY_DESC[softwaredev-code-performance]="performance optimization, profiling, benchmarking, latency"
+WAY_VOCAB[softwaredev-code-performance]="optimize profile benchmark latency throughput memory cache bottleneck flamegraph allocation heap speed slow"
 WAY_THRESH[softwaredev-code-performance]="2.0"
 
 WAY_DESC[softwaredev-environment-deps]="dependency management, package installation, library evaluation, security auditing of third-party code"

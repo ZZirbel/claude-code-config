@@ -37,9 +37,11 @@ while IFS= read -r wayfile; do
   rel=$(echo "$wayfile" | sed "s|$WAYS_DIR/||;s|/way\.md$||")
   way_id=$(echo "$rel" | tr '/' '-')
 
-  desc=$(sed -n 's/^description: *//p' "$wayfile")
-  vocab=$(sed -n 's/^vocabulary: *//p' "$wayfile")
-  thresh=$(sed -n 's/^threshold: *//p' "$wayfile")
+  # Extract frontmatter only (between --- delimiters), strip YAML comments
+  frontmatter=$(sed -n '2,/^---$/{ /^---$/d; p; }' "$wayfile")
+  desc=$(echo "$frontmatter" | sed -n 's/^description: *//p' | sed 's/ *#.*//')
+  vocab=$(echo "$frontmatter" | sed -n 's/^vocabulary: *//p' | sed 's/ *#.*//')
+  thresh=$(echo "$frontmatter" | sed -n 's/^threshold: *//p' | sed 's/ *#.*//')
 
   # Skip ways without semantic matching fields
   [[ -z "$desc" || -z "$vocab" ]] && continue
@@ -69,7 +71,7 @@ TEST_CASES=(
   "softwaredev-docs-api|add versioning to the API"
   "softwaredev-environment-debugging|debug why this function returns null"
   "softwaredev-environment-debugging|troubleshoot the failing deployment"
-  "softwaredev-environment-debugging|bisect to find which commit broke it"
+  "softwaredev-environment-debugging,softwaredev-delivery-commits|bisect to find which commit broke it"
   "softwaredev-code-security|fix the SQL injection vulnerability"
   "softwaredev-code-security|store passwords with bcrypt"
   "softwaredev-code-security|sanitize the form input"
