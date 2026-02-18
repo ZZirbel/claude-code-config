@@ -37,6 +37,10 @@ Present options with trade-offs, not just solutions. Be direct about problems an
 - ALWAYS prefer editing existing files over creating new ones
 - NEVER proactively create documentation unless explicitly requested
 
+## Language
+
+All file output (commit messages, comments, documentation, PR descriptions) must be in English regardless of interface language setting.
+
 ## Attribution
 
 Do NOT append the Claude Code attribution to commits.
