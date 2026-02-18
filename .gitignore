@@ -10,8 +10,10 @@
 !CODE_OF_CONDUCT.md
 !SECURITY.md
 !settings.json
+!settings.windows.json
 !statusline.sh
 !ways.json
+!statusline.ps1
 !.claude-upstream
 
 # GitHub community health files
@@ -59,6 +61,7 @@
 # Hooks and ways
 !hooks/
 !hooks/*.sh
+!hooks/*.ps1
 !hooks/pre-commit
 !hooks/ways/
 !hooks/ways/*.md
@@ -68,6 +71,7 @@
 !hooks/ways/**/
 !hooks/ways/**/*.md
 !hooks/ways/**/*.sh
+!hooks/ways/**/*.ps1
 !hooks/ways/**/*.yaml.template
 !hooks/ways/**/adr-tool
 
