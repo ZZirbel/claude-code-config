@@ -20,19 +20,19 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${HOME}/.claude/hooks/ways/clear-markers.sh"
+            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/clear-markers.sh\"'"
           },
           {
             "type": "command",
-            "command": "${HOME}/.claude/hooks/ways/show-core.sh"
+            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/show-core.sh\"'"
           },
           {
             "type": "command",
-            "command": "${HOME}/.claude/hooks/ways/init-project-ways.sh"
+            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/init-project-ways.sh\"'"
           },
           {
             "type": "command",
-            "command": "${HOME}/.claude/hooks/check-config-updates.sh"
+            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/check-config-updates.sh\"'"
           }
         ]
       },
@@ -41,11 +41,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${HOME}/.claude/hooks/ways/clear-markers.sh"
+            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/clear-markers.sh\"'"
           },
           {
             "type": "command",
-            "command": "${HOME}/.claude/hooks/ways/show-core.sh"
+            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/show-core.sh\"'"
           }
         ]
       },
@@ -54,7 +54,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${HOME}/.claude/hooks/ways/show-core.sh"
+            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/show-core.sh\"'"
           }
         ]
       },
@@ -63,15 +63,15 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${HOME}/.claude/hooks/ways/clear-markers.sh"
+            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/clear-markers.sh\"'"
           },
           {
             "type": "command",
-            "command": "${HOME}/.claude/hooks/ways/show-core.sh"
+            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/show-core.sh\"'"
           },
           {
             "type": "command",
-            "command": "${HOME}/.claude/hooks/ways/init-project-ways.sh"
+            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/init-project-ways.sh\"'"
           }
         ]
       }
@@ -82,7 +82,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${HOME}/.claude/hooks/ways/check-file-pre.sh"
+            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/check-file-pre.sh\"'"
           }
         ]
       },
@@ -91,7 +91,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${HOME}/.claude/hooks/ways/check-bash-pre.sh"
+            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/check-bash-pre.sh\"'"
           }
         ]
       },
@@ -100,7 +100,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${HOME}/.claude/hooks/ways/mark-tasks-active.sh"
+            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/mark-tasks-active.sh\"'"
           }
         ]
       },
@@ -109,7 +109,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${HOME}/.claude/hooks/ways/check-task-pre.sh"
+            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/check-task-pre.sh\"'"
           }
         ]
       }
@@ -119,11 +119,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${HOME}/.claude/hooks/ways/check-prompt.sh"
+            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/check-prompt.sh\"'"
           },
           {
             "type": "command",
-            "command": "${HOME}/.claude/hooks/ways/check-state.sh"
+            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/check-state.sh\"'"
           }
         ]
       }
@@ -133,7 +133,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${HOME}/.claude/hooks/ways/inject-subagent.sh"
+            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/inject-subagent.sh\"'"
           }
         ]
       }
@@ -143,7 +143,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${HOME}/.claude/hooks/ways/check-response.sh"
+            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/check-response.sh\"'"
           }
         ]
       }
@@ -151,7 +151,7 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "${HOME}/.claude/statusline.sh"
+    "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/statusline.sh\"'"
   },
   "enabledPlugins": {
     "clangd-lsp@claude-plugins-official": true,
