@@ -14,6 +14,8 @@ Run this to check your remaining context window budget:
 
 Report the result to the user in plain language, e.g.:
 
-> "About 98k tokens remaining (50% of the 200k window)."
+> "About 490k tokens remaining (51% of the 1M window)."
+
+The script auto-detects the context window size from the model in the transcript (1M for Opus 4.6 1M, 200k for others). You can override with `CLAUDE_CONTEXT_WINDOW` env var.
 
 If the remaining percentage is below 20%, mention that compaction is approaching and suggest wrapping up or prioritizing remaining work.

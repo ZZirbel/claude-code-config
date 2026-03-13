@@ -30,8 +30,20 @@ if [[ -z "$TRANSCRIPT" || ! -f "$TRANSCRIPT" ]]; then
   exit 1
 fi
 
-# Context window size (Claude's actual limit)
-WINDOW_TOKENS=200000
+# Detect context window size from the model used in the transcript
+MODEL=$(jq -r 'select(.type=="assistant" and .message.model) | .message.model' "$TRANSCRIPT" 2>/dev/null | tail -1)
+
+# Model-to-window mapping (update as new models ship)
+# Opus 4.6 defaults to 1M context; sonnet/haiku remain 200k
+case "$MODEL" in
+  *opus-4-6*|*opus-4*)  WINDOW_TOKENS=1000000 ;;
+  *sonnet*)             WINDOW_TOKENS=200000 ;;
+  *haiku*)              WINDOW_TOKENS=200000 ;;
+  *)                    WINDOW_TOKENS=200000 ;;  # safe default
+esac
+
+# Allow override via environment
+WINDOW_TOKENS="${CLAUDE_CONTEXT_WINDOW:-$WINDOW_TOKENS}"
 
 # Get the most recent real token count from API usage data.
 # cache_read_input_tokens reflects the actual context size sent to the API.
