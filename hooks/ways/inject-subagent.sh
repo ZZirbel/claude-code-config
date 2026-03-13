@@ -31,11 +31,18 @@ OLDEST=$(ls "$STASH_DIR"/*.json 2>/dev/null | sort | head -1)
 CLAIMED="${OLDEST}.claimed"
 mv "$OLDEST" "$CLAIMED" 2>/dev/null || exit 0
 
-# Read matched way paths, teammate flag, and team name
+# Read matched way paths, channels, teammate flag, and team name
 WAYS=$(jq -r '.ways[]' "$CLAIMED" 2>/dev/null)
+CHANNELS=$(jq -r '.channels // [] | .[]' "$CLAIMED" 2>/dev/null)
 IS_TEAMMATE=$(jq -r '.is_teammate // false' "$CLAIMED" 2>/dev/null)
 TEAM_NAME=$(jq -r '.team_name // empty' "$CLAIMED" 2>/dev/null)
 rm -f "$CLAIMED"
+
+# Build channel lookup array
+declare -a CHANNEL_ARR
+while IFS= read -r ch; do
+  CHANNEL_ARR+=("$ch")
+done <<< "$CHANNELS"
 
 # If this is a teammate spawn, write a marker the teammate's own hooks can detect
 # The marker persists for the teammate's session lifetime
@@ -47,9 +54,12 @@ fi
 
 # Emit way content for each matched way (bypassing markers)
 CONTEXT=""
+WAY_IDX=0
 
 while IFS= read -r waypath; do
   [[ -z "$waypath" ]] && continue
+  MATCH_CH="${CHANNEL_ARR[$WAY_IDX]:-prompt}"
+  ((WAY_IDX++))
 
   # Resolve way file (project-local > global)
   WAY_FILE=""
@@ -107,7 +117,7 @@ while IFS= read -r waypath; do
     scope="subagent"
     [[ "$IS_TEAMMATE" == "true" ]] && scope="teammate"
     log_args=(event=way_fired way="$waypath" domain="$DOMAIN"
-      trigger="$scope" scope="$scope" project="$PROJECT_DIR" session="$SESSION_ID")
+      trigger="${MATCH_CH}" scope="$scope" project="$PROJECT_DIR" session="$SESSION_ID")
     [[ -n "$TEAM_NAME" ]] && log_args+=(team="$TEAM_NAME")
     "${HOME}/.claude/hooks/ways/log-event.sh" "${log_args[@]}"
   fi

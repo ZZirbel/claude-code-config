@@ -65,13 +65,8 @@ scan_ways() {
     scope_matches "$scope_raw" "$CURRENT_SCOPE" || continue
 
     # Additive matching: pattern OR semantic (either channel can fire)
-    matched=false
     if match_way_prompt "$PROMPT" "$pattern" "$description" "$vocabulary" "$threshold"; then
-      matched=true
-    fi
-
-    if $matched; then
-      ~/.claude/hooks/ways/show-way.sh "$waypath" "$SESSION_ID" "prompt"
+      ~/.claude/hooks/ways/show-way.sh "$waypath" "$SESSION_ID" "${MATCH_CHANNEL:-prompt}"
     fi
   done < <(find "$dir" -name "way.md" -print0 2>/dev/null)
 }

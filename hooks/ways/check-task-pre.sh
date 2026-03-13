@@ -68,13 +68,8 @@ scan_ways_for_subagent() {
     local vocabulary=$(get_field "vocabulary")
     local threshold=$(get_field "threshold")
 
-    local matched=false
     if match_way_prompt "$TASK_PROMPT" "$pattern" "$description" "$vocabulary" "$threshold"; then
-      matched=true
-    fi
-
-    if $matched; then
-      MATCHED_WAYS+=("$waypath")
+      MATCHED_WAYS+=("$waypath|${MATCH_CHANNEL:-prompt}")
     fi
   done < <(find "$dir" -name "way.md" -print0 2>/dev/null)
 }
@@ -88,9 +83,12 @@ if [[ ${#MATCHED_WAYS[@]} -gt 0 ]]; then
   TIMESTAMP=$(date +%s%N)
   STASH_FILE="${STASH_DIR}/${TIMESTAMP}.json"
 
-  WAYS_JSON=$(printf '%s\n' "${MATCHED_WAYS[@]}" | jq -R . | jq -s .)
-  jq -n --argjson ways "$WAYS_JSON" --argjson teammate "$IS_TEAMMATE" --arg team "$TEAM_NAME" \
-    '{ways: $ways, is_teammate: $teammate, team_name: $team}' > "$STASH_FILE"
+  # Each entry is "waypath|channel" — split into parallel arrays
+  WAYS_JSON=$(printf '%s\n' "${MATCHED_WAYS[@]}" | cut -d'|' -f1 | jq -R . | jq -s .)
+  CHANNELS_JSON=$(printf '%s\n' "${MATCHED_WAYS[@]}" | cut -d'|' -f2 | jq -R . | jq -s .)
+  jq -n --argjson ways "$WAYS_JSON" --argjson channels "$CHANNELS_JSON" \
+    --argjson teammate "$IS_TEAMMATE" --arg team "$TEAM_NAME" \
+    '{ways: $ways, channels: $channels, is_teammate: $teammate, team_name: $team}' > "$STASH_FILE"
 fi
 
 # Never block Task creation

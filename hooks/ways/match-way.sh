@@ -24,11 +24,14 @@ detect_semantic_engine() {
 
 # Additive matching: pattern OR semantic (either channel can fire)
 # Args: $1=prompt $2=pattern $3=description $4=vocabulary $5=threshold
+# Sets: MATCH_CHANNEL ("keyword" or "semantic") on match
 match_way_prompt() {
   local prompt="$1" pattern="$2" description="$3" vocabulary="$4" threshold="$5"
+  MATCH_CHANNEL=""
 
   # Channel 1: Regex pattern match
   if [[ -n "$pattern" && "$prompt" =~ $pattern ]]; then
+    MATCH_CHANNEL="keyword"
     return 0
   fi
 
@@ -41,6 +44,7 @@ match_way_prompt() {
             --vocabulary "$vocabulary" \
             --query "$prompt" \
             --threshold "${threshold:-2.0}" 2>/dev/null; then
+          MATCH_CHANNEL="semantic"
           return 0
         fi
         ;;
@@ -51,6 +55,7 @@ match_way_prompt() {
         # cleanly: BM25 threshold 2.0 ≠ NCD distance 0.58. The fixed value 0.58 was
         # tuned against the test fixture corpus for acceptable recall without false positives.
         if "${WAYS_DIR}/semantic-match.sh" "$prompt" "$description" "$vocabulary" "0.58" 2>/dev/null; then
+          MATCH_CHANNEL="semantic"
           return 0
         fi
         ;;
