@@ -103,6 +103,11 @@ if [[ ! -f "$MARKER" ]]; then
 
   touch "$MARKER"
 
+  # Stamp epoch for check distance tracking
+  source "${HOME}/.claude/hooks/ways/epoch.sh"
+  CURRENT_EPOCH=$(cat "/tmp/.claude-epoch-${SESSION_ID}" 2>/dev/null || echo 0)
+  stamp_way_epoch "$WAY_MARKER_NAME" "$SESSION_ID"
+
   # Log event
   LOG_ARGS=(event=way_fired way="$WAY" domain="$DOMAIN"
     trigger="$TRIGGER" scope="$SCOPE" project="$PROJECT_DIR" session="$SESSION_ID")

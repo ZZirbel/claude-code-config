@@ -24,6 +24,10 @@ WAYS_DIR="${HOME}/.claude/hooks/ways"
 source "${WAYS_DIR}/match-way.sh"
 detect_semantic_engine
 
+# Epoch counter
+source "${WAYS_DIR}/epoch.sh"
+bump_epoch "$SESSION_ID"
+
 # Detect execution scope (agent vs teammate)
 source "${WAYS_DIR}/detect-scope.sh"
 CURRENT_SCOPE=$(detect_scope "$SESSION_ID")

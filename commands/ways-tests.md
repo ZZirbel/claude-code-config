@@ -157,8 +157,61 @@ When `--all` is specified for suggest or lint:
 2. Also check `$CLAUDE_PROJECT_DIR/.claude/ways/` if project dir is set
 3. Process each file and aggregate results
 
+### Check mode: test check scoring curve
+
+```
+/ways-tests check <path/to/check.md> "tool context" --distance N --fires N
+/ways-tests check design "editing architecture file" --distance 20 --fires 0
+```
+
+Simulates the check scoring curve for a given check.md against tool context. Accepts optional `--distance` (epoch distance from parent way, default 10) and `--fires` (prior fire count this session, default 0).
+
+Displays:
+```
+Check: softwaredev/architecture/design
+  Match score:     2.40
+  Distance factor: 3.30  (epoch distance: 20)
+  Decay factor:    1.00  (fire count: 0)
+  Effective score: 7.92
+  Threshold:       2.00
+  Result:          FIRES (anchored)
+
+Simulate decay:
+  Fire 1: effective=7.92  FIRES
+  Fire 2: effective=3.96  FIRES
+  Fire 3: effective=2.64  FIRES
+  Fire 4: effective=1.98  stops
+```
+
+Implementation:
+1. Extract frontmatter from check.md (description, vocabulary, threshold)
+2. Score the query with `way-match pair` to get match_score
+3. Apply the curve: `effective = match_score × (ln(distance+1)+1) × (1/(fires+1))`
+4. Show the breakdown and simulate successive firings until the check stops
+
+### Check-all mode: rank all checks against context
+
+```
+/ways-tests check-all "editing a database schema migration"
+```
+
+Like `score-all` but for check.md files. Shows match score, effective score at various distances, and how many fires before decay silences each check.
+
+### Lint mode (updated for checks)
+
+Lint now also validates check.md files:
+
+- Check required fields: `description` must be present
+- Verify `## anchor` and `## check` sections exist in body
+- Verify threshold is a number
+- Check that parent way.md exists in same directory (orphan check detection)
+- Report issues per file
+
+Use `--all` to lint all ways AND checks.
+
 ## Notes
 
 - The `way-match` binary must exist at `~/.claude/bin/way-match`. If missing, report that BM25 is unavailable and suggest building it: `make -f tools/way-match/Makefile local`
 - The UNUSED section in suggest output is informational — unused vocabulary terms are often intentional (they catch user query terms that don't appear in the way body). Don't automatically remove them.
 - When displaying results, use the human-readable format, not the raw machine output from the binary.
+- Check scoring uses `awk` for floating-point math — ensure `awk` is available (standard on all Unix systems).

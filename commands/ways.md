@@ -174,6 +174,54 @@ After the way is created or revised:
 - If the way has semantic matching, suggest running `/ways-tests score-all "sample prompt"` to verify it doesn't overlap with other ways
 - Remind them the way is committed to the project repo — teammates get it too
 
+## Checks — Confidence Sensors
+
+Ways can have an optional paired `check.md` in the same directory. Checks fire on PreToolUse (before edits/commands) with an epoch-distance-aware scoring curve. See ADR-103 for the full design.
+
+### When to suggest a check
+
+When the way covers a domain where Claude might act on assumptions — architecture, deployment, security, data migrations. Not every way needs a check. Simple formatting or style ways don't benefit.
+
+Ask: "Would it help if Claude verified assumptions before acting in this area?" If yes, offer to scaffold a check.
+
+### Check template
+
+```markdown
+---
+description: what this check verifies (narrower than parent way)
+vocabulary: domain terms (subset of parent way, more specific)
+threshold: 2.0
+scope: agent
+---
+
+## anchor
+
+[1-2 line re-anchor to parent way's intent — shown when way is distant in context]
+
+## check
+
+[3-5 verification questions specific to this domain]
+- Did you read the existing code before changing it?
+- [Domain-specific assumption to verify]
+- [Domain-specific blast radius question]
+```
+
+### Check authoring guidance
+
+- **Keep checks short** — 3-5 verification questions max
+- **Anchor section**: 1-2 lines that semantically bridge back to the parent way's intent
+- **Vocabulary**: should overlap with but be narrower than parent way (checks are more specific)
+- **Threshold**: start at parent way's threshold, adjust based on observed fire rate
+- Checks fire multiple times with decay — they self-limit, so don't worry about noise
+
+### File structure
+
+```
+.claude/ways/{domain}/{wayname}/
+  way.md        # directive (fires on domain entry)
+  check.md      # sensor (fires before action, with decay)
+```
+
 ## Principles
 
 - **The human doesn't need to know the word "frontmatter"** — ask about intent, translate to implementation

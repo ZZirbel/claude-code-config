@@ -26,6 +26,10 @@ CONTEXT=""
 source "${HOME}/.claude/hooks/ways/detect-scope.sh"
 CURRENT_SCOPE=$(detect_scope "$SESSION_ID")
 
+# Epoch counter
+source "${HOME}/.claude/hooks/ways/epoch.sh"
+bump_epoch "$SESSION_ID"
+
 # Scan ways in a directory (recursive)
 scan_ways() {
   local dir="$1"
@@ -61,6 +65,66 @@ scan_ways() {
 # Scan project-local first, then global
 scan_ways "$PROJECT_DIR/.claude/ways"
 scan_ways "${HOME}/.claude/hooks/ways"
+
+# --- Check scanning ---
+source "${HOME}/.claude/hooks/ways/match-way.sh"
+detect_semantic_engine
+
+scan_checks() {
+  local dir="$1"
+  [[ ! -d "$dir" ]] && return
+
+  while IFS= read -r -d '' checkfile; do
+    waypath="${checkfile#$dir/}"
+    waypath="${waypath%/check.md}"
+
+    frontmatter=$(awk 'NR==1 && /^---$/{p=1; next} p && /^---$/{exit} p{print}' "$checkfile")
+    get_field() { echo "$frontmatter" | awk "/^$1:/"'{gsub(/^'"$1"': */, ""); print; exit}'; }
+
+    description=$(get_field "description")
+    vocabulary=$(get_field "vocabulary")
+    threshold=$(get_field "threshold")
+    scope=$(get_field "scope")
+    scope="${scope:-agent}"
+    scope_matches "$scope" "$CURRENT_SCOPE" || continue
+
+    # Match against command + description
+    local query="$CMD $DESC"
+    MATCH_SCORE="0"
+
+    local commands_pattern=$(get_field "commands")
+    if [[ -n "$commands_pattern" && "$CMD" =~ $commands_pattern ]]; then
+      MATCH_SCORE="3.0"
+    elif [[ -n "$description" && -n "$vocabulary" ]]; then
+      case "$SEMANTIC_ENGINE" in
+        bm25)
+          local pair_out
+          pair_out=$("$WAY_MATCH_BIN" pair \
+            --description "$description" \
+            --vocabulary "$vocabulary" \
+            --query "$query" \
+            --threshold "0.0" 2>&1 || true)
+          MATCH_SCORE=$(echo "$pair_out" | sed -n 's/.*score=\([0-9.]*\).*/\1/p')
+          MATCH_SCORE="${MATCH_SCORE:-0}"
+          ;;
+        ncd)
+          if "${HOME}/.claude/hooks/ways/semantic-match.sh" "$query" "$description" "$vocabulary" "0.58" 2>/dev/null; then
+            MATCH_SCORE="2.5"
+          fi
+          ;;
+      esac
+    fi
+
+    if [[ "$MATCH_SCORE" != "0" ]]; then
+      local check_out
+      check_out=$("${HOME}/.claude/hooks/ways/show-check.sh" "$waypath" "$SESSION_ID" "bash" "$MATCH_SCORE")
+      [[ -n "$check_out" ]] && CONTEXT+="$check_out"
+    fi
+  done < <(find "$dir" -name "check.md" -print0 2>/dev/null)
+}
+
+scan_checks "$PROJECT_DIR/.claude/ways"
+scan_checks "${HOME}/.claude/hooks/ways"
 
 # Output JSON - PreToolUse format with decision + additionalContext
 if [[ -n "$CONTEXT" ]]; then

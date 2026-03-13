@@ -170,7 +170,11 @@ if $JSON_OUT; then
     by_trigger: ([.[] | select(.event == "way_fired") | .trigger] | group_by(.) | map({(.[0]): length}) | add // {}),
     by_scope: ([.[] | select(.event == "way_fired") | .scope // "unknown"] | group_by(.) | map({(.[0]): length}) | add // {}),
     by_team: ([.[] | select(.event == "way_fired" and .team != null and .team != "") | .team] | group_by(.) | map({(.[0]): length}) | add // {}),
-    by_project: ([.[] | select(.event != null) | .project] | group_by(.) | map({(.[0]): length}) | add // {})
+    by_project: ([.[] | select(.event != null) | .project] | group_by(.) | map({(.[0]): length}) | add // {}),
+    check_fires: ([.[] | select(.event == "check_fired")] | length),
+    by_check: ([.[] | select(.event == "check_fired") | .check] | group_by(.) | map({(.[0]): length}) | add // {}),
+    check_avg_distance: ([.[] | select(.event == "check_fired") | .distance | tonumber] | if length > 0 then (add / length) else 0 end),
+    check_anchored: ([.[] | select(.event == "check_fired" and .anchored == "true")] | length)
   }'
   exit 0
 fi
@@ -259,6 +263,31 @@ echo "$EVENTS" | jq -r 'select(.event == "way_fired") | .project' | sort | uniq 
   printf "  %-40s %3d fires%s\n" "$display" "$count" "$sess"
 done
 echo ""
+
+# Check stats
+CHECK_FIRES=$(echo "$EVENTS" | jq -r 'select(.event == "check_fired") | .check' | wc -l)
+if [[ $CHECK_FIRES -gt 0 ]]; then
+  echo "Check fires: ${CHECK_FIRES}"
+  echo ""
+  echo "Top checks:"
+  echo "$EVENTS" | jq -r 'select(.event == "check_fired") | .check' | sort | uniq -c | sort -rn | head -10 | while read count check; do
+    printf "  %-30s %3d\n" "$check" "$count"
+  done
+  echo ""
+  echo "Check distance stats:"
+  echo "$EVENTS" | jq -r 'select(.event == "check_fired") | .distance' | awk '
+    { sum += $1; count++; if ($1 > max) max = $1; if (count == 1 || $1 < min) min = $1 }
+    END { if (count > 0) printf "  avg: %.1f  min: %d  max: %d  total: %d\n", sum/count, min, max, count }
+  '
+  echo ""
+  echo "Anchored vs light:"
+  echo "$EVENTS" | jq -r 'select(.event == "check_fired") | .anchored' | sort | uniq -c | sort -rn | while read count anchored; do
+    label="light"
+    [[ "$anchored" == "true" ]] && label="anchored"
+    printf "  %-10s %3d\n" "$label" "$count"
+  done
+  echo ""
+fi
 
 # Recent activity
 YESTERDAY=$(date -u -d "1 day ago" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null \

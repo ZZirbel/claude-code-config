@@ -13,6 +13,8 @@ rm -f /tmp/.claude-way-* 2>/dev/null
 rm -f /tmp/.claude-core-* 2>/dev/null
 rm -f /tmp/.claude-tasks-active-* 2>/dev/null
 rm -rf /tmp/.claude-subagent-stash-* 2>/dev/null
+rm -f /tmp/.claude-epoch-* 2>/dev/null
+rm -f /tmp/.claude-check-fires-* 2>/dev/null
 
 # Log session event
 "${HOME}/.claude/hooks/ways/log-event.sh" \
