@@ -209,14 +209,14 @@ def cmd_list(args):
 
     # Dynamic column layout based on terminal width
     tw = term_width()
-    # Fixed columns: 2 indent + sessions(8) + size(6) + age(7) + mem(3) + spacing(4) = 30
-    fixed = 30
+    # Fixed columns: 2 indent + Sessions(8) + Size(6) + Last(7) + Memory(6) + spacing(5) = 34
+    fixed = 36
     path_w = max(20, tw - fixed)
 
     # Header
     print(f"\n{bold('Claude Code Projects')}  ({len(projects)} shown)\n")
-    print(f"  {'Project':<{path_w}} {'Sess':>4} {'Size':>6} {'Last':>7} {'M':>1}")
-    print(f"  {'─' * path_w} {'─' * 4} {'─' * 6} {'─' * 7} {'─' * 1}")
+    print(f"  {'Project':<{path_w}} {'Sessions':>8} {'Size':>6} {'Last':>7} {'Memory':>6}")
+    print(f"  {'─' * path_w} {'─' * 8} {'─' * 6} {'─' * 7} {'─' * 6}")
 
     for p in projects:
         path = p["path"]
@@ -238,7 +238,7 @@ def cmd_list(args):
         elif age:
             age = dim(age)
 
-        print(f"  {path:<{path_w}} {sess:>4} {size:>6} {age:>7} {mem:>1}")
+        print(f"  {path:<{path_w}} {sess:>8} {size:>6} {age:>7} {mem:>6}")
 
     print()
 
