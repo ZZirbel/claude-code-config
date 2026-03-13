@@ -1,7 +1,7 @@
 ---
-description: architectural decision, new component, structural change, module boundary, interface design, pattern introduction
-vocabulary: architect component module interface pattern boundary layer service schema model refactor restructure introduce new create design
-threshold: 2.0
+description: introducing new architectural pattern, restructuring module boundaries, designing service interfaces
+vocabulary: restructure boundary interface architectural introduce new pattern module service layer
+threshold: 3.0
 scope: agent
 ---
 

@@ -66,13 +66,15 @@ CURRENT_EPOCH=$(cat "/tmp/.claude-epoch-${SESSION_ID}" 2>/dev/null || echo 0)
 
 WAY_MARKER="/tmp/.claude-way-${WAY_MARKER_NAME}-${SESSION_ID}"
 WAY_HAS_FIRED=false
-EPOCH_DISTANCE=999  # default: way is infinitely cold
+EPOCH_DISTANCE=30  # default: way hasn't fired — cap at 30 to prevent score explosion
 
 if [[ -f "$WAY_MARKER" ]]; then
   WAY_HAS_FIRED=true
   WAY_EPOCH=$(cat "/tmp/.claude-way-epoch-${WAY_MARKER_NAME}-${SESSION_ID}" 2>/dev/null || echo 0)
   EPOCH_DISTANCE=$(( CURRENT_EPOCH - WAY_EPOCH ))
   [[ $EPOCH_DISTANCE -lt 0 ]] && EPOCH_DISTANCE=0
+  # Cap distance to keep the curve bounded
+  [[ $EPOCH_DISTANCE -gt 30 ]] && EPOCH_DISTANCE=30
 fi
 
 # --- Fire count ---

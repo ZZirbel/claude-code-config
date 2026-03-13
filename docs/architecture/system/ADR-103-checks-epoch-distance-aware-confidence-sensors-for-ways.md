@@ -86,7 +86,7 @@ effective_score = match_score × distance_factor × decay_factor
 Where:
 
 - **match_score** — BM25 or gzip NCD score against current tool input / description
-- **distance_factor** = `ln(epoch_distance + 1) + 1` — grows sublinearly with distance from parent way. The further from the way, the more valuable re-anchoring becomes.
+- **distance_factor** = `ln(min(epoch_distance, 30) + 1) + 1` — grows sublinearly with distance from parent way, **capped at 30** to prevent score explosion when the way hasn't fired or is very distant. Max multiplier: ~4.4×.
 - **decay_factor** = `1 / (fire_count + 1)` — shrinks with each successive check fire in the session. Diminishing returns on repeated nudges.
 
 The check fires if `effective_score >= threshold` (threshold set in check.md frontmatter, same as ways).
