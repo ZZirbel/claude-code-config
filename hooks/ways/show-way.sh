@@ -126,7 +126,72 @@ stamp_way_tokens "$WAY_MARKER_NAME" "$SESSION_ID"
 # Stamp epoch for check distance tracking
 source "${HOME}/.claude/hooks/ways/epoch.sh"
 CURRENT_EPOCH=$(cat "/tmp/.claude-epoch-${SESSION_ID}" 2>/dev/null || echo 0)
+EPOCH="$CURRENT_EPOCH"  # stamp_way_epoch uses $EPOCH
 stamp_way_epoch "$WAY_MARKER_NAME" "$SESSION_ID"
+
+# --- Tree disclosure tracking ---
+# When a child way fires, check if its parent has already fired this session.
+# Records: depth in tree, parent epoch, epoch distance from parent.
+TREE_DEPTH=0
+PARENT_MARKER=""
+PARENT_EPOCH=""
+EPOCH_FROM_PARENT=""
+
+# Walk up the directory tree looking for ancestor markers
+# Count all fired ancestors for depth; record nearest for parent info
+_tree_path="$WAY"
+while [[ "$_tree_path" == */* ]]; do
+  _tree_path="${_tree_path%/*}"  # strip last component
+  _parent_marker_name=$(echo "$_tree_path" | tr '/' '-')
+  _parent_marker="/tmp/.claude-way-${_parent_marker_name}-${SESSION_ID:-$(date +%Y%m%d)}"
+  if [[ -f "$_parent_marker" ]]; then
+    TREE_DEPTH=$((TREE_DEPTH + 1))
+    # Record nearest parent only (first ancestor found)
+    if [[ -z "$PARENT_MARKER" ]]; then
+      PARENT_MARKER="$_tree_path"
+      PARENT_EPOCH=$(cat "/tmp/.claude-way-epoch-${_parent_marker_name}-${SESSION_ID}" 2>/dev/null || echo 0)
+      EPOCH_FROM_PARENT=$((CURRENT_EPOCH - PARENT_EPOCH))
+    fi
+  fi
+done
+
+# Count sibling disclosure coverage (how many siblings of this way have fired?)
+_parent_dir="${WAY%/*}"
+if [[ "$_parent_dir" != "$WAY" ]]; then
+  _sibling_total=0
+  _sibling_fired=0
+  # Check both project-local and global ways for siblings
+  for _ways_base in "$PROJECT_DIR/.claude/ways" "${HOME}/.claude/hooks/ways"; do
+    [[ -d "${_ways_base}/${_parent_dir}" ]] || continue
+    for _sib_dir in "${_ways_base}/${_parent_dir}"/*/; do
+      [[ -f "${_sib_dir}way.md" ]] || continue
+      _sibling_total=$((_sibling_total + 1))
+      _sib_name="${_sib_dir#${_ways_base}/}"
+      _sib_name="${_sib_name%/}"
+      _sib_marker_name=$(echo "$_sib_name" | tr '/' '-')
+      [[ -f "/tmp/.claude-way-${_sib_marker_name}-${SESSION_ID:-$(date +%Y%m%d)}" ]] && _sibling_fired=$((_sibling_fired + 1))
+    done
+  done
+fi
+
+# Write tree metrics file (append, one JSON line per disclosure event)
+METRICS_FILE="/tmp/.claude-way-metrics-${SESSION_ID:-$(date +%Y%m%d)}.jsonl"
+jq -n -c \
+  --arg way "$WAY" \
+  --arg parent "${PARENT_MARKER:-none}" \
+  --argjson depth "$TREE_DEPTH" \
+  --argjson epoch "$CURRENT_EPOCH" \
+  --arg parent_epoch "${PARENT_EPOCH:-}" \
+  --arg epoch_distance "${EPOCH_FROM_PARENT:-}" \
+  --argjson sibling_total "${_sibling_total:-0}" \
+  --argjson sibling_fired "${_sibling_fired:-0}" \
+  --arg trigger "$TRIGGER" \
+  '{way: $way, parent: $parent, depth: $depth, epoch: $epoch,
+    parent_epoch: (if $parent_epoch == "" then null else ($parent_epoch | tonumber) end),
+    epoch_distance: (if $epoch_distance == "" then null else ($epoch_distance | tonumber) end),
+    sibling_total: $sibling_total, sibling_fired: $sibling_fired,
+    trigger: $trigger}' \
+  >> "$METRICS_FILE" 2>/dev/null || true
 
 # Log event
 if $IS_REDISCLOSURE; then
@@ -138,5 +203,6 @@ else
   LOG_ARGS=(event=way_fired way="$WAY" domain="$DOMAIN"
     trigger="$TRIGGER" scope="$SCOPE" project="$PROJECT_DIR" session="$SESSION_ID")
 fi
+[[ -n "$PARENT_MARKER" ]] && LOG_ARGS+=(parent="$PARENT_MARKER" tree_depth="$TREE_DEPTH" epoch_distance="$EPOCH_FROM_PARENT")
 [[ -n "$TEAM" ]] && LOG_ARGS+=(team="$TEAM")
 "${HOME}/.claude/hooks/ways/log-event.sh" "${LOG_ARGS[@]}"

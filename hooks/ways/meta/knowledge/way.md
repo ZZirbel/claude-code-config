@@ -1,5 +1,5 @@
 ---
-pattern: \bway\b|\bways\b|knowledge|guidance|context.?inject
+pattern: (^| )ways?( |$)|knowledge|guidance|context.?inject
 scope: agent, subagent
 provenance:
   policy:
@@ -59,3 +59,6 @@ Each (way, session) pair has its own marker. Multiple ways can fire per prompt. 
 - Project: `$PROJECT/.claude/ways/{domain}/{wayname}/way.md`
 - Disable domains: `~/.claude/ways.json` → `{"disabled": ["domain"]}`
 - Ways can nest: `{domain}/{parent}/{child}/way.md` for progressive disclosure
+- When a parent way fires, child thresholds are lowered 20% (domain context is established)
+- Tree disclosure metrics are tracked per-session (parent, depth, epoch distance, sibling coverage)
+- Think strategies are multi-turn ways that steer reasoning across several turns (auto-detected, opt-out)
