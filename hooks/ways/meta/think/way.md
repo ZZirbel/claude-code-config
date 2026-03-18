@@ -4,29 +4,41 @@ vocabulary: explore options approaches trade-off balance alternatives stuck prin
 threshold: 2.0
 scope: agent, subagent
 ---
-# Think Strategies
+# Structured Thinking
 
-When facing complex reasoning tasks, use a structured thinking strategy via the Skill tool. Each strategy is a step-by-step cognitive scaffold — invoke the skill and follow its stages.
+When you encounter complexity, don't reach for a framework first. Evaluate whether you need one.
 
-## Available Strategies
+## The Metacognitive Check
 
-| Problem Shape | Strategy Skill | When to Use |
+Before solving, pause and assess: **is your understanding trending toward clarity or away from it?**
+
+Do not attempt to solve in this first cycle. Just evaluate the direction:
+
+1. **Trending clear** — You can see the shape of the answer. Proceed normally. No scaffolding needed.
+2. **Trending unclear** — The problem has competing concerns, hidden dependencies, or you're uncertain which direction to go. Escalate.
+
+## Escalation Gradient
+
+| Level | What happens | When |
 |---|---|---|
-| Multiple viable approaches | `/think-tree` | "What are the options?" — branch, evaluate, prune, select |
-| Three competing objectives | `/think-trilemma` | "We can't have all three" — satisfice, don't maximize |
-| High-stakes decision | `/think-consistency` | "Are we sure?" — 3-5 independent reasoning paths, take consensus |
-| Stuck or need first principles | `/think-stepback` | "Why does this work this way?" — abstract, then apply |
-| Investigation or debugging | `/think-react` | "Figure out why" — reason-act-observe cycle |
+| **Internal reasoning** | Think harder silently — extend your reasoning, consider more angles | Unclear but likely resolvable with more thought |
+| **External strategy** | Use a structured strategy (below) — surfaces your reasoning step-by-step | Internal reasoning isn't converging; the human should see the work |
+| **Collaborative** | Discuss with the human — they have context you lack | Strategy hits unknowns that tools can't resolve |
 
-## How to Use
+Most problems resolve at level 1. The strategies exist for when they don't.
 
-1. Recognize the problem shape from the table above
-2. Invoke the matching skill (e.g., `/think-tree`)
-3. Follow the stages in order — the skill tracks progress
-4. Complete all stages before concluding
+You don't have to wait for human input to begin an external strategy. But if during your reasoning steps you encounter unknowns that can't be resolved through your tools, the remaining resource is the human. Ask.
 
-## When NOT to Use
+## External Strategies
 
-- Simple, straightforward tasks with obvious answers
-- When the user has already decided and just needs execution
-- When time pressure makes structured reasoning counterproductive
+When you escalate to an external strategy, select based on problem shape and invoke the skill:
+
+| Problem Shape | Strategy | Invoke |
+|---|---|---|
+| Multiple viable approaches | Tree of Thoughts | `/think-tree` |
+| Three competing objectives | Trilemma | `/think-trilemma` |
+| High-stakes, need confidence | Self-Consistency | `/think-consistency` |
+| Stuck, need first principles | Step-Back | `/think-stepback` |
+| Investigation or debugging | ReAct | `/think-react` |
+
+Each strategy is a step-by-step scaffold. The skill tracks progress through stages — follow them in order.

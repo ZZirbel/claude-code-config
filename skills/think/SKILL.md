@@ -6,33 +6,32 @@ allowed-tools: Bash, Read, Glob
 
 # Think Strategies
 
-Select and invoke a structured reasoning framework. Each strategy is a separate skill with step-by-step stages.
+Explicit invocation of the structured thinking escalation. Use `/think` when you want to force an external reasoning strategy — the metacognitive check in the think way normally handles this autonomously.
 
 ## Usage
 
 ```
-/think                    # Show available strategies
-/think <strategy>         # Invoke a specific strategy skill
+/think                    # Show available strategies and select one
+/think <strategy>         # Invoke a specific strategy directly
 ```
 
 ## Available Strategies
 
-| Problem Shape | Skill | Stages | When to Use |
-|---|---|---|---|
-| Multiple viable approaches | `/think-tree` | 7 | "What are the options?" — branch, evaluate, prune |
-| Three competing objectives | `/think-trilemma` | 6 | "We can't have all three" — satisfice |
-| High-stakes decision | `/think-consistency` | 5 | "Are we sure?" — independent paths, consensus |
-| Stuck / need principles | `/think-stepback` | 5 | "Why does this work?" — abstract, then apply |
-| Investigation / debugging | `/think-react` | 7 | "Figure out why" — reason-act-observe cycle |
+| Problem Shape | Skill | When to Use |
+|---|---|---|
+| Multiple viable approaches | `/think-tree` | "What are the options?" — branch, evaluate, prune |
+| Three competing objectives | `/think-trilemma` | "We can't have all three" — satisfice |
+| High-stakes decision | `/think-consistency` | "Are we sure?" — independent paths, consensus |
+| Stuck / need principles | `/think-stepback` | "Why does this work?" — abstract, then apply |
+| Investigation / debugging | `/think-react` | "Figure out why" — reason-act-observe cycle |
 
-## How It Works
+## When to Use `/think` Explicitly
 
-1. The Think Strategies way fires on reasoning-related prompts (via semantic matching)
-2. You (or the user) select the appropriate strategy
-3. Invoke the strategy skill — it provides step-by-step guidance
-4. Follow all stages in order before concluding
+- You want to **force** external reasoning even if the agent's metacognitive check would have stayed internal
+- You want to **choose** a specific strategy rather than letting the agent select
+- You want to **see the reasoning** — external strategies surface each step
 
-Strategy definitions live in `~/.claude/hooks/ways/meta/think/strategies/`.
+The think way's escalation gradient (internal → external → collaborative) handles most cases automatically. `/think` is the manual override.
 
 ## Session Lifecycle
 
