@@ -85,12 +85,22 @@ For small/obvious changes, the test plan can be brief.
 - Exception: `/ship full-sail` is rejected for team repos — tell the user why.
 
 **Solo/pair repos (≤2 active contributors):**
-- **Trivial** (typos, config, single-file): merge directly
-- **Small** (1-3 files, clear intent): quick self-review of the diff is enough
-- **Significant** (architecture, multi-file, behavioral): suggest the user review
-- `/ship full-sail` skips the pause entirely for any change size
+- **Default**: Offer to spawn a `code-reviewer` subagent against the PR. This is the
+  normal path — don't wait for the user to ask. Frame it as: "I'll run a code review
+  on this PR before we merge" and proceed unless the user declines.
+- **Trivial** (typos, config, single-file): mention the review is optional, still offer
+- `/ship full-sail` skips both the review and the pause
 
 State your assessment and let the user decide.
+
+**Running the review:**
+
+```
+Agent(subagent_type="code-reviewer", prompt="Review PR #<number> in this repo.
+Run gh pr diff <number> to see the changes. Post findings as a gh pr comment.")
+```
+
+After the review completes, summarize findings and ask whether to proceed to merge.
 
 ### 6. Merge
 
@@ -102,16 +112,26 @@ Use `--merge` (not squash or rebase) unless the user prefers otherwise.
 
 ### 7. Cleanup
 
+After merge, always run the full cleanup sequence — don't stop at `git pull`:
+
 ```bash
-git checkout main && git pull
+git checkout main && git pull && git fetch --prune
 ```
 
-Git typically prunes the remote tracking ref on pull after merge.
-If the local branch lingers:
+Then delete the local branch we just merged:
 
 ```bash
 git branch -d <branch>
 ```
+
+And verify the workspace is clean:
+
+```bash
+git branch  # Should show only main (and any other active work branches)
+```
+
+This keeps the repo tidy. Stale local branches and dangling remote tracking refs
+accumulate fast if you skip this.
 
 ## Key Principles
 

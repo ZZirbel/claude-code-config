@@ -41,6 +41,14 @@ We use PRs for all changes, including solo projects. A PR without reviewers stil
 - **Team**: Full PR with context, reviewers, and linked issues
 - **Team (3+ contributors)**: Consider enabling [Claude Code Review](https://claude.com/blog/code-review) — automated multi-agent PR analysis that catches bugs skimmed reviews miss. $15-25/review, Team/Enterprise plans, org spending caps available
 
+## Code Review Before Merge
+
+After creating a PR, offer to spawn a `code-reviewer` subagent to review it before merging. This is the default workflow — don't wait for the user to request it.
+
+## Post-Merge Cleanup
+
+After merging a PR, always run the full cleanup: `git checkout main && git pull && git fetch --prune`, then `git branch -d <branch>`. Stale branches accumulate fast — clean up every time.
+
 ## When User Mentions GitHub
 
 **Trigger words**: "issue", "PR", "pull request", "review", "comments", "checks"
