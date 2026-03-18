@@ -154,13 +154,13 @@ This step has no PASS/FAIL. After the agent finishes, the user evaluates the int
 
 ---
 
-### Step 9 — Think way is session-gated
+### Step 9 — Think way re-fires after strategy completion
 
 > **USER**: Type exactly: `what are the trade-offs between the three options`
 
 > **CLAUDE**: Check if the Structured Thinking way fires again on this related prompt.
 
-**Expected**: The way does NOT re-fire (marker exists from Step 7). The agent should continue reasoning with the escalation gradient already internalized from the first firing.
+**Expected**: If Step 8b completed a full strategy cycle (including cleanup), the way marker was cleared — so the way **will re-fire**. This is correct: a completed strategy should allow the think way to activate again for new problems. If Step 8b was skipped or the strategy wasn't completed, the marker from Step 7 persists and the way stays silent. Report which case you're in.
 
 ---
 
@@ -255,7 +255,7 @@ rm -f /tmp/.claude-think-session 2>/dev/null
 > | 7 | Think way fires | Metacognitive check + escalation gradient | ? |
 > | 8 | Metacognitive check | Agent assesses clarity; escalates decisively if unclear | ? |
 > | 8b | Autonomous escalation | No pass/fail — evaluate engagement + collaboration | ? |
-> | 9 | Think way session-gated | Way does not re-fire | ? |
+> | 9 | Think way post-strategy | Re-fires if strategy completed (marker cleared); silent if not | ? |
 > | 10 | Session registration | Strategy skill creates session file | ? |
 > | 11 | Overlapping session blocked | Second skill refuses to start | ? |
 > | 12 | Session cleanup | Session file removed | ? |
