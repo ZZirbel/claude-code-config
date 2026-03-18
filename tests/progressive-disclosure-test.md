@@ -101,47 +101,55 @@ The root security way should NOT re-fire (marker exists from Step 1).
 
 ---
 
-## Part B: Think Strategy Way
+## Part B: Structured Thinking — Metacognitive Escalation
 
-### Step 7 — Think Strategies way fires on reasoning prompt
+The think way teaches an escalation gradient: internal check → internal reasoning → external strategy → collaborative. These steps test whether the way fires correctly, whether the agent performs the metacognitive check, and whether autonomous escalation works.
+
+### Step 7 — Structured Thinking way fires on reasoning prompt
 
 > **USER**: Type exactly: `we need to explore different approaches for the caching layer, there are several options to consider`
 
-> **CLAUDE**: Check if the Think Strategies way fired. Look for "# Think Strategies" heading with the strategy selection table. Report:
-1. Did the way fire?
-2. Is the strategy table present (tree-of-thoughts, trilemma, etc.)?
+> **CLAUDE**: Check if the Structured Thinking way fired. Look for these key elements:
+> 1. "# Structured Thinking" heading
+> 2. "The Metacognitive Check" section (trending clear vs unclear)
+> 3. "Escalation Gradient" table (internal → external → collaborative)
+> 4. "External Strategies" table with strategy skills
+> 5. "Engaging the Human" section with `AskUserQuestion` guidance
 
-**Expected**: The Think Strategies way fires (vocabulary: explore, options, approaches, trade-off, balance, alternatives). You should see a table of available strategy skills and guidance on when to use each one. No auto-activation of a specific strategy — the way provides the menu, Claude or the user selects.
-
----
-
-### Step 8 — Think strategy does NOT auto-activate
-
-> **CLAUDE**: Verify that no think strategy state file was created. The way+skills architecture does not auto-activate — it presents options.
-
-```bash
-ls /tmp/.claude-think-*.json 2>/dev/null
-```
-
-**Expected**: No state file exists. The way fires as guidance; specific strategies are invoked via skill (e.g., `/think-tree`).
+**Expected**: The way fires (vocabulary: explore, options, approaches, trade-off, balance, alternatives). You should see the metacognitive check framework and escalation gradient — NOT just a strategy menu. The way teaches the agent *how to decide* whether to escalate, not just *what to escalate to*.
 
 ---
 
-### Step 9 — Think strategy way is session-gated
+### Step 8 — Agent performs metacognitive check
+
+> **CLAUDE**: Observe your own response to the user's Step 7 prompt. Did you:
+> 1. Perform a metacognitive check (assess clarity vs uncertainty)?
+> 2. If trending unclear: decide on an escalation level?
+> 3. If escalating to external strategy: invoke the skill **immediately and decisively** (no "should I use..." hedging)?
+>
+> Report what you actually did — the test is whether the way's guidance shaped your behavior.
+
+**Expected**: The agent should have assessed the problem direction. For this prompt ("explore different approaches... several options"), the metacognitive check should trend **unclear** (multiple viable approaches, no obvious winner). The agent MAY autonomously invoke `/think-tree` — if so, it should do so decisively without asking permission. If the agent stayed at internal reasoning, that's also valid — the test is that the check happened, not that escalation occurred.
+
+---
+
+### Step 9 — Think way is session-gated
 
 > **USER**: Type exactly: `what are the trade-offs between the three options`
 
-> **CLAUDE**: Check if the Think Strategies way fires again on this related prompt.
+> **CLAUDE**: Check if the Structured Thinking way fires again on this related prompt.
 
-**Expected**: The way does NOT re-fire (marker exists from Step 7). This is correct — the way fires once per session. If the user wants a specific strategy, they invoke the skill directly.
+**Expected**: The way does NOT re-fire (marker exists from Step 7). The agent should continue reasoning with the escalation gradient already internalized from the first firing.
 
 ---
 
-## Part B2: Think Strategy Skill Session Lifecycle
+## Part B2: Think Strategy Session Lifecycle
 
-### Step 10 — Skill creates session registration
+These steps test the session lifecycle when an external strategy is invoked — whether by autonomous escalation or explicit `/think` invocation.
 
-> **CLAUDE**: Clean up any leftover state, then invoke the `/think-tree` skill. After it registers, verify the session file exists:
+### Step 10 — Strategy invocation creates session registration
+
+> **CLAUDE**: First, clean up any leftover state:
 
 ```bash
 rm -f /tmp/.claude-think-session 2>/dev/null
@@ -155,7 +163,7 @@ rm -f /tmp/.claude-think-session 2>/dev/null
 cat /tmp/.claude-think-session 2>/dev/null
 ```
 
-**Expected**: The file contains `tree-of-thoughts`. The skill registered its session before beginning work.
+**Expected**: The file contains `tree-of-thoughts`. The skill registered its session before beginning work. Note: in normal flow the agent would invoke this autonomously during escalation — the explicit `/think-tree` here is to isolate the lifecycle test.
 
 ---
 
@@ -165,7 +173,7 @@ cat /tmp/.claude-think-session 2>/dev/null
 
 > **CLAUDE**: The step-back skill should detect the active tree-of-thoughts session and ask whether to finish or abandon it first. Report whether the skill blocked or proceeded.
 
-**Expected**: The skill detects `/tmp/.claude-think-session` contains `tree-of-thoughts` and does NOT start a new session. It asks the user to finish or abandon the active session first.
+**Expected**: The skill detects `/tmp/.claude-think-session` contains `tree-of-thoughts` and does NOT start a new session. It asks the user to finish or abandon the active session first. This prevents conflicting reasoning strategies from running simultaneously.
 
 ---
 
@@ -174,16 +182,16 @@ cat /tmp/.claude-think-session 2>/dev/null
 > **CLAUDE**: Simulate abandoning the session by running the cleanup:
 
 ```bash
-rm -f /tmp/.claude-think-session /tmp/.claude-way-meta-think-* 2>/dev/null
+rm -f /tmp/.claude-think-session 2>/dev/null
 ```
 
-> Then verify both are gone:
+> Then verify it's gone:
 
 ```bash
-ls /tmp/.claude-think-session /tmp/.claude-way-meta-think-* 2>/dev/null; echo "exit: $?"
+[[ -f /tmp/.claude-think-session ]] && echo "EXISTS" || echo "GONE (clean)"
 ```
 
-**Expected**: Both files are removed. Exit code is non-zero (files don't exist). The think way marker is also cleared, meaning the think way can fire again for new problems in this session.
+**Expected**: File is removed. The think way marker is also eligible for cleanup (strategies clear it on completion), meaning the think way can fire again for new problems later in the session.
 
 ---
 
@@ -223,18 +231,19 @@ ls /tmp/.claude-think-session /tmp/.claude-way-meta-think-* 2>/dev/null; echo "e
 > | 4 | Sibling fires | Secrets way, coverage 2/3 | ? |
 > | 5 | Docs tree | Mermaid child fires | ? |
 > | 6 | TDD anti-rationalization | Rationalizations table present | ? |
-> | 7 | Think way fires | Strategy menu injected | ? |
-> | 8 | No auto-activation | No state file created | ? |
+> | 7 | Think way fires | Metacognitive check + escalation gradient | ? |
+> | 8 | Metacognitive check | Agent assesses clarity; escalates decisively if unclear | ? |
 > | 9 | Think way session-gated | Way does not re-fire | ? |
-> | 10 | Skill session registration | Session file created with strategy name | ? |
+> | 10 | Session registration | Strategy skill creates session file | ? |
 > | 11 | Overlapping session blocked | Second skill refuses to start | ? |
-> | 12 | Session cleanup | Session + way marker removed | ? |
+> | 12 | Session cleanup | Session file removed | ? |
 > | 13 | Negative test | Nothing fires | ? |
 > | 14 | Way does not re-fire | Marker prevents repeat | ? |
 >
 > Report pass/fail count and observations about:
 > - Whether progressive disclosure trees deliver the right content at the right depth
 > - Whether anti-rationalization tables appear at the expected specificity level
-> - Whether the think strategies way fires and is session-gated correctly
-> - Whether think skill session lifecycle prevents overlapping sessions and cleans up correctly
+> - Whether the metacognitive check shapes agent behavior (not just injects content)
+> - Whether autonomous escalation to external strategies is decisive (no hedging)
+> - Whether session lifecycle prevents overlapping strategies and cleans up correctly
 > - Whether tree disclosure metrics capture parent-child relationships
