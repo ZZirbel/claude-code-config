@@ -25,6 +25,8 @@ Result: PASS / FAIL / UNEXPECTED
 Detail: [what happened vs what was expected]
 ```
 
+**A note on Step 8b**: That step presents a real problem for you to reason about. There is no right or wrong answer — we're tuning for two things: (1) maximal autonomous engagement (you drive the reasoning without waiting for permission) and (2) maximal collaborative opportunity (when you hit genuine unknowns, you engage the human naturally). Reading this expected outcome in advance doesn't help because the outcome depends entirely on how you actually reason through the problem. Just work the problem authentically.
+
 Begin Step 1 NOW.
 
 ---
@@ -133,6 +135,25 @@ The think way teaches an escalation gradient: internal check → internal reason
 
 ---
 
+### Step 8b — Autonomous escalation on a real problem
+
+> **USER**: Type exactly: `We have a read-heavy API hitting Postgres, about 50k requests per minute, 95% reads. Response times are creeping up. We could add Redis as an application cache, use Postgres query caching, put a CDN in front of the API, or denormalize the hot tables. Data changes every few minutes and consistency matters — stale prices would be bad.`
+
+> **CLAUDE**: Work this problem. Don't report on the test — actually engage with the problem using whatever level of the escalation gradient you land on. The user will observe your behavior afterward.
+
+**What we're observing** (not "expected" — there's no single right answer):
+- Did the agent perform the metacognitive check and decide on an escalation level?
+- If it escalated to an external strategy: did it invoke the skill **immediately** (no "I think I should use..." hedging)?
+- If it stayed internal: was internal reasoning actually sufficient, or did the agent avoid escalating when it should have?
+- Did the agent engage the human via `AskUserQuestion` when it hit genuine unknowns (deployment constraints, budget, team expertise, existing infrastructure)?
+- Was the reasoning visible and collaborative, or opaque and self-contained?
+
+This step has no PASS/FAIL. After the agent finishes, the user evaluates the interaction quality along two axes: **autonomous engagement** (agent drove the reasoning forward without waiting for permission) and **collaborative opportunity** (agent surfaced unknowns and invited human input at the right moments).
+
+> **USER**: After the agent works the problem, type: `OK, let's continue with the test at Step 9`
+
+---
+
 ### Step 9 — Think way is session-gated
 
 > **USER**: Type exactly: `what are the trade-offs between the three options`
@@ -233,6 +254,7 @@ rm -f /tmp/.claude-think-session 2>/dev/null
 > | 6 | TDD anti-rationalization | Rationalizations table present | ? |
 > | 7 | Think way fires | Metacognitive check + escalation gradient | ? |
 > | 8 | Metacognitive check | Agent assesses clarity; escalates decisively if unclear | ? |
+> | 8b | Autonomous escalation | No pass/fail — evaluate engagement + collaboration | ? |
 > | 9 | Think way session-gated | Way does not re-fire | ? |
 > | 10 | Session registration | Strategy skill creates session file | ? |
 > | 11 | Overlapping session blocked | Second skill refuses to start | ? |
@@ -244,6 +266,6 @@ rm -f /tmp/.claude-think-session 2>/dev/null
 > - Whether progressive disclosure trees deliver the right content at the right depth
 > - Whether anti-rationalization tables appear at the expected specificity level
 > - Whether the metacognitive check shapes agent behavior (not just injects content)
-> - Whether autonomous escalation to external strategies is decisive (no hedging)
+> - Whether autonomous escalation to external strategies is decisive (no hedging) — Step 8b is the key observation
 > - Whether session lifecycle prevents overlapping strategies and cleans up correctly
 > - Whether tree disclosure metrics capture parent-child relationships
