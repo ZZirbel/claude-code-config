@@ -1,4 +1,7 @@
 ---
+description: Sub-agent delegation — when and how to spawn specialized agents for token-intensive work
+vocabulary: subagent delegate spawn agent background task parallel worker teammate
+threshold: 2.0
 pattern: subagent|delegat|spawn.*agent|review.*pr|plan.*task|organiz.*docs
 scope: agent
 ---

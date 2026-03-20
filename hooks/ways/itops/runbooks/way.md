@@ -1,4 +1,7 @@
 ---
+description: Runbook automation, executable playbooks, SOPs as code, operational procedures
+vocabulary: runbook playbook sop procedure operational automation executable standard checklist step-by-step operations
+threshold: 2.0
 pattern: runbook|runbook.?(automation|executable)|playbook|sop.?(automation|as.?code)|operational.?procedure
 scope: agent, subagent
 ---
