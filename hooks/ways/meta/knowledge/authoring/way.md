@@ -47,6 +47,8 @@ threshold: 2.0            # BM25 score threshold (higher = stricter)
 
 No `match:` field needed — the presence of `description:` + `vocabulary:` enables semantic matching automatically. Matching is additive: pattern OR semantic (either fires the way).
 
+**All values must be single-line.** Do not use YAML folded (`>`) or literal (`|`) scalars — the trigger pipeline parsers only read the first line, silently returning `>` as the value. Use `lint-ways.sh` to catch this.
+
 For state-based triggers:
 ```markdown
 ---

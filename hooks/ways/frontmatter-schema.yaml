@@ -1,8 +1,10 @@
 # Way frontmatter schema — single source of truth
 # Read by: lint-ways.sh, ways-tests skill, authoring way
 #
-# Fields are categorized by role and marked required/optional.
-# "required" means the linter flags its absence.
+# Fields are categorized by role and marked required/recommended/optional.
+# "required" means the linter flags its absence as an error.
+# "recommended" means every way should have it, but the system has a sensible
+#   default. Linter flags absence as a warning (with --strict).
 # "optional" means absence is correct and never flagged.
 # "conditional" means required only when a paired field is present.
 
@@ -18,7 +20,7 @@ way:
       role: Space-separated domain keywords for BM25 scoring
     threshold:
       type: number
-      required: optional
+      required: recommended  # always explicit about scoring sensitivity
       default: 2.0
       role: BM25 score threshold (higher = stricter)
     pattern:
@@ -38,7 +40,7 @@ way:
     scope:
       type: enum
       values: [agent, subagent, teammate]
-      required: optional
+      required: recommended
       default: agent
       role: Who receives this way (comma-separated)
     when:

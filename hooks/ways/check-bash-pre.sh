@@ -76,7 +76,7 @@ scan_ways "$PROJECT_DIR/.claude/ways"
 scan_ways "${HOME}/.claude/hooks/ways"
 
 # --- Check scanning ---
-source "${HOME}/.claude/hooks/ways/match-way.sh"
+# match-way.sh already sourced above; just init the semantic engine
 detect_semantic_engine
 
 scan_checks() {

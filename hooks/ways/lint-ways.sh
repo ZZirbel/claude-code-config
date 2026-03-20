@@ -19,11 +19,13 @@ PROJECT_DIR="${CLAUDE_PROJECT_DIR:-}"
 
 MODE="lint"
 FIX=false
+STRICT=false
 TARGET=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --fix)    FIX=true; shift ;;
+        --strict) STRICT=true; shift ;;
         --schema) MODE="schema"; shift ;;
         --help|-h)
             sed -n '2,/^$/{ s/^# //; s/^#//; p }' "$0"
@@ -92,9 +94,25 @@ extract_when_subfields() {
 WAY_FIELDS=$(extract_fields "way" | tr '\n' ' ')
 CHECK_FIELDS=$(extract_fields "check" | tr '\n' ' ')
 WHEN_SUBFIELDS=$(extract_when_subfields | tr '\n' ' ')
-VALID_SCOPES=$(extract_enum_values "way" "scope")
-VALID_MACROS=$(extract_enum_values "way" "macro")
-VALID_TRIGGERS=$(extract_enum_values "way" "trigger")
+VALID_SCOPES=$(extract_enum_values "way" "scope" | tr -s ' ')
+VALID_MACROS=$(extract_enum_values "way" "macro" | tr -s ' ')
+VALID_TRIGGERS=$(extract_enum_values "way" "trigger" | tr -s ' ')
+
+# Extract recommended fields from schema
+extract_recommended() {
+    local type="$1"
+    awk -v type="$type" '
+        /^[a-z]+:$/ { ct = $0; gsub(/:/, "", ct); next }
+        ct == type && /^  [a-z]+:$/ { in_cat = 1; next }
+        ct == type && in_cat && /^    [a-z_]+:$/ { fname = $0; gsub(/^    /, "", fname); gsub(/:$/, "", fname); next }
+        ct == type && in_cat && /required: recommended/ { print fname }
+        /^  [a-z]/ && !/^    / { in_cat = 0 }
+        /^[a-z]/ { in_cat = 0; ct = "" }
+    ' "$SCHEMA_FILE"
+}
+
+WAY_RECOMMENDED=$(extract_recommended "way" | tr '\n' ' ')
+CHECK_RECOMMENDED=$(extract_recommended "check" | tr '\n' ' ')
 
 if [[ "$MODE" == "schema" ]]; then
     cat "$SCHEMA_FILE"
@@ -131,6 +149,19 @@ lint_file() {
 
     local file_errors=0
     local file_warnings=0
+
+    # Check for multi-line YAML values (> or |) — the trigger pipeline parsers
+    # only read single-line values. Multi-line silently returns ">" as the value,
+    # breaking semantic matching.
+    local multiline_fields
+    multiline_fields=$(echo "$frontmatter" | awk '/^[a-z_]+: *[>|] *$/{gsub(/:.*/, ""); print}')
+    for mlf in $multiline_fields; do
+        echo "  ERROR: $relpath — '$mlf' uses multi-line YAML (> or |) which the trigger pipeline cannot parse. Use a single line."
+        ((file_errors++))
+        if [[ "$FIX" == "true" ]]; then
+            echo "    fix: collapse '$mlf:' value to a single line"
+        fi
+    done
 
     # Check for unknown top-level fields
     local fields
@@ -244,6 +275,25 @@ lint_file() {
                 ((file_warnings++))
             fi
         fi
+    fi
+
+    # Check recommended fields (--strict only)
+    if [[ "$STRICT" == "true" ]]; then
+        local recommended
+        if [[ "$filetype" == "check" ]]; then
+            recommended="$CHECK_RECOMMENDED"
+        else
+            recommended="$WAY_RECOMMENDED"
+        fi
+        for rec in $recommended; do
+            if ! echo "$frontmatter" | grep -q "^${rec}:"; then
+                echo "  RECOMMEND: $relpath — missing recommended field '$rec'"
+                ((file_warnings++))
+                if [[ "$FIX" == "true" ]]; then
+                    echo "    fix: add '$rec:' with appropriate value"
+                fi
+            fi
+        done
     fi
 
     # check.md specific: verify anchor and check sections
