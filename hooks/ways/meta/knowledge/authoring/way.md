@@ -73,6 +73,17 @@ threshold: 90             # percentage (0-100)
 - `threshold:` - For context-threshold: percentage (0-100)
 - `path:` - For file-exists: glob pattern relative to project
 
+**Preconditions (`when:` block):**
+- `when:` - Deterministic gate checked before any matching. If unmet, way is skipped entirely.
+  - `project:` - Only fire in this project directory (e.g., `~/.claude`). Path is resolved for comparison.
+
+```yaml
+when:
+  project: ~/.claude    # only fire when working in claude-code-config
+```
+
+Ways without a `when:` block fire everywhere (the default). Use `when:` sparingly — only for self-referential ways that are meaningless outside their home project.
+
 **Other:**
 - `macro:` - `prepend` or `append` to run `macro.sh` for dynamic context
 - `scope:` - `agent`, `subagent`, `teammate` (comma-separated, default: agent)

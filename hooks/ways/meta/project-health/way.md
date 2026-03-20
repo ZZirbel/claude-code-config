@@ -11,6 +11,8 @@ vocabulary: >
   relevance feature gap opportunity
 threshold: 2.5
 scope: agent
+when:
+  project: ~/.claude
 ---
 # Project Health
 

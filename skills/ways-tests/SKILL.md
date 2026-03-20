@@ -161,6 +161,7 @@ Validate way frontmatter and tree structure:
 - If `pattern` present: verify valid regex
 - `threshold` must be numeric if present
 - `scope` values must be valid (agent, subagent, teammate)
+- If `when:` block present: validate `project:` path exists on disk
 - For check.md files: verify `## anchor` and `## check` sections exist, and parent way.md exists
 
 ### Progressive Disclosure Validation (when `--all`)

@@ -9,6 +9,35 @@
 
 WAYS_DIR="${WAYS_DIR:-${HOME}/.claude/hooks/ways}"
 
+# Check `when:` preconditions — deterministic gate before any matching.
+# Returns 0 if all preconditions are met (or no when: block), 1 if any fail.
+# Args: $1=frontmatter (raw text)
+# Requires: PROJECT_DIR to be set by the calling scanner
+check_when_preconditions() {
+  local frontmatter="$1"
+
+  # Extract when: block fields (indented under when:)
+  local when_project
+  when_project=$(echo "$frontmatter" | awk '/^when:/{found=1;next} found && /^  project:/{gsub(/^  project: */,"");print;exit} found && /^[^ ]/{exit}')
+
+  # No when: block → no gate → allow
+  [[ -z "$when_project" ]] && return 0
+
+  # when.project: check if current project dir matches
+  if [[ -n "$when_project" ]]; then
+    # Expand ~ to $HOME for comparison
+    local expanded_project="${when_project/#\~/$HOME}"
+    local resolved_project
+    resolved_project=$(cd "$expanded_project" 2>/dev/null && pwd -P || echo "$expanded_project")
+    local resolved_current
+    resolved_current=$(cd "${PROJECT_DIR:-.}" 2>/dev/null && pwd -P || echo "${PROJECT_DIR:-.}")
+
+    [[ "$resolved_current" != "$resolved_project" ]] && return 1
+  fi
+
+  return 0
+}
+
 # Detect semantic matcher: BM25 binary → gzip NCD → none
 # Sets: SEMANTIC_ENGINE, WAY_MATCH_BIN
 detect_semantic_engine() {

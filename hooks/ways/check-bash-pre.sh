@@ -30,6 +30,9 @@ CURRENT_SCOPE=$(detect_scope "$SESSION_ID")
 source "${HOME}/.claude/hooks/ways/epoch.sh"
 bump_epoch "$SESSION_ID"
 
+# Shared matching logic (provides check_when_preconditions)
+source "${HOME}/.claude/hooks/ways/match-way.sh"
+
 # Scan ways in a directory (recursive)
 scan_ways() {
   local dir="$1"
@@ -41,14 +44,20 @@ scan_ways() {
     waypath="${wayfile#$dir/}"
     waypath="${waypath%/way.md}"
 
+    # Extract frontmatter
+    frontmatter=$(awk 'NR==1 && /^---$/{p=1; next} p && /^---$/{exit} p{print}' "$wayfile")
+
     # Extract frontmatter fields
-    commands=$(awk '/^---$/{p=!p; next} p && /^commands:/' "$wayfile" | sed 's/^commands: *//')
-    pattern=$(awk '/^---$/{p=!p; next} p && /^pattern:/' "$wayfile" | sed 's/^pattern: *//')
+    commands=$(echo "$frontmatter" | awk '/^commands:/{gsub(/^commands: */,"");print;exit}')
+    pattern=$(echo "$frontmatter" | awk '/^pattern:/{gsub(/^pattern: */,"");print;exit}')
 
     # Check scope -- skip if current scope not in way's scope list
-    scope=$(awk '/^---$/{p=!p; next} p && /^scope:/' "$wayfile" | sed 's/^scope: *//')
+    scope=$(echo "$frontmatter" | awk '/^scope:/{gsub(/^scope: */,"");print;exit}')
     scope="${scope:-agent}"
     scope_matches "$scope" "$CURRENT_SCOPE" || continue
+
+    # Check when: preconditions -- deterministic gate before matching
+    check_when_preconditions "$frontmatter" || continue
 
     # Check command patterns
     if [[ -n "$commands" && "$CMD" =~ $commands ]]; then

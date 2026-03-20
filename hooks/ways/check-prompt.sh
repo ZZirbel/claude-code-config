@@ -68,6 +68,9 @@ scan_ways() {
     scope_raw="${scope_raw:-agent}"
     scope_matches "$scope_raw" "$CURRENT_SCOPE" || continue
 
+    # Check when: preconditions -- deterministic gate before matching
+    check_when_preconditions "$frontmatter" || continue
+
     # Parent-aware threshold lowering: if a parent way already fired this session,
     # reduce the child's threshold by 20% (parent activation is evidence of domain context)
     effective_threshold="$threshold"
