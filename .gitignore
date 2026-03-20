@@ -68,6 +68,7 @@
 !hooks/ways/
 !hooks/ways/*.md
 !hooks/ways/*.sh
+!hooks/ways/frontmatter-schema.yaml
 # Nested ways: domain/wayname[/subway...]/way.md + macro.sh + bundled tools
 !hooks/ways/*/
 !hooks/ways/**/
