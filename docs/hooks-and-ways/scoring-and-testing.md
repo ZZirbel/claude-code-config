@@ -186,6 +186,23 @@ When writing vocabulary, it's natural to think in *your* terms — the terms tha
 
 The fix is always the same: write target prompts *before* you write the vocabulary, then add the terms the prompts actually use.
 
+## Sparsity as the Guard Against Overfitting
+
+The natural instinct when a way misses a prompt is to add more vocabulary. When it misses another, add more. This works locally — each fix raises the score for the target prompt — but globally it's overfitting. Every term you add to a vocabulary is a term that could match prompts meant for a *different* way.
+
+The system's defense against this is **sparsity**: each way should occupy a narrow, distinct region of the scoring space with minimal overlap against other ways. The goal isn't to maximize any single way's score. It's to maximize the *distance between ways* — so that for any given prompt, at most one or two ways fire, and it's obvious which one is the right one.
+
+This is why the cross-way ranking check (Step 6 in the worked example) matters more than the individual scores. A way that scores 3.0 on its target prompt and has clean separation from every other way is healthier than a way that scores 8.0 but overlaps with three neighbors.
+
+Concretely:
+
+- **Narrow vocabularies are better than broad ones.** 15 precise terms beat 40 general terms. "upstream", "changelog", "drift" are specific to project-health. "update", "check", "status" are shared by many domains.
+- **Don't chase every synonym.** If "shipped" fixes a miss, add it. But don't then add "deployed", "released", "landed", "merged", "delivered" — each one increases the surface area for false matches against delivery/release or delivery/github.
+- **Threshold is a second lever.** If a way fires correctly but also fires weakly on unrelated prompts, raising the threshold is often better than trimming vocabulary. It preserves the true positives while cutting the false positives.
+- **Accept some misses.** A way that fires for 90% of relevant prompts with zero false positives is better than one that fires for 100% but also fires for 5% of irrelevant prompts. The 0 FP constraint is hard; recall is soft.
+
+The test harness enforces this: it tracks false positive rate as a hard constraint (must be 0) while accuracy can vary. Sparsity is how you maintain 0 FP as the vocabulary grows.
+
 ## Tools Reference
 
 | Command | Purpose |
