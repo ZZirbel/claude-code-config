@@ -66,13 +66,17 @@ The `pair` command remains available for single-way testing (used by `/ways-test
 
 Locale support separates two concerns: **matching** (frontmatter vocabulary in the user's language) and **injection** (the way body Claude reads). These don't have to come from the same file.
 
-Three tiers of localization, from cheapest to most complete:
+Two tiers of localization:
 
-**Tier 1 — Polyglot frontmatter, single-language body.** One file (`way.md` or `way-en.md`) contains vocabulary lines for multiple languages alongside the English body. A Spanish user's prompt matches on Spanish vocabulary terms, but the injected guidance is English. Zero additional files. Just add vocabulary terms in other languages to the existing frontmatter.
+**Tier 1 — Language-specific matchers, shared body.** `way-en.md` has the full body. `way-es.md` has only frontmatter with Spanish vocabulary — no body. The scanner matches on `way-es.md`'s frontmatter (using the Spanish stemmer) but injects `way-en.md`'s body. The stub says "I know how to match in this language" but defers to the English file for content.
 
-**Tier 2 — Language-specific matchers, shared body.** `way-en.md` has the full body. `way-es.md` has only frontmatter with Spanish vocabulary — no body. The scanner matches on `way-es.md`'s frontmatter but injects `way-en.md`'s body. The stub says "I know how to match in this language" but defers to the English file for content. Cheap to add — a frontmatter-only file per language.
+**Tier 2 — Fully translated.** Both `way-en.md` and `way-fr.md` have frontmatter AND body in their respective languages. Full localization. Most expensive to maintain — the body content must be kept in sync across translations.
 
-**Tier 3 — Fully translated.** Both `way-en.md` and `way-fr.md` have frontmatter AND body in their respective languages. Full localization. Most expensive to maintain — the body content must be kept in sync across translations.
+**Rejected: Polyglot frontmatter** (mixing vocabulary from multiple languages in one file). This doesn't work — the English Porter2 stemmer mangles Spanish/French morphology. "vulnerabilidades" stemmed by the English stemmer produces unpredictable results. Each language's vocabulary must be processed by its own stemmer, which means separate files with separate `--language` invocations. There is no cheap shortcut that avoids per-language files.
+
+**Complete coverage requirement.** Adding a language is an all-or-nothing commitment across the entire way corpus. You cannot add Spanish stubs for 3 ways and leave the other 52 English-only — a Spanish user would get guidance for 3 topics and silence for the rest, which is worse than getting all guidance in English.
+
+The linter enforces this: if any `way-es.md` exists anywhere in the tree, every way directory must have a `way-es.md` (Tier 1 stub minimum). Creating 5 language stubs in 5 different ways produces a lint explosion: `(66 ways * 5 languages) - 5 existing = 325 errors`. That's the honest cost of "we support 5 languages" made visible before you ship. The lint explosion is intentional — it's the quality gate showing you the commitment you're making. Each stub is small (frontmatter-only, ~5 lines), but the aggregate authoring and scoring work is real. This prevents casual, incomplete localization from degrading the user experience.
 
 ```
 hooks/ways/softwaredev/code/security/
@@ -99,11 +103,11 @@ The key principle: **frontmatter is for matching, body is for injection, and the
 
 - **Stemmers:** Snowball ships stemmers for 20+ languages. The binary links multiple Snowball stemmer modules and selects at runtime via `--language`. This is a compile-time decision — each supported language adds ~5-10KB to the binary.
 - **Stopwords:** Move from a hardcoded C array to per-language stopword files in `tools/way-match/stopwords/` (e.g., `en.txt`, `es.txt`, `fr.txt`). These are small, source-auditable text files — same trust tier as the C source. The binary loads the appropriate file at startup based on `--language`, falling back to the baked-in English list if the file is absent.
-- **Corpus:** The `ways-corpus.jsonl` gains a `locale` field per entry. IDF is computed within-locale — Spanish term frequencies don't contaminate English IDF and vice versa. The corpus generator reads `locale:` from each way file's frontmatter.
+- **Corpus:** The `ways-corpus.jsonl` gains a `locale` field per entry. IDF is computed over the full corpus regardless of locale — not within-locale. A small locale (3 Spanish ways) computed in isolation would have meaningless IDF where every term is rare. Computing IDF across all 55+ documents preserves discriminative power. The `--language` flag affects stemming and stopwords only, not IDF calculation.
 
 All three components are rebuilt together. The supported language set is not declared in a config — it's discovered from what exists. The corpus generator scans all `way-*.md` files, collects the set of locale codes in use (from filenames: `way-en.md` → `en`, `way-es.md` → `es`), and the Makefile includes the corresponding Snowball stemmers and stopword files. Adding a new language is: add `way-{lang}.md` files with frontmatter, run the rebuild. The build system discovers the language, the linter validates the pieces, the binary includes the stemmer.
 
-**Scope:** Most ways stay English-only (Tier 1 with potential polyglot vocabulary). Tier 2 and 3 only exist where someone writes them. The system degrades gracefully — no locale file means English, which is the current behavior.
+**Scope:** Most ways stay English-only. Tier 1 and 2 only exist where someone commits to full-corpus coverage for a language. The system degrades gracefully — no locale file means English, which is the current behavior.
 
 ### Phase 3 testing: Cross-language scoring validation
 
@@ -148,9 +152,11 @@ A delta within ~1.0 of the baseline indicates comparable vocabulary coverage. A 
 
 The test harness groups fixtures by language, runs each group with the appropriate `--language` flag, and reports per-language accuracy alongside the cross-language delta.
 
-**Linter integration:** `lint-ways.sh --strict` gains locale checks:
-- For each `way-{lang}.md`, verify the language code is valid
-- For Tier 2 stubs (frontmatter only), verify a body file exists
+**Linter integration:** `lint-ways.sh` gains locale checks (not behind `--strict` — these are errors, not recommendations):
+- Scan all way directories, collect every locale code found (from `way-{lang}.md` filenames)
+- On first encounter of a non-English locale: check every other way directory for that locale. Flag every directory missing it. This is the complete-coverage enforcement — one `way-es.md` anywhere means `way-es.md` everywhere.
+- For each `way-{lang}.md`, verify the language code is a valid Snowball stemmer language
+- For Tier 1 stubs (frontmatter only), verify a body file (`way-en.md` or `way.md`) exists in the same directory
 - If test fixtures exist for multiple languages, run cross-language delta and flag deltas > 1.0
 
 ## Consequences
@@ -160,7 +166,7 @@ The test harness groups fixtures by language, runs each group with the appropria
 - Phase 1: Correct IDF across the real corpus. Immediate accuracy improvement with minimal code change.
 - Phase 2: 55x fewer process spawns per prompt. Measurable latency reduction on every user interaction.
 - Phase 3: Ways system becomes accessible to non-English users. Same architecture, same matching quality, different language.
-- Each phase ships independently — no big-bang migration.
+- Phases are sequential but each is a shippable increment — Phase 1 improves accuracy alone, Phase 2 improves performance alone, Phase 3 requires both but adds locale support. No big-bang migration.
 - The trust chain from ADR-014 is preserved: tier 0 (bash fallback) → tier 1 (source-auditable binary) → tier 1.5 (source-auditable binary + tracked corpus).
 
 ### Negative
