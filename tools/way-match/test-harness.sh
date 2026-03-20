@@ -6,6 +6,9 @@
 # - Per-test pass/fail
 # - Match matrix (TP, FP, TN, FN per scorer)
 # - Head-to-head comparison (BM25 wins, NCD wins, ties)
+#
+# Compatible with bash 3.2+ (macOS default)
+# Credit: bash 3.2 compat identified by @0x3dge (PR #38)
 
 set -euo pipefail
 
@@ -14,89 +17,83 @@ FIXTURES="$SCRIPT_DIR/test-fixtures.jsonl"
 NCD_SCRIPT="$SCRIPT_DIR/../../hooks/ways/semantic-match.sh"
 BM25_BINARY="$SCRIPT_DIR/../../bin/way-match"
 
-# Way corpus: id|description|vocabulary|threshold
-declare -A WAY_DESC WAY_VOCAB WAY_THRESH
-WAY_DESC[softwaredev-code-testing]="writing unit tests, test coverage, mocking dependencies, test-driven development"
-WAY_VOCAB[softwaredev-code-testing]="unittest coverage mock tdd assertion jest pytest rspec testcase spec fixture describe expect verify"
-WAY_THRESH[softwaredev-code-testing]="2.0"
+# Way corpus: parallel indexed arrays (bash 3.2 compatible — no associative arrays)
+WAY_IDS=()
+WAY_DESCS=()
+WAY_VOCABS=()
+WAY_THRESHS=()
 
-WAY_DESC[softwaredev-docs-api]="designing REST APIs, HTTP endpoints, API versioning, request response structure"
-WAY_VOCAB[softwaredev-docs-api]="endpoint api rest route http status pagination versioning graphql request response header payload crud webhook"
-WAY_THRESH[softwaredev-docs-api]="2.0"
+add_way() { WAY_IDS+=("$1"); WAY_DESCS+=("$2"); WAY_VOCABS+=("$3"); WAY_THRESHS+=("$4"); }
 
-WAY_DESC[softwaredev-environment-debugging]="debugging, troubleshooting failures, investigating broken behavior"
-WAY_VOCAB[softwaredev-environment-debugging]="debug breakpoint stacktrace investigate troubleshoot regression bisect crash crashes crashing error fail bug log trace exception segfault hang timeout step broken"
-WAY_THRESH[softwaredev-environment-debugging]="2.0"
+add_way "softwaredev-code-testing" \
+  "writing unit tests, test coverage, mocking dependencies, test-driven development" \
+  "unittest coverage mock tdd assertion jest pytest rspec testcase spec fixture describe expect verify" "2.0"
+add_way "softwaredev-docs-api" \
+  "designing REST APIs, HTTP endpoints, API versioning, request response structure" \
+  "endpoint api rest route http status pagination versioning graphql request response header payload crud webhook" "2.0"
+add_way "softwaredev-environment-debugging" \
+  "debugging, troubleshooting failures, investigating broken behavior" \
+  "debug breakpoint stacktrace investigate troubleshoot regression bisect crash crashes crashing error fail bug log trace exception segfault hang timeout step broken" "2.0"
+add_way "softwaredev-code-security" \
+  "security, authentication, secrets management, input validation" \
+  "authentication secrets password credentials owasp injection xss sql sanitize vulnerability bcrypt hash encrypt token cert ssl tls csrf cors rotate login expose exposed harden" "2.0"
+add_way "softwaredev-architecture-design" \
+  "software system design, architecture patterns, database schema, component modeling, proposals, RFCs, design deliberation" \
+  "architecture pattern database schema modeling interface component modules factory observer strategy monolith microservice microservices domain layer coupling cohesion abstraction singleton proposal rfc sketch deliberation whiteboard" "2.0"
+add_way "softwaredev-environment-config" \
+  "configuration, environment variables, dotenv files, connection settings" \
+  "dotenv environment configuration envvar config.json config.yaml connection port host url setting variable string" "2.0"
+add_way "softwaredev-architecture-adr-context" \
+  "planning how to implement a feature, deciding an approach, understanding existing project decisions, starting work on an item, investigating why something was built a certain way" \
+  "plan approach debate implement build work pick understand investigate why how decision context tradeoff evaluate option consider scope" "2.0"
+add_way "softwaredev-delivery-commits" \
+  "git commit messages, branch naming, conventional commits, atomic changes" \
+  "commit message branch conventional feat fix refactor scope atomic squash amend stash rebase cherry" "2.0"
+add_way "softwaredev-delivery-github" \
+  "GitHub pull requests, issues, code review, CI checks, repository management" \
+  "pr pullrequest issue review checks ci label milestone fork repository upstream draft" "2.0"
+add_way "softwaredev-delivery-patches" \
+  "creating and applying patch files, git diff generation, patch series management" \
+  "patch diff apply hunk unified series format-patch" "2.0"
+add_way "softwaredev-delivery-release" \
+  "software releases, changelog generation, version bumping, semantic versioning, tagging" \
+  "release changelog version bump semver tag publish ship major minor breaking" "2.0"
+add_way "softwaredev-delivery-migrations" \
+  "database migrations, schema changes, table alterations, rollback procedures" \
+  "migration schema alter table column index rollback seed ddl prisma alembic knex flyway" "2.0"
+add_way "softwaredev-code-errors" \
+  "error handling patterns, exception management, try-catch boundaries, error wrapping and propagation" \
+  "exception handling catch throw boundary wrap rethrow fallback graceful recovery propagate unhandled" "2.0"
+add_way "softwaredev-code-quality" \
+  "code quality, refactoring, SOLID principles, code review standards, technical debt, maintainability" \
+  "refactor quality solid principle decompose extract method responsibility coupling cohesion maintainability readability" "2.0"
+add_way "softwaredev-code-performance" \
+  "performance optimization, profiling, benchmarking, latency" \
+  "optimize profile benchmark latency throughput memory cache bottleneck flamegraph allocation heap speed slow" "2.0"
+add_way "softwaredev-environment-deps" \
+  "dependency management, package installation, library evaluation, security auditing of third-party code" \
+  "dependency package library install upgrade outdated audit vulnerability license bundle npm pip cargo" "2.0"
+add_way "softwaredev-environment-ssh" \
+  "SSH remote access, key management, secure file transfer, non-interactive authentication" \
+  "ssh remote key agent scp rsync bastion jumphost tunnel forwarding batchmode noninteractive" "2.0"
+add_way "softwaredev-docs" \
+  "README authoring, docstrings, technical prose, Mermaid diagrams, project guides" \
+  "readme docstring technical writing mermaid diagram flowchart sequence onboarding" "2.0"
+add_way "softwaredev-architecture-threat-modeling" \
+  "threat modeling, STRIDE analysis, trust boundaries, attack surface assessment, security design review" \
+  "threat model stride attack surface trust boundary mitigation adversary dread spoofing tampering repudiation elevation" "2.0"
+add_way "softwaredev-docs-standards" \
+  "establishing team norms, coding conventions, testing philosophy, dependency policy, accessibility requirements" \
+  "convention norm guideline accessibility style guide linting rule agreement philosophy" "2.0"
 
-WAY_DESC[softwaredev-code-security]="security, authentication, secrets management, input validation"
-WAY_VOCAB[softwaredev-code-security]="authentication secrets password credentials owasp injection xss sql sanitize vulnerability bcrypt hash encrypt token cert ssl tls csrf cors rotate login expose exposed harden"
-WAY_THRESH[softwaredev-code-security]="2.0"
-
-WAY_DESC[softwaredev-architecture-design]="software system design, architecture patterns, database schema, component modeling, proposals, RFCs, design deliberation"
-WAY_VOCAB[softwaredev-architecture-design]="architecture pattern database schema modeling interface component modules factory observer strategy monolith microservice microservices domain layer coupling cohesion abstraction singleton proposal rfc sketch deliberation whiteboard"
-WAY_THRESH[softwaredev-architecture-design]="2.0"
-
-WAY_DESC[softwaredev-environment-config]="configuration, environment variables, dotenv files, connection settings"
-WAY_VOCAB[softwaredev-environment-config]="dotenv environment configuration envvar config.json config.yaml connection port host url setting variable string"
-WAY_THRESH[softwaredev-environment-config]="2.0"
-
-WAY_DESC[softwaredev-architecture-adr-context]="planning how to implement a feature, deciding an approach, understanding existing project decisions, starting work on an item, investigating why something was built a certain way"
-WAY_VOCAB[softwaredev-architecture-adr-context]="plan approach debate implement build work pick understand investigate why how decision context tradeoff evaluate option consider scope"
-WAY_THRESH[softwaredev-architecture-adr-context]="2.0"
-
-WAY_DESC[softwaredev-delivery-commits]="git commit messages, branch naming, conventional commits, atomic changes"
-WAY_VOCAB[softwaredev-delivery-commits]="commit message branch conventional feat fix refactor scope atomic squash amend stash rebase cherry"
-WAY_THRESH[softwaredev-delivery-commits]="2.0"
-
-WAY_DESC[softwaredev-delivery-github]="GitHub pull requests, issues, code review, CI checks, repository management"
-WAY_VOCAB[softwaredev-delivery-github]="pr pullrequest issue review checks ci label milestone fork repository upstream draft"
-WAY_THRESH[softwaredev-delivery-github]="2.0"
-
-WAY_DESC[softwaredev-delivery-patches]="creating and applying patch files, git diff generation, patch series management"
-WAY_VOCAB[softwaredev-delivery-patches]="patch diff apply hunk unified series format-patch"
-WAY_THRESH[softwaredev-delivery-patches]="2.0"
-
-WAY_DESC[softwaredev-delivery-release]="software releases, changelog generation, version bumping, semantic versioning, tagging"
-WAY_VOCAB[softwaredev-delivery-release]="release changelog version bump semver tag publish ship major minor breaking"
-WAY_THRESH[softwaredev-delivery-release]="2.0"
-
-WAY_DESC[softwaredev-delivery-migrations]="database migrations, schema changes, table alterations, rollback procedures"
-WAY_VOCAB[softwaredev-delivery-migrations]="migration schema alter table column index rollback seed ddl prisma alembic knex flyway"
-WAY_THRESH[softwaredev-delivery-migrations]="2.0"
-
-WAY_DESC[softwaredev-code-errors]="error handling patterns, exception management, try-catch boundaries, error wrapping and propagation"
-WAY_VOCAB[softwaredev-code-errors]="exception handling catch throw boundary wrap rethrow fallback graceful recovery propagate unhandled"
-WAY_THRESH[softwaredev-code-errors]="2.0"
-
-WAY_DESC[softwaredev-code-quality]="code quality, refactoring, SOLID principles, code review standards, technical debt, maintainability"
-WAY_VOCAB[softwaredev-code-quality]="refactor quality solid principle decompose extract method responsibility coupling cohesion maintainability readability"
-WAY_THRESH[softwaredev-code-quality]="2.0"
-
-WAY_DESC[softwaredev-code-performance]="performance optimization, profiling, benchmarking, latency"
-WAY_VOCAB[softwaredev-code-performance]="optimize profile benchmark latency throughput memory cache bottleneck flamegraph allocation heap speed slow"
-WAY_THRESH[softwaredev-code-performance]="2.0"
-
-WAY_DESC[softwaredev-environment-deps]="dependency management, package installation, library evaluation, security auditing of third-party code"
-WAY_VOCAB[softwaredev-environment-deps]="dependency package library install upgrade outdated audit vulnerability license bundle npm pip cargo"
-WAY_THRESH[softwaredev-environment-deps]="2.0"
-
-WAY_DESC[softwaredev-environment-ssh]="SSH remote access, key management, secure file transfer, non-interactive authentication"
-WAY_VOCAB[softwaredev-environment-ssh]="ssh remote key agent scp rsync bastion jumphost tunnel forwarding batchmode noninteractive"
-WAY_THRESH[softwaredev-environment-ssh]="2.0"
-
-WAY_DESC[softwaredev-docs]="README authoring, docstrings, technical prose, Mermaid diagrams, project guides"
-WAY_VOCAB[softwaredev-docs]="readme docstring technical writing mermaid diagram flowchart sequence onboarding"
-WAY_THRESH[softwaredev-docs]="2.0"
-
-WAY_DESC[softwaredev-architecture-threat-modeling]="threat modeling, STRIDE analysis, trust boundaries, attack surface assessment, security design review"
-WAY_VOCAB[softwaredev-architecture-threat-modeling]="threat model stride attack surface trust boundary mitigation adversary dread spoofing tampering repudiation elevation"
-WAY_THRESH[softwaredev-architecture-threat-modeling]="2.0"
-
-WAY_DESC[softwaredev-docs-standards]="establishing team norms, coding conventions, testing philosophy, dependency policy, accessibility requirements"
-WAY_VOCAB[softwaredev-docs-standards]="convention norm guideline accessibility style guide linting rule agreement philosophy"
-WAY_THRESH[softwaredev-docs-standards]="2.0"
-
-WAY_IDS=(softwaredev-code-testing softwaredev-docs-api softwaredev-environment-debugging softwaredev-code-security softwaredev-architecture-design softwaredev-environment-config softwaredev-architecture-adr-context softwaredev-delivery-commits softwaredev-delivery-github softwaredev-delivery-patches softwaredev-delivery-release softwaredev-delivery-migrations softwaredev-code-errors softwaredev-code-quality softwaredev-code-performance softwaredev-environment-deps softwaredev-environment-ssh softwaredev-docs softwaredev-architecture-threat-modeling softwaredev-docs-standards)
+# Lookup by way ID — returns index into parallel arrays
+way_index() {
+  local target="$1"
+  for i in $(seq 0 $((${#WAY_IDS[@]} - 1))); do
+    if [ "${WAY_IDS[$i]}" = "$target" ]; then echo "$i"; return 0; fi
+  done
+  echo "-1"; return 1
+}
 
 # --- Options ---
 RUN_NCD=true
@@ -131,10 +128,9 @@ total=0
 # --- NCD scorer ---
 ncd_matches_way() {
   local prompt="$1" way_id="$2"
-  local desc="${WAY_DESC[$way_id]}"
-  local vocab="${WAY_VOCAB[$way_id]}"
-  # NCD uses distance metric (0-1), not BM25 score threshold
-  # Must match check-prompt.sh hardcoded value (0.58)
+  local idx; idx=$(way_index "$way_id") || return 1
+  local desc="${WAY_DESCS[$idx]}"
+  local vocab="${WAY_VOCABS[$idx]}"
   local ncd_thresh="0.58"
 
   if bash "$NCD_SCRIPT" "$prompt" "$desc" "$vocab" "$ncd_thresh" 2>/dev/null; then
@@ -147,9 +143,10 @@ ncd_matches_way() {
 # --- BM25 scorer ---
 bm25_matches_way() {
   local prompt="$1" way_id="$2"
-  local desc="${WAY_DESC[$way_id]}"
-  local vocab="${WAY_VOCAB[$way_id]}"
-  local thresh="${WAY_THRESH[$way_id]}"
+  local idx; idx=$(way_index "$way_id") || return 1
+  local desc="${WAY_DESCS[$idx]}"
+  local vocab="${WAY_VOCABS[$idx]}"
+  local thresh="${WAY_THRESHS[$idx]}"
 
   if "$BM25_BINARY" pair \
     --description "$desc" \
@@ -170,11 +167,12 @@ find_best_match() {
 
   if [[ "$scorer" == "bm25" ]]; then
     local best_way="none" best_score="0"
-    for way_id in "${WAY_IDS[@]}"; do
+    for i in $(seq 0 $((${#WAY_IDS[@]} - 1))); do
+      local way_id="${WAY_IDS[$i]}"
       local stderr_out
       stderr_out=$("$BM25_BINARY" pair \
-        --description "${WAY_DESC[$way_id]}" \
-        --vocabulary "${WAY_VOCAB[$way_id]}" \
+        --description "${WAY_DESCS[$i]}" \
+        --vocabulary "${WAY_VOCABS[$i]}" \
         --query "$prompt" \
         --threshold "0" 2>&1 >/dev/null)
       local score
@@ -188,7 +186,8 @@ find_best_match() {
     done
     # Verify best actually meets its threshold
     if [[ "$best_way" != "none" ]]; then
-      local thresh="${WAY_THRESH[$best_way]}"
+      local bidx; bidx=$(way_index "$best_way") || true
+      local thresh="${WAY_THRESHS[$bidx]}"
       if command -v bc >/dev/null 2>&1 && (( $(echo "$best_score < $thresh" | bc -l) )); then
         best_way="none"
       fi
@@ -235,7 +234,7 @@ while IFS= read -r line; do
   case "$expected_type" in
     null)   is_negative=true ;;
     string) expected_list=("$(echo "$line" | jq -r '.expected')") ;;
-    array)  mapfile -t expected_list < <(echo "$line" | jq -r '.expected[]')
+    array)  while IFS= read -r item; do expected_list+=("$item"); done < <(echo "$line" | jq -r '.expected[]')
             [[ ${#expected_list[@]} -gt 1 ]] && is_coact=true ;;
   esac
 

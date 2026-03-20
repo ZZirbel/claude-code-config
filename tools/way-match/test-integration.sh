@@ -3,6 +3,9 @@
 # Reads frontmatter from real semantic ways and scores test prompts
 #
 # This tests the real pipeline: way files → frontmatter extraction → BM25 scoring
+#
+# Compatible with bash 3.2+ (macOS default)
+# Credit: bash 3.2 compat identified by @0x3dge (PR #38)
 
 set -euo pipefail
 
@@ -25,7 +28,12 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 # --- Extract frontmatter from actual way files ---
-declare -A WAY_DESC WAY_VOCAB WAY_THRESH WAY_PATH
+# Parallel indexed arrays (bash 3.2 compatible)
+WAY_IDS=()
+WAY_DESCS=()
+WAY_VOCABS=()
+WAY_THRESHS=()
+WAY_PATHS=()
 
 echo -e "${BOLD}=== Integration Test: Real Way Files ===${NC}"
 echo ""
@@ -33,29 +41,27 @@ echo "Scanning for semantic ways..."
 echo ""
 
 while IFS= read -r wayfile; do
-  # Derive way ID from path
   rel=$(echo "$wayfile" | sed "s|$WAYS_DIR/||;s|/way\.md$||")
   way_id=$(echo "$rel" | tr '/' '-')
 
-  # Extract frontmatter only (between --- delimiters), strip YAML comments
   frontmatter=$(sed -n '2,/^---$/{ /^---$/d; p; }' "$wayfile")
   desc=$(echo "$frontmatter" | sed -n 's/^description: *//p' | sed 's/ *#.*//')
   vocab=$(echo "$frontmatter" | sed -n 's/^vocabulary: *//p' | sed 's/ *#.*//')
   thresh=$(echo "$frontmatter" | sed -n 's/^threshold: *//p' | sed 's/ *#.*//')
 
-  # Skip ways without semantic matching fields
   [[ -z "$desc" || -z "$vocab" ]] && continue
 
-  WAY_DESC[$way_id]="$desc"
-  WAY_VOCAB[$way_id]="$vocab"
-  WAY_THRESH[$way_id]="${thresh:-2.0}"
-  WAY_PATH[$way_id]="$wayfile"
+  WAY_IDS+=("$way_id")
+  WAY_DESCS+=("$desc")
+  WAY_VOCABS+=("$vocab")
+  WAY_THRESHS+=("${thresh:-2.0}")
+  WAY_PATHS+=("$wayfile")
 
   printf "  %-30s thresh=%-5s  %s\n" "$way_id" "${thresh:-2.0}" "$(echo "$desc" | cut -c1-60)"
 done < <(find "$WAYS_DIR" -name "way.md" -type f | sort)
 
 echo ""
-echo "Found ${#WAY_DESC[@]} semantic ways"
+echo "Found ${#WAY_IDS[@]} semantic ways"
 echo ""
 
 # --- Test prompts with expected matches ---
@@ -118,27 +124,27 @@ for test_case in "${TEST_CASES[@]}"; do
   # Score against all ways with BM25
   bm25_matches=()
   bm25_scores=""
-  for way_id in "${!WAY_DESC[@]}"; do
+  for i in $(seq 0 $((${#WAY_IDS[@]} - 1))); do
+    local_id="${WAY_IDS[$i]}"
     score=$("$BM25_BINARY" pair \
-      --description "${WAY_DESC[$way_id]}" \
-      --vocabulary "${WAY_VOCAB[$way_id]}" \
+      --description "${WAY_DESCS[$i]}" \
+      --vocabulary "${WAY_VOCABS[$i]}" \
       --query "$prompt" \
-      --threshold 0.0 2>&1 | grep -oP 'score=\K[0-9.]+')
-    if (( $(echo "$score > 0" | bc -l 2>/dev/null || echo 0) )); then
-      bm25_scores="$bm25_scores $way_id=$score"
-      # Check against per-way threshold from way.md
-      thresh="${WAY_THRESH[$way_id]}"
-      if (( $(echo "$score >= $thresh" | bc -l 2>/dev/null || echo 0) )); then
-        bm25_matches+=("$way_id")
+      --threshold 0.0 2>&1 | sed -n 's/.*score=\([0-9.]*\).*/\1/p')
+    if [ -n "$score" ] && [ "$(echo "$score > 0" | bc -l 2>/dev/null || echo 0)" = "1" ]; then
+      bm25_scores="$bm25_scores $local_id=$score"
+      thresh="${WAY_THRESHS[$i]}"
+      if [ "$(echo "$score >= $thresh" | bc -l 2>/dev/null || echo 0)" = "1" ]; then
+        bm25_matches+=("$local_id")
       fi
     fi
   done
 
   # Score against all ways with NCD (uses fixed NCD threshold, not BM25 threshold)
   ncd_matches=()
-  for way_id in "${!WAY_DESC[@]}"; do
-    if bash "$NCD_SCRIPT" "$prompt" "${WAY_DESC[$way_id]}" "${WAY_VOCAB[$way_id]}" "0.55" 2>/dev/null; then
-      ncd_matches+=("$way_id")
+  for i in $(seq 0 $((${#WAY_IDS[@]} - 1))); do
+    if bash "$NCD_SCRIPT" "$prompt" "${WAY_DESCS[$i]}" "${WAY_VOCABS[$i]}" "0.55" 2>/dev/null; then
+      ncd_matches+=("${WAY_IDS[$i]}")
     fi
   done
 

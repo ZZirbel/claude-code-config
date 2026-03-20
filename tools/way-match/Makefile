@@ -12,11 +12,20 @@ ALL_SRC   = $(SRC) $(SNOW_SRC)
 BIN       = bin/way-match
 CFLAGS    = -O2 -I$(SRCDIR)
 
-# Default: build with cosmocc for cross-platform APE binary
+# Default: cosmocc for cross-platform APE, fall back to system cc
 $(BIN): $(ALL_SRC) | bin
-	$(COSMOCC) $(CFLAGS) -o $@ $(ALL_SRC)
+	@if command -v $(COSMOCC) >/dev/null 2>&1; then \
+		echo "Building with cosmocc (cross-platform APE)"; \
+		$(COSMOCC) $(CFLAGS) -o $@ $(ALL_SRC); \
+	else \
+		echo "cosmocc not found, building with system compiler"; \
+		$(CC) $(CFLAGS) -lm -o $@ $(ALL_SRC); \
+	fi
 
-# Local development build with system compiler
+# Explicit targets for when you want to force one or the other
+cosmo: $(ALL_SRC) | bin
+	$(COSMOCC) $(CFLAGS) -o $(BIN) $(ALL_SRC)
+
 local: $(ALL_SRC) | bin
 	$(CC) $(CFLAGS) -lm -o $(BIN) $(ALL_SRC)
 
