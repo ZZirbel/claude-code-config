@@ -153,16 +153,41 @@ When `--apply` is specified:
 
 ## Lint Mode
 
-Validate way frontmatter and tree structure:
+Validate way frontmatter against the official schema. Use the linter script for mechanical validation:
 
-### Frontmatter Validation
-- `description` must be present
-- If vocabulary present: check both description and vocabulary exist
-- If `pattern` present: verify valid regex
-- `threshold` must be numeric if present
-- `scope` values must be valid (agent, subagent, teammate)
-- If `when:` block present: validate `project:` path exists on disk
-- For check.md files: verify `## anchor` and `## check` sections exist, and parent way.md exists
+```bash
+# Lint all ways (global + project-local)
+bash ~/.claude/hooks/ways/lint-ways.sh
+
+# Lint with fix suggestions
+bash ~/.claude/hooks/ways/lint-ways.sh --fix
+
+# Print the frontmatter schema
+bash ~/.claude/hooks/ways/lint-ways.sh --schema
+
+# Lint a specific directory
+bash ~/.claude/hooks/ways/lint-ways.sh hooks/ways/meta/
+```
+
+The linter checks:
+- Unknown fields (typos, deprecated fields)
+- Invalid values (non-numeric threshold, bad scope values, bad macro values)
+- Incomplete pairs (description without vocabulary, or vice versa)
+- `when:` block validation (unknown sub-fields, path existence)
+- check.md structure (`## anchor` and `## check` sections)
+
+The linter does NOT flag absence of optional fields. A way without `when:`, `macro:`, or `provenance:` is correct — these fields are additive. Only flag what's wrong, not what's missing-but-optional.
+
+### Frontmatter Schema Reference
+
+Run `bash ~/.claude/hooks/ways/lint-ways.sh --schema` for the full field reference. Key categories:
+
+**Trigger fields**: `pattern`, `description`, `vocabulary`, `threshold`, `files`, `commands`, `trigger`
+**Scope/preconditions**: `scope`, `when:` (with sub-field `project:`)
+**Display**: `macro` (prepend/append)
+**State**: `trigger`, `repeat`, `path`
+**Governance**: `provenance:` (stripped before injection, zero context cost)
+**Extended**: `scan_exclude` (macro-specific)
 
 ### Progressive Disclosure Validation (when `--all`)
 When linting all ways, also check tree structural health:

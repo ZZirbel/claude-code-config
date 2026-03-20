@@ -1,0 +1,112 @@
+# Way frontmatter schema — single source of truth
+# Read by: lint-ways.sh, ways-tests skill, authoring way
+#
+# Fields are categorized by role and marked required/optional.
+# "required" means the linter flags its absence.
+# "optional" means absence is correct and never flagged.
+# "conditional" means required only when a paired field is present.
+
+way:
+  trigger:
+    description:
+      type: string
+      required: conditional  # required if vocabulary present
+      role: Semantic matching reference text
+    vocabulary:
+      type: string
+      required: conditional  # required if description present
+      role: Space-separated domain keywords for BM25 scoring
+    threshold:
+      type: number
+      required: optional
+      default: 2.0
+      role: BM25 score threshold (higher = stricter)
+    pattern:
+      type: regex
+      required: optional
+      role: Regex matched against user prompts
+    files:
+      type: regex
+      required: optional
+      role: Regex matched against file paths (Edit/Write hooks)
+    commands:
+      type: regex
+      required: optional
+      role: Regex matched against bash commands
+
+  preconditions:
+    scope:
+      type: enum
+      values: [agent, subagent, teammate]
+      required: optional
+      default: agent
+      role: Who receives this way (comma-separated)
+    when:
+      type: block
+      required: optional
+      role: Deterministic gate checked before any matching
+      subfields:
+        project:
+          type: path
+          required: optional
+          role: Only fire in this project directory
+
+  state:
+    trigger:
+      type: enum
+      values: [context-threshold, file-exists, session-start]
+      required: optional
+      role: State-based trigger type (instead of pattern/semantic)
+    repeat:
+      type: boolean
+      required: optional
+      role: Keep firing until condition met
+    path:
+      type: glob
+      required: optional
+      role: For file-exists trigger, glob relative to project
+
+  display:
+    macro:
+      type: enum
+      values: [prepend, append]
+      required: optional
+      role: Run macro.sh alongside way content
+
+  extended:
+    scan_exclude:
+      type: regex
+      required: optional
+      role: File patterns for macros to skip (macro-specific)
+
+  governance:
+    provenance:
+      type: block
+      required: optional
+      role: Policy URIs, controls, rationale (stripped before injection)
+
+check:
+  trigger:
+    description:
+      type: string
+      required: conditional
+    vocabulary:
+      type: string
+      required: conditional
+    threshold:
+      type: number
+      required: optional
+      default: 2.0
+    files:
+      type: regex
+      required: optional
+    commands:
+      type: regex
+      required: optional
+
+  preconditions:
+    scope:
+      type: enum
+      values: [agent, subagent, teammate]
+      required: optional
+      default: agent
