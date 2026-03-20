@@ -277,8 +277,17 @@ lint_file() {
         fi
     fi
 
-    # Check recommended fields (--strict only)
+    # Check recommended fields and matching strategy (--strict only)
     if [[ "$STRICT" == "true" ]]; then
+        # Flag regex-only ways (have pattern but no semantic matching)
+        local has_pattern
+        has_pattern=$(echo "$frontmatter" | grep -c '^pattern:' || true)
+        if [[ "$has_pattern" -gt 0 && "$has_desc" -eq 0 && "$has_vocab" -eq 0 ]]; then
+            echo "  RECOMMEND: $relpath — regex-only matching; add description + vocabulary for natural language coverage"
+            ((file_warnings++))
+        fi
+
+        # Flag recommended fields (only for semantic ways where they apply)
         local recommended
         if [[ "$filetype" == "check" ]]; then
             recommended="$CHECK_RECOMMENDED"
@@ -286,6 +295,10 @@ lint_file() {
             recommended="$WAY_RECOMMENDED"
         fi
         for rec in $recommended; do
+            # threshold is only recommended for semantic ways
+            if [[ "$rec" == "threshold" && "$has_desc" -eq 0 ]]; then
+                continue
+            fi
             if ! echo "$frontmatter" | grep -q "^${rec}:"; then
                 echo "  RECOMMEND: $relpath — missing recommended field '$rec'"
                 ((file_warnings++))

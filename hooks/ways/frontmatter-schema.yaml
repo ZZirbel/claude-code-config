@@ -26,7 +26,7 @@ way:
     pattern:
       type: regex
       required: optional
-      role: Regex matched against user prompts
+      role: Supplementary regex trigger — use alongside semantic, not instead of
     files:
       type: regex
       required: optional

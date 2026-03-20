@@ -21,31 +21,31 @@ provenance:
 
 ## Way File Format
 
-Each way lives in `{domain}/{wayname}/way.md` with YAML frontmatter:
+Each way lives in `{domain}/{wayname}/way.md` with YAML frontmatter.
 
-```markdown
----
-pattern: foo|bar|regex.*  # for regex matching
-files: \.md$|docs/.*
-commands: git\ commit
-macro: prepend
----
-# Way Name
+## Matching Strategy
 
-## Guidance
-- Compact, actionable points
-```
+**Use semantic matching (BM25).** This is the primary matching strategy for prompt-triggered ways.
 
-For semantic matching (BM25 — preferred):
 ```markdown
 ---
 description: what this way covers, in natural language
 vocabulary: domain specific keywords users would say
 threshold: 2.0            # BM25 score threshold (higher = stricter)
+scope: agent
 ---
 ```
 
-No `match:` field needed — the presence of `description:` + `vocabulary:` enables semantic matching automatically. Matching is additive: pattern OR semantic (either fires the way).
+Regex-only matching (`pattern:` without `description:`/`vocabulary:`) will miss any phrasing you didn't predict. Users don't say "code.?quality" — they say "clean this up" or "this function is a mess." BM25 with a good vocabulary handles the variation. Regex doesn't.
+
+If you still want regex-only, that's your choice, but expect poor recall on natural language prompts.
+
+**When to add `pattern:` alongside semantic:** As a supplementary trigger for exact matches you never want to miss. Matching is additive — pattern OR semantic, either fires the way. Use both when you need guaranteed activation on specific terms AND broad natural language coverage.
+
+**Other trigger types** (not prompt-based, semantic doesn't apply):
+- `files:` — regex matched against file paths (Edit/Write hooks)
+- `commands:` — regex matched against bash commands
+- `trigger:` — state-based (context-threshold, file-exists, session-start)
 
 **All values must be single-line.** Do not use YAML folded (`>`) or literal (`|`) scalars — the trigger pipeline parsers only read the first line, silently returning `>` as the value. Use `lint-ways.sh` to catch this.
 
