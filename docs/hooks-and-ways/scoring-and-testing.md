@@ -2,6 +2,29 @@
 
 How we verify that ways trigger correctly — and only when they should.
 
+## The Self-Validating Loop
+
+The ways system doesn't just deliver guidance — it instructs its own quality assurance.
+
+When Claude creates or modifies a way, the `meta/knowledge` way has already fired for that session, telling Claude how ways work — including that they use BM25 scoring with vocabulary and thresholds. The `/ways-tests` skill is listed in Claude's available tools. The memory system records "always verify new ways against sample prompts before shipping." The way-testing skill's own documentation includes scoring methodology, cross-way isolation checks, and vocabulary gap analysis.
+
+So when Claude finishes writing a way and moves to testing it, that behavior isn't a separate QA step bolted on after the fact. It's the system telling Claude to validate itself, using tools the system provides, against criteria the system defines. The loop looks like this:
+
+```
+ways tell Claude how ways work
+  → Claude creates a new way
+    → ways (+ skills + memory) tell Claude to score it
+      → Claude runs the scoring tool the system provides
+        → scores reveal vocabulary gaps
+          → Claude fixes the vocabulary
+            → the improved way is now part of the system
+              → that system tells Claude to score the next one
+```
+
+This is what makes the testing process reliable without a human manually running a test suite. Claude is both the author and the reviewer, but the *review criteria* come from the system itself — not from Claude's general training. The ways encode what "good" looks like for this specific project, and Claude applies those standards because the ways told it to.
+
+The worked example below shows this loop in action during an actual way creation session.
+
 ## The Problem
 
 Ways use BM25 scoring to decide whether a user's prompt is relevant to a particular domain of guidance. Each way has a vocabulary (terms it cares about), a description, and a threshold (minimum score to fire). Getting this right matters: a way that fires too eagerly drowns the user in irrelevant guidance; a way that never fires is dead weight.
