@@ -44,7 +44,7 @@ Write prose, not bullet points wearing a trenchcoat. Let ideas develop across se
 **Ask the user** about style preferences early. Use literary terms when discussing: register (formal/informal), diction (word choice), syntax (sentence structure), cadence (rhythm), tone (attitude toward subject). These terms are precise and help the user articulate what they want.
 
 **Avoid:**
-- LinkedIn voice — hollow superlatives, engagement bait, breathless enthusiasm disconnected from substance.
+- Corporate filler — hollow superlatives, engagement bait, breathless enthusiasm disconnected from substance.
 - Constructivism framing — "it's not X, it's Y" patterns that define by negation. Say what it is.
 - Adjective stacking. One precise adjective beats three vague ones.
 
