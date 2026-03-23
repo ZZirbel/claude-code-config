@@ -115,6 +115,8 @@
 !tools/way-embed/
 !tools/way-embed/*
 !tools/way-embed/llama.cpp
+!tools/mmaid/
+!tools/mmaid/*
 
 # Standalone tools (user-facing CLI utilities)
 !tools/

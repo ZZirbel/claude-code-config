@@ -21,11 +21,14 @@ help:
 	@echo "  make clean      Remove build artifacts"
 	@echo ""
 
-# Set up the semantic matching engine (embedding binary + model + corpus).
+# Set up the semantic matching engine + tools (embedding, mmaid, corpus).
 # This is the most common target — run it after cloning or pulling.
 setup:
 	@echo "Setting up semantic matching engine..."
 	$(MAKE) -C tools/way-embed setup
+	@echo ""
+	@echo "Setting up mmaid diagram renderer..."
+	@bash tools/mmaid/download-mmaid.sh || echo "  (mmaid optional — skipping)"
 
 # Full first-time install: make hooks executable, build way-match if needed, set up embeddings.
 install: hooks-executable setup
