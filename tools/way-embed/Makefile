@@ -70,7 +70,23 @@ test: $(BIN)
 	$(BIN) --version
 	@echo "PASS: version check"
 
+# Publish pre-built binary + model to GitHub Releases
+# Usage: make release VERSION=v0.1.0
+VERSION ?= v0.1.0
+RELEASE_TAG = way-embed-$(VERSION)
+GH_REPO = $(shell git -C ../.. remote get-url origin | sed 's|.*github.com[:/]||;s|\.git$$||')
+
+release: $(BIN) $(MODEL)
+	@echo "Publishing $(RELEASE_TAG) to $(GH_REPO)..."
+	@ls -lh $(BIN) $(MODEL)
+	gh release create $(RELEASE_TAG) \
+		--repo $(GH_REPO) \
+		--title "way-embed $(VERSION)" \
+		--notes-file $(SRCDIR)RELEASE.md \
+		$(BIN) $(MODEL)
+	@echo "Published: https://github.com/$(GH_REPO)/releases/tag/$(RELEASE_TAG)"
+
 clean:
 	rm -rf $(BUILDDIR) $(BUILDDIR)-cosmo
 
-.PHONY: cmake-build cosmo verify test model model-upstream setup clean
+.PHONY: cmake-build cosmo verify test model model-upstream setup release clean
