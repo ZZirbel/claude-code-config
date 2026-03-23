@@ -1,13 +1,17 @@
-Pre-built binary and model for ADR-108 embedding-based way matching.
+Pre-built binaries and model for ADR-108 embedding-based way matching.
 
 ## Quick Install
 
 ```bash
-# Download binary
-gh release download way-embed-v0.1.0 -p 'way-embed' -D ~/.claude/bin/
+# Detect your platform
+PLATFORM="$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m)"
+
+# Download platform binary + model
+gh release download way-embed-v0.1.0 \
+  -p "way-embed-${PLATFORM}" -D ~/.claude/bin/
+cp ~/.claude/bin/way-embed-${PLATFORM} ~/.claude/bin/way-embed
 chmod +x ~/.claude/bin/way-embed
 
-# Download model (21MB Q5_K_M)
 gh release download way-embed-v0.1.0 -p 'minilm-l6-v2.gguf' \
   -D "${XDG_CACHE_HOME:-~/.cache}/claude-ways/user/"
 
@@ -18,9 +22,28 @@ bash ~/.claude/tools/way-match/generate-corpus.sh
 bash ~/.claude/tools/way-embed/test-embedding.sh
 ```
 
+## Available platforms
+
+| Binary | Platform |
+|--------|----------|
+| `way-embed-linux-x86_64` | Linux x86_64 |
+| `way-embed-linux-aarch64` | Linux ARM64 |
+| `way-embed-darwin-x86_64` | macOS Intel |
+| `way-embed-darwin-arm64` | macOS Apple Silicon |
+
+## Build from source
+
+If your platform isn't listed:
+
+```bash
+cd ~/.claude/tools/way-embed && make setup
+```
+
+Requires: cmake, C++ compiler, git (for submodule).
+
 ## Verify model provenance
 
-If you prefer to download the model directly from the publisher:
+Download the model directly from HuggingFace instead of the release:
 
 ```bash
 bash ~/.claude/tools/way-embed/download-model.sh --upstream

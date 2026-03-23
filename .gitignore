@@ -117,9 +117,10 @@
 !models/
 !models/*
 
-# Built binaries (checked in, cross-platform APE)
+# Built binaries (way-match checked in, way-embed via GitHub Releases)
 !bin/
-!bin/*
+!bin/way-match
+bin/way-embed-*
 
 # Tests
 !tests/
