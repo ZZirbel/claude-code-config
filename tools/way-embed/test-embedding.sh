@@ -4,9 +4,16 @@
 
 set -euo pipefail
 
-WAY_EMBED="${HOME}/.claude/bin/way-embed"
+XDG_WAY="${XDG_CACHE_HOME:-$HOME/.cache}/claude-ways/user"
+if [[ -x "${XDG_WAY}/way-embed" ]]; then
+  WAY_EMBED="${XDG_WAY}/way-embed"
+elif [[ -x "${HOME}/.claude/bin/way-embed" ]]; then
+  WAY_EMBED="${HOME}/.claude/bin/way-embed"
+else
+  WAY_EMBED=""
+fi
 CORPUS="${HOME}/.claude/hooks/ways/ways-corpus.jsonl"
-MODEL="${XDG_CACHE_HOME:-$HOME/.cache}/claude-ways/user/minilm-l6-v2.gguf"
+MODEL="${XDG_WAY}/minilm-l6-v2.gguf"
 
 pass=0; fail=0; skip=0
 
