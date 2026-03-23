@@ -85,7 +85,7 @@ flowchart TB
     subgraph Session["Claude Code Session"]
         SS[SessionStart]:::event --> Core["show-core.sh<br/>Dynamic table + core.md"]:::script
 
-        UP[UserPromptSubmit]:::event --> CP["check-prompt.sh<br/>Regex · BM25 Semantic"]:::script
+        UP[UserPromptSubmit]:::event --> CP["check-prompt.sh<br/>Regex · Embedding/BM25"]:::script
 
         subgraph PreTool["PreToolUse"]
             Bash[Bash tool]:::event --> CB["check-bash-pre.sh"]:::script
@@ -259,7 +259,7 @@ flowchart LR
 
 ## Semantic Matching
 
-Ways with `description:` and `vocabulary:` fields use BM25 scoring with a degradation chain:
+Ways with `description:` fields use a three-tier scoring engine:
 
 ```mermaid
 flowchart TB
@@ -271,36 +271,49 @@ flowchart TB
 
     subgraph Input
         Prompt["User prompt"]:::input
-        Desc["Way description"]:::input
-        Vocab["Domain vocabulary"]:::input
+        Corpus["ways-corpus.jsonl<br/>(pre-computed vectors + BM25 fields)"]:::input
     end
 
-    subgraph BM25["BM25 (preferred)"]
+    subgraph Embedding["Embedding (preferred — ADR-108)"]
+        Embed["way-embed match<br/>all-MiniLM-L6-v2"]:::process
+        Cosine["Cosine similarity<br/>vs 384-dim pre-computed vectors"]:::process
+        EmbedResult["similarity ≥ embed_threshold?"]:::check
+    end
+
+    subgraph BM25["BM25 (fallback)"]
         Tokenize["Tokenize + Porter2 stem"]:::process
         Score["Okapi BM25 score<br/>k1=1.2, b=0.75"]:::process
-        IDF["IDF weighted against<br/>built-in 7-way corpus"]:::process
         BM25Result["score ≥ threshold?"]:::check
     end
 
-    subgraph NCD["Gzip NCD (fallback)"]
+    subgraph NCD["Gzip NCD (legacy)"]
         Compress["Compress description + prompt"]:::process
         Formula["NCD = (C(ab) - min) / max"]:::process
         NCDResult["NCD < 0.58?"]:::check
     end
 
-    Prompt --> Tokenize
-    Desc --> Tokenize
-    Vocab --> Tokenize
-    Tokenize --> Score --> IDF --> BM25Result
+    Prompt --> Embed --> Cosine --> EmbedResult
+    EmbedResult -->|Yes| Match["MATCH"]:::yes
+    EmbedResult -->|"No binary/model"| Tokenize
+    Corpus --> Embed
+    Corpus --> Tokenize
 
-    BM25Result -->|Yes| Match["MATCH"]:::yes
+    Tokenize --> Score --> BM25Result
+    BM25Result -->|Yes| Match
     BM25Result -->|"No binary"| Compress
+    Prompt --> Compress
     Compress --> Formula --> NCDResult
     NCDResult -->|Yes| Match
     NCDResult -->|No| NoMatch["No match"]:::no
 ```
 
-**Why gzip NCD works**: Similar texts share patterns that compress well together.
+| Engine | Accuracy | Timing | Requirements |
+|--------|----------|--------|-------------|
+| **Embedding** | 98.4% (63/64) | ~20ms | `bin/way-embed` + GGUF model (21MB) |
+| **BM25** | 90.6% (58/64) | ~2ms (score mode) | `bin/way-match` (checked in) |
+| **NCD** | ~70% | ~5ms | `gzip` + `bc` |
+
+Engine is auto-detected or forced via `ways.json` (`"semantic_engine": "embedding"` / `"bm25"` / `"ncd"`).
 
 ```
 NCD("software design", "design the database schema") = 0.52 (similar)
@@ -408,7 +421,8 @@ flowchart LR
     classDef stash fill:#E65100,stroke:#BF360C,color:#fff
     classDef util fill:#00695C,stroke:#004D40,color:#fff
 
-    MW["match-way.sh<br/>(shared matching)"]:::shared --> WM["way-match (BM25)"]:::util
+    MW["match-way.sh<br/>(shared matching)"]:::shared --> WE["way-embed (embedding)"]:::util
+    MW -.->|"fallback"| WM["way-match (BM25)"]:::util
     MW -.->|"fallback"| NCD["semantic-match.sh<br/>(gzip NCD)"]:::util
 
     CP["check-prompt.sh"]:::trigger --> MW

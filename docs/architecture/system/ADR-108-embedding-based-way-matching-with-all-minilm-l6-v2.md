@@ -1,5 +1,5 @@
 ---
-status: Draft
+status: Proposed
 date: 2026-03-21
 deciders:
   - aaronsb
@@ -40,7 +40,7 @@ Replace BM25 with embedding-based semantic matching using **all-MiniLM-L6-v2** a
 
 - **Parameters**: 22M (6 transformer layers, 384-dim embeddings)
 - **License**: Apache 2.0
-- **GGUF size**: ~24MB (F16), ~11MB (Q4)
+- **GGUF size**: ~44MB (F16), ~22MB (Q5_K_M), ~21MB (Q4_K_M)
 - **Why this model**: Smallest viable sentence embedding model with strong semantic discrimination. Battle-tested in production search systems. Pre-converted GGUF available on HuggingFace (second-state/All-MiniLM-L6-v2-Embedding-GGUF).
 
 ### Architecture: pre-compute + single-spawn runtime
@@ -64,22 +64,22 @@ One process spawn. Loads pre-computed vectors from JSONL, embeds the prompt (~3-
 | Operation | BM25 today (58 spawns) | Embedding (1 spawn) |
 |-----------|----------------------|---------------------|
 | Process spawns | 58 × ~2ms = ~116ms | 1 × ~2ms |
-| Model load | N/A | ~2ms (GGUF mmap) |
-| Scoring | <1ms each (in-process) | ~3-5ms forward pass + <1ms cosine sims |
-| **Total** | **~120ms** | **~8ms** |
+| Model load | N/A | ~5ms (GGUF mmap) |
+| Scoring | <1ms each (in-process) | ~12ms forward pass + <1ms cosine sims |
+| **Total** | **~120ms** | **~22ms** |
 
-The embedding path is **15x faster** than the current BM25 path while providing dramatically better discrimination.
+The embedding path is **5-6x faster** than the current BM25 path while providing dramatically better discrimination. (Measured on Linux x86_64, 2 threads.)
 
 ### Binary packaging
 
 Build on llama.cpp's GGML library (pure C tensor computation, no dependencies). Two files:
 
-- `bin/way-embed` — static binary (~3MB), built with cosmocc for cross-platform APE
-- `models/minilm-l6-v2.gguf` — model weights (~24MB F16 or ~11MB Q4)
+- `bin/way-embed` — static binary (~5MB), built with cosmocc for cross-platform APE
+- Model weights downloaded to `${XDG_CACHE_HOME}/claude-ways/user/` (~44MB F16, ~22MB Q5_K_M)
 
-The binary loads the model via mmap (no full read into RAM). The model file is git-tracked alongside the binary, same as `bin/way-match` today.
+The binary loads the model via mmap (no full read into RAM). The model is distributed via GitHub Release artifact or direct HuggingFace download, verified against a committed SHA-256 checksum. It lives in the XDG cache directory, not in the git repo (too large at 44MB).
 
-Future option: llamafile-style single binary with model weights concatenated into the executable (~27MB single file). Deferred until cosmocc builds of llama.cpp stabilize.
+Future option: llamafile-style single binary with model weights concatenated into the executable. Deferred until cosmocc builds of llama.cpp stabilize.
 
 ### Corpus format evolution
 
@@ -125,7 +125,7 @@ The model file is a published, checksummed artifact from HuggingFace. It can be 
 
 ### Negative
 
-- 24MB model file in the repo (or 11MB quantized). Significantly larger than the 62KB BM25 binary. Users who clone the repo pay this cost.
+- 44MB model file download (F16) or ~22MB (Q5_K_M). Not git-tracked — distributed via GitHub Release or HuggingFace. Users run `make model` to download.
 - llama.cpp / GGML dependency for building the binary. More complex build than the current single-file `way-match.c`. Though the binary itself remains dependency-free once compiled.
 - Model quality is fixed at MiniLM's training — it may not perfectly capture domain-specific semantics (e.g., "way" as a concept in this system vs. "way" as a path). BM25's explicit vocabulary handles this better for known edge cases.
 - Quantization (Q4) trades quality for size. Need to validate that Q4 embeddings still discriminate well enough on the test fixture corpus.

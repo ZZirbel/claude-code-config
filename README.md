@@ -58,6 +58,7 @@ Runs on **Linux** and **macOS**. The hooks are all bash and lean on standard POS
 | `git` | Version control, update checking | Usually pre-installed |
 | `jq` | JSON parsing (hook inputs, configs, API responses) | **Must install** |
 | `cc` | Build BM25 matcher from source (`make local`) | Usually pre-installed; see below |
+| `cmake` + `c++` | Build embedding engine from source (`make -C tools/way-embed`) | Optional — only if using embedding engine |
 | `gzip` | Legacy NCD fallback (only if BM25 binary missing) | Usually pre-installed |
 | `bc` | Math for legacy NCD fallback | Usually pre-installed (not in Arch `base`) |
 | `python3` | Governance traceability tooling | Stdlib only — no pip packages |
@@ -65,7 +66,13 @@ Runs on **Linux** and **macOS**. The hooks are all bash and lean on standard POS
 
 Standard utilities (`bash`, `awk`, `sed`, `grep`, `find`, `timeout`, `tr`, `sort`, `wc`, `date`) are assumed present via coreutils.
 
-**BM25 semantic matcher:** The matching engine is a C binary at `bin/way-match` (source in `tools/way-match/`), checked into the repo as a cross-platform binary. To rebuild from source: `make local` (uses system `cc`) or `make` (uses [Cosmopolitan](https://cosmo.zip/)). If the binary is missing, matching falls back to a legacy gzip NCD script, then regex only.
+**Semantic matching** uses a three-tier engine: **embedding** (all-MiniLM-L6-v2, 98% accuracy) → **BM25** (91% accuracy) → **NCD** (legacy gzip fallback). Auto-detected at runtime — the best available engine is used. The BM25 binary at `bin/way-match` is checked in as a cross-platform APE. The embedding engine requires a separate build and model download:
+
+```bash
+cd tools/way-embed && make setup   # build, download model (21MB), generate corpus, verify
+```
+
+See [Semantic Matching](docs/hooks-and-ways.md#semantic-matching) for the full setup and engine comparison.
 
 **Platform install guides:**
 [macOS (Homebrew)](docs/prerequisites-macos.md) · [Arch Linux](docs/prerequisites-arch.md) · [Debian / Ubuntu](docs/prerequisites-debian.md) · [Fedora / RHEL](docs/prerequisites-fedora.md)
@@ -140,12 +147,12 @@ Restart Claude Code after install — ways are now active.
 
 `core.md` loads at session start with behavioral guidance, operational rules, and a dynamic ways index. Then, as you work:
 
-1. **UserPromptSubmit** scans your message for keyword and BM25 semantic matches
+1. **UserPromptSubmit** scans your message for keyword and semantic matches (embedding or BM25)
 2. **PreToolUse** intercepts commands and file edits *before they execute*
 3. **SubagentStart** injects relevant ways into subagents spawned via Task
 4. Each way fires **once per session** — marker files prevent re-triggering
 
-Matching is tiered: regex patterns for known keywords/commands/files, then [BM25](https://en.wikipedia.org/wiki/Okapi_BM25) term-frequency scoring for semantic similarity. See [matching.md](docs/hooks-and-ways/matching.md) for the full strategy.
+Matching is tiered: regex patterns for known keywords/commands/files, then semantic scoring — either [sentence embeddings](docs/architecture/system/ADR-108-embedding-based-way-matching-with-all-minilm-l6-v2.md) (all-MiniLM-L6-v2) or [BM25](https://en.wikipedia.org/wiki/Okapi_BM25) term-frequency scoring. See [matching.md](docs/hooks-and-ways/matching.md) for the full strategy.
 
 For the complete system guide — trigger flow, state machines, the pipeline from principle to implementation — see **[docs/hooks-and-ways/README.md](docs/hooks-and-ways/README.md)**.
 
@@ -155,15 +162,17 @@ Ways config lives in `~/.claude/ways.json`:
 
 ```json
 {
-  "disabled": ["itops"]
+  "disabled": ["itops"],
+  "semantic_engine": "auto"
 }
 ```
 
 | Field | Purpose |
 |-------|---------|
 | `disabled` | Array of domain names to skip (e.g., `["itops", "softwaredev"]`) |
+| `semantic_engine` | `"auto"` (default), `"embedding"`, `"bm25"`, or `"ncd"` — force a specific engine |
 
-Disabled domains are completely ignored — no pattern matching, no output.
+Disabled domains are completely ignored — no pattern matching, no output. The `semantic_engine` override is useful for testing or when the embedding engine causes issues — set to `"bm25"` to fall back.
 
 ## Creating Ways
 
@@ -174,9 +183,10 @@ Each way is a `way.md` file with YAML frontmatter in `~/.claude/hooks/ways/{doma
 pattern: commit|push          # regex on user prompts
 commands: git\ commit         # regex on bash commands
 files: \.env$                 # regex on file paths
-description: semantic text    # BM25 matching
-vocabulary: domain keywords   # BM25 vocabulary
+description: semantic text    # embedding/BM25 matching
+vocabulary: domain keywords   # BM25 vocabulary boost
 threshold: 2.0                # BM25 score threshold
+embed_threshold: 0.35         # cosine similarity threshold
 macro: prepend                # dynamic context via macro.sh
 scope: agent,subagent         # injection scope
 ---
@@ -196,17 +206,23 @@ After creating or tuning a way, verify it matches what you expect — and doesn'
 # Quick check: score a prompt against all semantic ways
 /ways-tests "write some unit tests for this module"
 
-# Automated: BM25 scorer against synthetic corpus (32 tests)
-tests/way-match/run-tests.sh fixture --verbose
+# Embedding engine tests (15 tests, validates ADR-108 claims)
+bash tools/way-embed/test-embedding.sh
 
-# Automated: score against real way.md files (31 tests)
-tests/way-match/run-tests.sh integration
+# Head-to-head: embedding vs BM25 on 64 fixtures
+bash tools/way-embed/compare-engines.sh
+
+# BM25 scorer against synthetic corpus (32 tests)
+bash tools/way-match/test-harness.sh --verbose
+
+# Score against real way.md files
+bash tools/way-match/test-integration.sh
 
 # Interactive: full hook pipeline with subagent injection (6 steps)
 # Start a fresh session, then: read and run tests/way-activation-test.md
 ```
 
-The fixture and integration tests validate BM25 scorer accuracy. Typical results: 81-87% accuracy with 0 false positives. The test harness also benchmarks the legacy NCD fallback for comparison — see [tests/way-match/results.md](tests/way-match/results.md) for detailed output.
+The embedding engine achieves 98.4% accuracy (63/64) vs BM25's 90.6% (58/64) with 0 false negatives. See `tools/way-embed/compare-engines.sh` for the full comparison.
 
 Other test tools: `scripts/doc-graph.sh --stats` checks documentation link integrity; `governance/provenance-verify.sh` validates provenance metadata. Full test guide: [tests/README.md](tests/README.md).
 
@@ -242,7 +258,7 @@ This matters because of how attention works in transformers. Rules loaded at fil
 | **What** | Static instructions | Action templates | Event-driven guidance |
 | **Job** | "Always do X" | "Here's how to do Y" | "Right now, remember Z" |
 | **Trigger** | File access or startup | User intent (Claude decides) | Tool use, keywords, state conditions |
-| **Conditional on** | File paths (directory tree) | Semantic similarity | Multi-channel: regex, BM25, commands, files, state |
+| **Conditional on** | File paths (directory tree) | Semantic similarity | Multi-channel: regex, embeddings/BM25, commands, files, state |
 | **Cross-cutting concerns** | Needs duplicate `paths:` entries | N/A (intent-based) | Single way fires regardless of file location |
 | **Dynamic content** | No | No | Yes (shell macros) |
 | **Survives refactoring** | No (`src/` → `lib/` breaks paths) | Yes | Yes |
@@ -283,7 +299,7 @@ Policy-as-code for AI agents — lightweight, portable, deterministic.
 
 | Feature | Why It Matters |
 |---------|----------------|
-| **Pattern matching** | Predictable, debuggable (no semantic black box) |
+| **Tiered matching** | Regex for precision, embeddings for semantics, BM25 fallback — no cloud API needed |
 | **Shell macros** | Dynamic context from any source (APIs, files, system state) |
 | **Zero dependencies** | Bash + jq — runs anywhere |
 | **Domain-agnostic** | Swap software dev ways for finance, ops, research, anything |

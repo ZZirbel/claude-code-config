@@ -23,6 +23,9 @@ WAYS_DIR="${HOME}/.claude/hooks/ways"
 source "${WAYS_DIR}/match-way.sh"
 detect_semantic_engine
 
+# Clean up embedding cache on exit (ephemeral per-prompt eval cycle)
+[[ -n "${EMBED_CACHE:-}" ]] && trap 'rm -f "$EMBED_CACHE" 2>/dev/null' EXIT
+
 # Detect teammate spawn (Task tool with team_name parameter)
 TEAM_NAME=$(echo "$INPUT" | jq -r '.tool_input.team_name // empty')
 IS_TEAMMATE=false
@@ -68,7 +71,7 @@ scan_ways_for_subagent() {
     local vocabulary=$(get_field "vocabulary")
     local threshold=$(get_field "threshold")
 
-    if match_way_prompt "$TASK_PROMPT" "$pattern" "$description" "$vocabulary" "$threshold"; then
+    if match_way_prompt "$TASK_PROMPT" "$pattern" "$description" "$vocabulary" "$threshold" "$waypath"; then
       MATCHED_WAYS+=("$waypath|${MATCH_CHANNEL:-prompt}")
     fi
   done < <(find "$dir" -name "way.md" -print0 2>/dev/null)
