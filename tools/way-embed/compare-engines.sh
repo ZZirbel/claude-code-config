@@ -36,15 +36,13 @@ while IFS= read -r line; do
     expected="null"
   fi
 
-  expected_slash=$(echo "$expected" | sed 's/-/\//g; s/threat\/modeling/threat-modeling/g; s/adr\/context/adr-context/g')
-
   # BM25: score mode, check if expected way appears
   bm25_results=$("$WAY_MATCH" score --corpus "$CORPUS" --query "$prompt" 2>/dev/null || true)
-  bm25_hit=$(echo "$bm25_results" | grep "^${expected_slash}	" | head -1 || true)
+  bm25_hit=$(echo "$bm25_results" | grep "^${expected}	" | head -1 || true)
 
   # Embedding: match mode at threshold 0.0
   emb_results=$("$WAY_EMBED" match --corpus "$CORPUS" --model "$MODEL" --query "$prompt" --threshold 0.0 2>/dev/null || true)
-  emb_hit=$(echo "$emb_results" | grep "^${expected_slash}	" | head -1 || true)
+  emb_hit=$(echo "$emb_results" | grep "^${expected}	" | head -1 || true)
 
   if [[ "$should_match" == "true" ]]; then
     # TP if expected way found, FN if not

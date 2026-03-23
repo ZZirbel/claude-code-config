@@ -1,74 +1,74 @@
-{"prompt": "add unit tests for the auth module", "expected": "softwaredev-code-testing", "match": true, "category": "direct"}
-{"prompt": "write pytest fixtures for the database layer", "expected": "softwaredev-code-testing", "match": true, "category": "direct"}
-{"prompt": "increase test coverage to 80%", "expected": "softwaredev-code-testing", "match": true, "category": "direct"}
-{"prompt": "mock the payment gateway in tests", "expected": "softwaredev-code-testing", "match": true, "category": "direct"}
-{"prompt": "how should I structure the REST API endpoints", "expected": "softwaredev-docs-api", "match": true, "category": "direct"}
-{"prompt": "add pagination to the users endpoint", "expected": "softwaredev-docs-api", "match": true, "category": "direct"}
-{"prompt": "what HTTP status code for a deleted resource", "expected": "softwaredev-docs-api", "match": true, "category": "direct"}
-{"prompt": "debug this segfault in the parser", "expected": "softwaredev-environment-debugging", "match": true, "category": "direct"}
-{"prompt": "investigate why the build is broken", "expected": "softwaredev-environment-debugging", "match": true, "category": "direct"}
-{"prompt": "add a breakpoint and step through the logic", "expected": "softwaredev-environment-debugging", "match": true, "category": "direct"}
-{"prompt": "fix the XSS vulnerability in the comment form", "expected": "softwaredev-code-security", "match": true, "category": "direct"}
-{"prompt": "rotate the database credentials", "expected": "softwaredev-code-security", "match": true, "category": "direct"}
-{"prompt": "sanitize user input before SQL queries", "expected": "softwaredev-code-security", "match": true, "category": "direct"}
-{"prompt": "design the database schema for orders", "expected": "softwaredev-architecture-design", "match": true, "category": "direct"}
-{"prompt": "which architecture pattern for the notification service", "expected": "softwaredev-architecture-design", "match": true, "category": "direct"}
-{"prompt": "set up environment variables for staging", "expected": "softwaredev-environment-config", "match": true, "category": "direct"}
-{"prompt": "manage the dotenv files across environments", "expected": "softwaredev-environment-config", "match": true, "category": "direct"}
-{"prompt": "plan how to implement the search feature", "expected": "softwaredev-architecture-adr-context", "match": true, "category": "direct"}
-{"prompt": "why was the caching layer built this way", "expected": "softwaredev-architecture-adr-context", "match": true, "category": "direct"}
-{"prompt": "write a conventional commit message for this change", "expected": "softwaredev-delivery-commits", "match": true, "category": "direct"}
-{"prompt": "should I squash these commits before merging", "expected": "softwaredev-delivery-commits", "match": true, "category": "direct"}
-{"prompt": "create a pull request for the auth feature", "expected": "softwaredev-delivery-github", "match": true, "category": "direct"}
-{"prompt": "check the CI status on this PR", "expected": "softwaredev-delivery-github", "match": true, "category": "direct"}
-{"prompt": "generate a patch from my local changes", "expected": "softwaredev-delivery-patches", "match": true, "category": "direct"}
-{"prompt": "apply this diff to the codebase", "expected": "softwaredev-delivery-patches", "match": true, "category": "direct"}
-{"prompt": "bump the version and generate a changelog", "expected": "softwaredev-delivery-release", "match": true, "category": "direct"}
-{"prompt": "tag a new release with semver", "expected": "softwaredev-delivery-release", "match": true, "category": "direct"}
-{"prompt": "create a database migration to add a column", "expected": "softwaredev-delivery-migrations", "match": true, "category": "direct"}
-{"prompt": "write the rollback for this schema change", "expected": "softwaredev-delivery-migrations", "match": true, "category": "direct"}
-{"prompt": "add proper exception handling to this function", "expected": "softwaredev-code-errors", "match": true, "category": "direct"}
-{"prompt": "should I catch this error at the boundary or propagate it", "expected": "softwaredev-code-errors", "match": true, "category": "direct"}
-{"prompt": "refactor this class to follow single responsibility", "expected": "softwaredev-code-quality", "match": true, "category": "direct"}
-{"prompt": "decompose this large function into smaller methods", "expected": "softwaredev-code-quality", "match": true, "category": "direct"}
-{"prompt": "profile this function to find the bottleneck", "expected": "softwaredev-code-performance", "match": true, "category": "direct"}
-{"prompt": "benchmark the memory allocation in this loop", "expected": "softwaredev-code-performance", "match": true, "category": "direct"}
-{"prompt": "is this npm package well maintained before I install it", "expected": "softwaredev-environment-deps", "match": true, "category": "direct"}
-{"prompt": "audit our dependencies for vulnerabilities", "expected": "softwaredev-environment-deps", "match": true, "category": "direct"}
-{"prompt": "set up SSH key-based access to the server", "expected": "softwaredev-environment-ssh", "match": true, "category": "direct"}
-{"prompt": "transfer files to the remote host with rsync", "expected": "softwaredev-environment-ssh", "match": true, "category": "direct"}
-{"prompt": "write a README for this project", "expected": "softwaredev-docs", "match": true, "category": "direct"}
-{"prompt": "add a mermaid diagram to the documentation", "expected": "softwaredev-docs", "match": true, "category": "direct"}
-{"prompt": "speed up the SQL queries", "expected": "softwaredev-code-performance", "match": true, "category": "synonym", "note": "optimization prompt - performance not design"}
-{"prompt": "harden the login endpoints against brute force", "expected": "softwaredev-code-security", "match": true, "category": "synonym", "note": "NCD likely misses: harden not in vocabulary"}
-{"prompt": "the app crashes when you submit the form", "expected": "softwaredev-environment-debugging", "match": true, "category": "synonym", "note": "NCD likely misses: crash/submit not in debugging vocabulary"}
-{"prompt": "verify the service handles bad input gracefully", "expected": "softwaredev-code-testing", "match": true, "category": "synonym", "note": "NCD likely misses: verify/gracefully not in testing vocabulary"}
-{"prompt": "set up the connection string for postgres", "expected": "softwaredev-environment-config", "match": true, "category": "synonym", "note": "NCD likely misses: connection string is config concept but not in vocabulary"}
-{"prompt": "how do the microservices talk to each other", "expected": "softwaredev-architecture-design", "match": true, "category": "synonym", "note": "NCD likely misses: microservices/talk are design concepts but informal"}
-{"prompt": "make the API respond with proper error codes", "expected": "softwaredev-docs-api", "match": true, "category": "synonym", "note": "NCD may match via api but error codes is the real signal"}
+{"prompt": "add unit tests for the auth module", "expected": "softwaredev/code/testing", "match": true, "category": "direct"}
+{"prompt": "write pytest fixtures for the database layer", "expected": "softwaredev/code/testing", "match": true, "category": "direct"}
+{"prompt": "increase test coverage to 80%", "expected": "softwaredev/code/testing", "match": true, "category": "direct"}
+{"prompt": "mock the payment gateway in tests", "expected": "softwaredev/code/testing", "match": true, "category": "direct"}
+{"prompt": "how should I structure the REST API endpoints", "expected": "softwaredev/docs/api", "match": true, "category": "direct"}
+{"prompt": "add pagination to the users endpoint", "expected": "softwaredev/docs/api", "match": true, "category": "direct"}
+{"prompt": "what HTTP status code for a deleted resource", "expected": "softwaredev/docs/api", "match": true, "category": "direct"}
+{"prompt": "debug this segfault in the parser", "expected": "softwaredev/environment/debugging", "match": true, "category": "direct"}
+{"prompt": "investigate why the build is broken", "expected": "softwaredev/environment/debugging", "match": true, "category": "direct"}
+{"prompt": "add a breakpoint and step through the logic", "expected": "softwaredev/environment/debugging", "match": true, "category": "direct"}
+{"prompt": "fix the XSS vulnerability in the comment form", "expected": "softwaredev/code/security", "match": true, "category": "direct"}
+{"prompt": "rotate the database credentials", "expected": "softwaredev/code/security", "match": true, "category": "direct"}
+{"prompt": "sanitize user input before SQL queries", "expected": "softwaredev/code/security", "match": true, "category": "direct"}
+{"prompt": "design the database schema for orders", "expected": "softwaredev/architecture/design", "match": true, "category": "direct"}
+{"prompt": "which architecture pattern for the notification service", "expected": "softwaredev/architecture/design", "match": true, "category": "direct"}
+{"prompt": "set up environment variables for staging", "expected": "softwaredev/environment/config", "match": true, "category": "direct"}
+{"prompt": "manage the dotenv files across environments", "expected": "softwaredev/environment/config", "match": true, "category": "direct"}
+{"prompt": "plan how to implement the search feature", "expected": "softwaredev/architecture/adr-context", "match": true, "category": "direct"}
+{"prompt": "why was the caching layer built this way", "expected": "softwaredev/architecture/adr-context", "match": true, "category": "direct"}
+{"prompt": "write a conventional commit message for this change", "expected": "softwaredev/delivery/commits", "match": true, "category": "direct"}
+{"prompt": "should I squash these commits before merging", "expected": "softwaredev/delivery/commits", "match": true, "category": "direct"}
+{"prompt": "create a pull request for the auth feature", "expected": "softwaredev/delivery/github", "match": true, "category": "direct"}
+{"prompt": "check the CI status on this PR", "expected": "softwaredev/delivery/github", "match": true, "category": "direct"}
+{"prompt": "generate a patch from my local changes", "expected": "softwaredev/delivery/patches", "match": true, "category": "direct"}
+{"prompt": "apply this diff to the codebase", "expected": "softwaredev/delivery/patches", "match": true, "category": "direct"}
+{"prompt": "bump the version and generate a changelog", "expected": "softwaredev/delivery/release", "match": true, "category": "direct"}
+{"prompt": "tag a new release with semver", "expected": "softwaredev/delivery/release", "match": true, "category": "direct"}
+{"prompt": "create a database migration to add a column", "expected": "softwaredev/delivery/migrations", "match": true, "category": "direct"}
+{"prompt": "write the rollback for this schema change", "expected": "softwaredev/delivery/migrations", "match": true, "category": "direct"}
+{"prompt": "add proper exception handling to this function", "expected": "softwaredev/code/errors", "match": true, "category": "direct"}
+{"prompt": "should I catch this error at the boundary or propagate it", "expected": "softwaredev/code/errors", "match": true, "category": "direct"}
+{"prompt": "refactor this class to follow single responsibility", "expected": "softwaredev/code/quality", "match": true, "category": "direct"}
+{"prompt": "decompose this large function into smaller methods", "expected": "softwaredev/code/quality", "match": true, "category": "direct"}
+{"prompt": "profile this function to find the bottleneck", "expected": "softwaredev/code/performance", "match": true, "category": "direct"}
+{"prompt": "benchmark the memory allocation in this loop", "expected": "softwaredev/code/performance", "match": true, "category": "direct"}
+{"prompt": "is this npm package well maintained before I install it", "expected": "softwaredev/environment/deps", "match": true, "category": "direct"}
+{"prompt": "audit our dependencies for vulnerabilities", "expected": "softwaredev/environment/deps", "match": true, "category": "direct"}
+{"prompt": "set up SSH key-based access to the server", "expected": "softwaredev/environment/ssh", "match": true, "category": "direct"}
+{"prompt": "transfer files to the remote host with rsync", "expected": "softwaredev/environment/ssh", "match": true, "category": "direct"}
+{"prompt": "write a README for this project", "expected": "softwaredev/docs", "match": true, "category": "direct"}
+{"prompt": "add a mermaid diagram to the documentation", "expected": "softwaredev/docs", "match": true, "category": "direct"}
+{"prompt": "speed up the SQL queries", "expected": "softwaredev/code/performance", "match": true, "category": "synonym", "note": "optimization prompt - performance not design"}
+{"prompt": "harden the login endpoints against brute force", "expected": "softwaredev/code/security", "match": true, "category": "synonym", "note": "NCD likely misses: harden not in vocabulary"}
+{"prompt": "the app crashes when you submit the form", "expected": "softwaredev/environment/debugging", "match": true, "category": "synonym", "note": "NCD likely misses: crash/submit not in debugging vocabulary"}
+{"prompt": "verify the service handles bad input gracefully", "expected": "softwaredev/code/testing", "match": true, "category": "synonym", "note": "NCD likely misses: verify/gracefully not in testing vocabulary"}
+{"prompt": "set up the connection string for postgres", "expected": "softwaredev/environment/config", "match": true, "category": "synonym", "note": "NCD likely misses: connection string is config concept but not in vocabulary"}
+{"prompt": "how do the microservices talk to each other", "expected": "softwaredev/architecture/design", "match": true, "category": "synonym", "note": "NCD likely misses: microservices/talk are design concepts but informal"}
+{"prompt": "make the API respond with proper error codes", "expected": "softwaredev/docs/api", "match": true, "category": "synonym", "note": "NCD may match via api but error codes is the real signal"}
 {"prompt": "what's the weather today", "expected": null, "match": false, "category": "negative"}
 {"prompt": "hello", "expected": null, "match": false, "category": "negative"}
 {"prompt": "tell me a joke about programmers", "expected": null, "match": false, "category": "negative"}
 {"prompt": "what time zone is Tokyo in", "expected": null, "match": false, "category": "negative"}
 {"prompt": "summarize this document for me", "expected": null, "match": false, "category": "negative"}
 {"prompt": "translate this paragraph to Spanish", "expected": null, "match": false, "category": "negative"}
-{"prompt": "create a migration to alter the users table and add an index on email", "expected": ["softwaredev-delivery-migrations", "softwaredev-delivery-patches"], "match": true, "category": "coactivation", "note": "delivery domain overlap: migrations schema + patches diff"}
-{"prompt": "write tests to verify the exception handling works correctly", "expected": ["softwaredev-code-testing", "softwaredev-code-errors"], "match": true, "category": "coactivation", "note": "testing verify + errors exception handling"}
-{"prompt": "audit our dependencies for security vulnerabilities", "expected": ["softwaredev-environment-deps", "softwaredev-code-security"], "match": true, "category": "coactivation", "note": "shared vulnerability and audit terms"}
-{"prompt": "debug the unhandled exception and add proper error handling", "expected": ["softwaredev-environment-debugging", "softwaredev-code-errors"], "match": true, "category": "coactivation", "note": "debugging investigate + errors exception handling"}
-{"prompt": "design the database schema for the new microservice", "expected": ["softwaredev-architecture-design", "softwaredev-delivery-migrations"], "match": true, "category": "coactivation", "note": "shared schema/database terms across architecture and delivery"}
-{"prompt": "refactor this module to reduce coupling and improve cohesion", "expected": ["softwaredev-code-quality", "softwaredev-architecture-design"], "match": true, "category": "coactivation", "note": "shared coupling/cohesion between quality metrics and design patterns"}
-{"prompt": "perform a STRIDE analysis on the authentication flow", "expected": "softwaredev-architecture-threat-modeling", "match": true, "category": "direct"}
-{"prompt": "document the trust boundaries between services", "expected": "softwaredev-architecture-threat-modeling", "match": true, "category": "direct"}
-{"prompt": "update the risk register with the new attack surface", "expected": "softwaredev-architecture-threat-modeling", "match": true, "category": "direct"}
-{"prompt": "establish coding standards for the team", "expected": "softwaredev-docs-standards", "match": true, "category": "direct"}
-{"prompt": "write a dependency policy with evaluation guidelines", "expected": "softwaredev-docs-standards", "match": true, "category": "direct"}
-{"prompt": "define accessibility guidelines for the frontend", "expected": "softwaredev-docs-standards", "match": true, "category": "direct"}
-{"prompt": "write an RFC for the new caching architecture", "expected": "softwaredev-architecture-design", "match": true, "category": "direct", "note": "RFC vocabulary expansion"}
-{"prompt": "sketch out a proposal for the event-driven refactoring", "expected": "softwaredev-architecture-design", "match": true, "category": "synonym", "note": "design way RFC/proposal expansion"}
-{"prompt": "review the authentication trust boundaries and fix the token validation", "expected": ["softwaredev-architecture-threat-modeling", "softwaredev-code-security"], "match": true, "category": "coactivation", "note": "threat-modeling trust boundary + security authentication token"}
-{"prompt": "model the attack surface for the new microservice architecture", "expected": ["softwaredev-architecture-threat-modeling", "softwaredev-architecture-design"], "match": true, "category": "coactivation", "note": "threat-modeling attack surface + design architecture microservice"}
-{"prompt": "establish testing conventions and define our coverage philosophy", "expected": ["softwaredev-docs-standards", "softwaredev-code-testing"], "match": true, "category": "coactivation", "note": "standards convention philosophy + testing coverage"}
-{"prompt": "write a dependency evaluation policy with vulnerability audit criteria", "expected": ["softwaredev-docs-standards", "softwaredev-environment-deps"], "match": true, "category": "coactivation", "note": "standards policy guideline + deps dependency audit vulnerability"}
+{"prompt": "create a migration to alter the users table and add an index on email", "expected": ["softwaredev/delivery/migrations", "softwaredev/delivery/patches"], "match": true, "category": "coactivation", "note": "delivery domain overlap: migrations schema + patches diff"}
+{"prompt": "write tests to verify the exception handling works correctly", "expected": ["softwaredev/code/testing", "softwaredev/code/errors"], "match": true, "category": "coactivation", "note": "testing verify + errors exception handling"}
+{"prompt": "audit our dependencies for security vulnerabilities", "expected": ["softwaredev/environment/deps", "softwaredev/code/security"], "match": true, "category": "coactivation", "note": "shared vulnerability and audit terms"}
+{"prompt": "debug the unhandled exception and add proper error handling", "expected": ["softwaredev/environment/debugging", "softwaredev/code/errors"], "match": true, "category": "coactivation", "note": "debugging investigate + errors exception handling"}
+{"prompt": "design the database schema for the new microservice", "expected": ["softwaredev/architecture/design", "softwaredev/delivery/migrations"], "match": true, "category": "coactivation", "note": "shared schema/database terms across architecture and delivery"}
+{"prompt": "refactor this module to reduce coupling and improve cohesion", "expected": ["softwaredev/code/quality", "softwaredev/architecture/design"], "match": true, "category": "coactivation", "note": "shared coupling/cohesion between quality metrics and design patterns"}
+{"prompt": "perform a STRIDE analysis on the authentication flow", "expected": "softwaredev/architecture/threat-modeling", "match": true, "category": "direct"}
+{"prompt": "document the trust boundaries between services", "expected": "softwaredev/architecture/threat-modeling", "match": true, "category": "direct"}
+{"prompt": "update the risk register with the new attack surface", "expected": "softwaredev/architecture/threat-modeling", "match": true, "category": "direct"}
+{"prompt": "establish coding standards for the team", "expected": "softwaredev/docs/standards", "match": true, "category": "direct"}
+{"prompt": "write a dependency policy with evaluation guidelines", "expected": "softwaredev/docs/standards", "match": true, "category": "direct"}
+{"prompt": "define accessibility guidelines for the frontend", "expected": "softwaredev/docs/standards", "match": true, "category": "direct"}
+{"prompt": "write an RFC for the new caching architecture", "expected": "softwaredev/architecture/design", "match": true, "category": "direct", "note": "RFC vocabulary expansion"}
+{"prompt": "sketch out a proposal for the event-driven refactoring", "expected": "softwaredev/architecture/design", "match": true, "category": "synonym", "note": "design way RFC/proposal expansion"}
+{"prompt": "review the authentication trust boundaries and fix the token validation", "expected": ["softwaredev/architecture/threat-modeling", "softwaredev/code/security"], "match": true, "category": "coactivation", "note": "threat-modeling trust boundary + security authentication token"}
+{"prompt": "model the attack surface for the new microservice architecture", "expected": ["softwaredev/architecture/threat-modeling", "softwaredev/architecture/design"], "match": true, "category": "coactivation", "note": "threat-modeling attack surface + design architecture microservice"}
+{"prompt": "establish testing conventions and define our coverage philosophy", "expected": ["softwaredev/docs/standards", "softwaredev/code/testing"], "match": true, "category": "coactivation", "note": "standards convention philosophy + testing coverage"}
+{"prompt": "write a dependency evaluation policy with vulnerability audit criteria", "expected": ["softwaredev/docs/standards", "softwaredev/environment/deps"], "match": true, "category": "coactivation", "note": "standards policy guideline + deps dependency audit vulnerability"}
 {"prompt": "what are the risks of going to the beach today", "expected": null, "match": false, "category": "negative", "note": "risk is in threat-modeling but context is non-technical"}
 {"prompt": "follow the standard operating procedure for checkout", "expected": null, "match": false, "category": "negative", "note": "standard is in standards way but context is non-technical"}

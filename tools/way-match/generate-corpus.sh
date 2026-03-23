@@ -7,12 +7,18 @@
 # This is an authoring-time tool. The output file is a build artifact
 # committed to the repo — runtime scanners read it but never write it.
 #
-# Usage: generate-corpus.sh [ways-dir] [output-file]
+# Usage: generate-corpus.sh [--quiet] [ways-dir] [output-file]
+#   --quiet:     suppress progress output (for use in test/lint pipelines)
 #   ways-dir:    directory to scan (default: ~/.claude/hooks/ways)
 #   output-file: where to write JSONL (default: <ways-dir>/ways-corpus.jsonl)
 
+QUIET=false
+[[ "${1:-}" == "--quiet" ]] && { QUIET=true; shift; }
+
 WAYS_DIR="${1:-${HOME}/.claude/hooks/ways}"
 OUTPUT="${2:-${WAYS_DIR}/ways-corpus.jsonl}"
+
+log() { $QUIET || echo "$@" >&2; }
 
 # Temp file for atomic write
 TMPFILE="${OUTPUT}.tmp.$$"
@@ -28,6 +34,7 @@ while IFS= read -r wayfile; do
   description=$(echo "$frontmatter" | awk '/^description:/{gsub(/^description: */,"");print;exit}')
   vocabulary=$(echo "$frontmatter" | awk '/^vocabulary:/{gsub(/^vocabulary: */,"");print;exit}')
   threshold=$(echo "$frontmatter" | awk '/^threshold:/{gsub(/^threshold: */,"");print;exit}')
+  embed_threshold=$(echo "$frontmatter" | awk '/^embed_threshold:/{gsub(/^embed_threshold: */,"");print;exit}')
 
   # Skip ways without semantic fields
   [[ -z "$description" || -z "$vocabulary" ]] && continue
@@ -40,9 +47,10 @@ while IFS= read -r wayfile; do
   desc_escaped=$(printf '%s' "$description" | sed 's/\\/\\\\/g; s/"/\\"/g')
   vocab_escaped=$(printf '%s' "$vocabulary" | sed 's/\\/\\\\/g; s/"/\\"/g')
   thresh_val="${threshold:-2.0}"
+  embed_thresh_val="${embed_threshold:-0.35}"
 
-  printf '{"id":"%s","description":"%s","vocabulary":"%s","threshold":%s}\n' \
-    "$id" "$desc_escaped" "$vocab_escaped" "$thresh_val" >> "$TMPFILE"
+  printf '{"id":"%s","description":"%s","vocabulary":"%s","threshold":%s,"embed_threshold":%s}\n' \
+    "$id" "$desc_escaped" "$vocab_escaped" "$thresh_val" "$embed_thresh_val" >> "$TMPFILE"
 
   count=$((count + 1))
 
@@ -54,6 +62,7 @@ while IFS= read -r wayfile; do
   description=$(echo "$frontmatter" | awk '/^description:/{gsub(/^description: */,"");print;exit}')
   vocabulary=$(echo "$frontmatter" | awk '/^vocabulary:/{gsub(/^vocabulary: */,"");print;exit}')
   threshold=$(echo "$frontmatter" | awk '/^threshold:/{gsub(/^threshold: */,"");print;exit}')
+  embed_threshold=$(echo "$frontmatter" | awk '/^embed_threshold:/{gsub(/^embed_threshold: */,"");print;exit}')
 
   [[ -z "$description" || -z "$vocabulary" ]] && continue
 
@@ -63,9 +72,10 @@ while IFS= read -r wayfile; do
   desc_escaped=$(printf '%s' "$description" | sed 's/\\/\\\\/g; s/"/\\"/g')
   vocab_escaped=$(printf '%s' "$vocabulary" | sed 's/\\/\\\\/g; s/"/\\"/g')
   thresh_val="${threshold:-2.0}"
+  embed_thresh_val="${embed_threshold:-0.35}"
 
-  printf '{"id":"%s","description":"%s","vocabulary":"%s","threshold":%s}\n' \
-    "$id" "$desc_escaped" "$vocab_escaped" "$thresh_val" >> "$TMPFILE"
+  printf '{"id":"%s","description":"%s","vocabulary":"%s","threshold":%s,"embed_threshold":%s}\n' \
+    "$id" "$desc_escaped" "$vocab_escaped" "$thresh_val" "$embed_thresh_val" >> "$TMPFILE"
 
   count=$((count + 1))
 
@@ -74,7 +84,7 @@ done < <(find "$WAYS_DIR" -name "way-*.md" -type f 2>/dev/null | sort)
 # Atomic move
 mv "$TMPFILE" "$OUTPUT"
 
-echo "Generated ${OUTPUT}: ${count} ways" >&2
+log "Generated ${OUTPUT}: ${count} ways"
 
 # Auto-embed: if way-embed binary and model are available, add embedding vectors
 # Check XDG cache first (downloaded), then ~/.claude/bin (built from source)
@@ -89,13 +99,13 @@ fi
 MODEL_PATH="${XDG_WAY}/minilm-l6-v2.gguf"
 
 if [[ -n "$WAY_EMBED_BIN" && -x "$WAY_EMBED_BIN" && -f "$MODEL_PATH" ]]; then
-  echo "Embedding model found — generating embedding vectors..." >&2
-  if "$WAY_EMBED_BIN" generate --corpus "$OUTPUT" --model "$MODEL_PATH" 2>&1 | grep -v "^$" >&2; then
-    echo "Embeddings added to ${OUTPUT}" >&2
+  log "Embedding model found — generating embedding vectors..."
+  if "$WAY_EMBED_BIN" generate --corpus "$OUTPUT" --model "$MODEL_PATH" 2>/dev/null; then
+    log "Embeddings added to ${OUTPUT}"
   else
     echo "WARNING: embedding generation failed, corpus has BM25 fields only" >&2
   fi
 elif [[ ! -x "$WAY_EMBED_BIN" ]]; then
-  echo "Tip: install the embedding engine for 98% matching accuracy (vs 91% BM25):" >&2
-  echo "  cd ~/.claude && make setup" >&2
+  log "Tip: install the embedding engine for 98% matching accuracy (vs 91% BM25):"
+  log "  cd ~/.claude && make setup"
 fi

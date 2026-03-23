@@ -44,9 +44,6 @@ while IFS= read -r line; do
     # Get all matches at threshold 0.0
     all_scores=$("$WAY_EMBED" match --corpus "$CORPUS" --model "$MODEL" --query "$prompt" --threshold 0.0 2>/dev/null)
 
-    # Convert expected id format: softwaredev-code-testing → softwaredev/code/testing
-    expected_slash=$(echo "$expected" | tr '-' '/')
-
     # Get top match
     top_id=$(echo "$all_scores" | head -1 | cut -f1)
     top_score=$(echo "$all_scores" | head -1 | cut -f2)
@@ -57,14 +54,13 @@ while IFS= read -r line; do
             # Coactivation: check each expected way
             all_found=true
             found_list=""
-            for exp in $expected_slash; do
-                exp_slash=$(echo "$exp" | tr '-' '/')
-                match_score=$(echo "$all_scores" | grep "^${exp_slash}	" | cut -f2 || true)
+            for exp in $expected; do
+                match_score=$(echo "$all_scores" | grep "^${exp}	" | cut -f2 || true)
                 if [[ -n "$match_score" ]]; then
-                    found_list+=" ${exp_slash}(${match_score})"
+                    found_list+=" ${exp}(${match_score})"
                 else
                     all_found=false
-                    found_list+=" ${exp_slash}(MISS)"
+                    found_list+=" ${exp}(MISS)"
                 fi
             done
             if $all_found; then
@@ -76,7 +72,7 @@ while IFS= read -r line; do
             fi
             printf "[%-12s] %-55s → %s | %s | %s\n" "$category" "$prompt" "$expected" "$found_list" "$verdict"
         else
-            match_score=$(echo "$all_scores" | grep "^${expected_slash}	" | cut -f2 || true)
+            match_score=$(echo "$all_scores" | grep "^${expected}	" | cut -f2 || true)
             if [[ -n "$match_score" ]]; then
                 verdict="TP"
                 TP=$((TP + 1))
@@ -122,9 +118,8 @@ while IFS= read -r line; do
     # Skip coactivation for simplicity
     echo "$line" | grep -q '"expected": *\[' && continue
 
-    expected_slash=$(echo "$expected" | tr '-' '/')
     all_scores=$("$WAY_EMBED" match --corpus "$CORPUS" --model "$MODEL" --query "$prompt" --threshold 0.0 2>/dev/null)
-    match_score=$(echo "$all_scores" | grep "^${expected_slash}	" | cut -f2 || echo "MISS")
+    match_score=$(echo "$all_scores" | grep "^${expected}	" | cut -f2 || echo "MISS")
 
     printf "%s\t%s\t%s\n" "$match_score" "$category" "$prompt"
 done < "$FIXTURES" | sort -t$'\t' -k1 -n
