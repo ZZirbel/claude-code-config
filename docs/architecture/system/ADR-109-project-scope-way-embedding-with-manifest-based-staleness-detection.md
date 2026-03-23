@@ -114,6 +114,8 @@ If a project is deleted or its ways removed, stale embeddings remain in the corp
 - BM25 and NCD fallback paths already handle project-local ways — this extends existing behavior to the embedding tier
 - The scanner (`match-way.sh`) needs no changes for matching — it already resolves project overrides at runtime. The change is in corpus generation only.
 - Progressive disclosure (ADR-105) works the same way for project ways — parent/child relationships, sibling coverage, depth tracking all apply
+- `embed-status` CLI tool needs updating to report: manifest contents, per-project inclusion state (included/disincluded/not found), staleness per scope, and decoded project paths. The current project path decoding is lossy — this implementation should store the real path in the manifest when running in project context.
+- Claude Code's project path encoding (`/` → `-`) is a one-way function. Paths with hyphens in directory names can't be decoded. The manifest must record real paths at embed time, not attempt reverse decoding.
 
 ## Alternatives Considered
 
