@@ -7,6 +7,7 @@
 #   resolve_project_path — decode Claude Code's lossy path encoding
 #   json_escape          — safe string embedding in JSON
 #   enumerate_projects   — iterate all projects with .claude/ways/
+#   resolve_tool         — find a tool binary (system PATH → XDG → not found)
 
 # Content-addressed hash of all way.md files in a directory.
 # Immune to clock skew, catches uncommitted edits.
@@ -36,6 +37,34 @@ resolve_project_path() {
 # Escape a string for safe JSON embedding (handles quotes and backslashes)
 json_escape() {
   printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+# Resolve a tool binary: system PATH → XDG cache → not found.
+# Returns the path on stdout, empty if not found.
+# Usage: mmaid_bin=$(resolve_tool mmaid)
+resolve_tool() {
+  local name="$1"
+  local xdg_cache="${XDG_CACHE_HOME:-$HOME/.cache}/claude-ways/user"
+
+  # 1. System PATH (AUR, brew, go install, etc.)
+  if command -v "$name" &>/dev/null; then
+    command -v "$name"
+    return 0
+  fi
+
+  # 2. XDG cache (downloaded by our tooling)
+  if [[ -x "${xdg_cache}/${name}" ]]; then
+    echo "${xdg_cache}/${name}"
+    return 0
+  fi
+
+  # 3. ~/.claude/bin (built from source)
+  if [[ -x "${HOME}/.claude/bin/${name}" ]]; then
+    echo "${HOME}/.claude/bin/${name}"
+    return 0
+  fi
+
+  return 1
 }
 
 # Greedily resolve an encoded path against the filesystem.

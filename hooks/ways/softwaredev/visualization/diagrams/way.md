@@ -8,11 +8,27 @@ scope: agent, subagent
 ---
 # Terminal Diagrams with mmaid
 
-## mmaid Binary
+## Finding mmaid
 
-Location: `${XDG_CACHE_HOME:-~/.cache}/claude-ways/user/mmaid`
+Resolution order — use the first one found:
 
-If not installed, run: `bash ~/.claude/tools/mmaid/download-mmaid.sh`
+1. **System PATH**: `mmaid` (installed via AUR, brew, `go install`)
+2. **XDG cache**: `~/.cache/claude-ways/user/mmaid` (downloaded by our tooling)
+3. **Not found**: suggest installation
+
+```bash
+# Check if available (uses resolve_tool from embed-lib.sh)
+source ~/.claude/hooks/ways/embed-lib.sh
+MMAID=$(resolve_tool mmaid)
+
+# Or just check directly
+command -v mmaid || ~/.cache/claude-ways/user/mmaid --version
+```
+
+If not installed:
+- **Arch Linux**: `yay -S mmaid` (AUR, when published)
+- **Go**: `go install github.com/aaronsb/mmaid-go/cmd/mmaid@latest`
+- **Download**: `bash ~/.claude/tools/mmaid/download-mmaid.sh`
 
 ## Usage
 
