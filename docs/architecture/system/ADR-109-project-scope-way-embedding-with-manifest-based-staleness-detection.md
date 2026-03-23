@@ -55,43 +55,37 @@ Writing to `<project>/.claude/` is consistent with Claude Code's own behavior �
 
 ### Manifest-Based Staleness Detection
 
-A manifest at `${XDG_CACHE_HOME}/claude-ways/user/embed-manifest.json` records what was embedded and when:
+A manifest at `${XDG_CACHE_HOME}/claude-ways/user/embed-manifest.json` records what was embedded using content hashes — not timestamps:
 
 ```json
 {
-  "generated": "2026-03-23T14:30:00Z",
-  "global": {
-    "ways_count": 58,
-    "last_commit": "abc1234"
-  },
+  "global_hash": "a1b2c3...",
+  "global_count": 58,
   "projects": {
     "-home-aaron-myproject": {
       "path": "/home/aaron/myproject",
-      "ways_count": 3,
-      "last_commit": "def5678",
-      "uncommitted": false
+      "ways_hash": "d4e5f6...",
+      "ways_count": 3
     }
   }
 }
 ```
+
+Hashes are computed from the way files themselves (e.g., `git ls-files -s .claude/ways/ | sha256sum` for tracked files, plus stat of untracked way files). This is content-addressed staleness — immune to clock skew, catches uncommitted edits, and doesn't care *when* things changed, only *whether* they changed.
 
 ### Session-Start Staleness Check
 
 At session start (cheap, no embedding work):
 
 1. Read the manifest
-2. For each project in the manifest, compare:
-   - Git log date of `.claude/ways/` vs manifest's `last_commit`
-   - Check for uncommitted changes to `.claude/ways/`
-3. For projects not in the manifest, check if `.claude/ways/` exists (new project)
-4. If any project is stale, or a new project is discovered, trigger regen
+2. Compute current content hash for global ways
+3. For each project in `~/.claude/projects/`, compute ways hash if `.claude/ways/` exists
+4. Compare hashes against manifest entries
+5. If any hash differs, or a project exists that isn't in the manifest, trigger regen
 
-This is a **trilemma** of three timestamps:
-- **Embedding date** — when the corpus was last generated
-- **Project ways state** — commit hashes and uncommitted changes
-- **Manifest** — what was included last time
+Hash computation is one `ls-files | sha256sum` per scope — cheaper than git log, and works for uncommitted changes too. At worst it runs every session start. User-scope ways are relatively static; project-scope ways evolve significantly, making this check worthwhile.
 
-The check is stat/git-log level — no embedding computation. At worst it runs every session start. User-scope ways are relatively static; project-scope ways evolve significantly, making this check worthwhile.
+If the manifest is missing or corrupted, treat it as "everything stale" and do a full regen. The manifest is a cache of caches — losing it just costs one regen cycle.
 
 ### Staleness is Harmless
 
@@ -103,14 +97,14 @@ If a project is deleted or its ways removed, stale embeddings remain in the corp
 
 - Project-local ways get embedding-quality matching (98%) instead of BM25 fallback (91%)
 - Single corpus, single embedding space — no per-project model overhead
-- Staleness check is cheap and non-blocking (stat + git log, no embedding)
+- Content-addressed staleness — immune to clock skew, no date comparison, catches uncommitted edits
 - Lint-gating prevents broken or untrusted ways from entering the embedding
 - Inclusion markers give projects control without global configuration
 - Manifest enables incremental regen — only re-embed when something changed
 
 ### Negative
 
-- Session start gains a filesystem scan across `~/.claude/projects/` (should be fast — it's directory listing + git log)
+- Session start gains a filesystem scan across `~/.claude/projects/` (should be fast — directory listing + content hash per scope)
 - Regen cost grows linearly with project count (each project's ways are additional embedding work, ~20ms per way)
 - Manifest is another file to manage in XDG cache (but it's a cache — loss just triggers full regen)
 - Inclusion markers in project `.claude/` directories are a write outside the framework's own tree
@@ -133,7 +127,7 @@ Rejected: multiplies file I/O, complicates the scanner, and breaks the "one embe
 
 Skip the manifest, just regenerate every time.
 
-Rejected: embedding 58+ ways takes ~2 seconds. With multiple projects, this could grow to 5-10 seconds — noticeable on every session start. The manifest check is effectively free by comparison.
+Rejected: embedding 58+ ways takes ~2 seconds. With multiple projects, this could grow to 5-10 seconds — noticeable on every session start. A content-hash check is effectively free by comparison and only triggers regen when something actually changed.
 
 ### Store corpus in project `.claude/` alongside ways
 
