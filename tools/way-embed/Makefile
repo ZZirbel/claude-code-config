@@ -68,7 +68,7 @@ setup: setup-binary $(MODEL)
 
 # Try download, fall back to build
 setup-binary:
-	@if bash $(SRCDIR)download-binary.sh 2>/dev/null; then \
+	@if bash $(SRCDIR)download-binary.sh; then \
 		echo "Pre-built binary installed."; \
 	else \
 		echo "No pre-built binary available, building from source..."; \

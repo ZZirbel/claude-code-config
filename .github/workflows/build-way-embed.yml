@@ -77,10 +77,12 @@ jobs:
           path: binaries
           merge-multiple: true
 
-      - name: List binaries
+      - name: Generate checksums
         run: |
-          ls -lh binaries/
-          file binaries/*
+          cd binaries
+          sha256sum way-embed-* > checksums.txt
+          cat checksums.txt
+          ls -lh
 
       - uses: actions/upload-artifact@v4
         with:

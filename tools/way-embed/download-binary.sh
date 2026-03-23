@@ -7,7 +7,7 @@
 # Usage:
 #   download-binary.sh [--release TAG] [output-dir]
 #
-# The binary is placed at: output-dir/way-embed (default: ~/.claude/bin/)
+# The binary is placed at: ${XDG_CACHE_HOME:-~/.cache}/claude-ways/user/way-embed
 
 set -euo pipefail
 
@@ -32,7 +32,7 @@ while [[ $# -gt 0 ]]; do
       echo "Usage: $0 [--release TAG] [output-dir]"
       echo ""
       echo "  --release TAG  GitHub Release tag (default: latest way-embed-* release)"
-      echo "  output-dir     Override output directory (default: ~/.claude/bin/)"
+      echo "  output-dir     Override output directory (default: \$XDG_CACHE_HOME/claude-ways/user/)"
       echo ""
       echo "Platform: ${PLATFORM}"
       echo "Available: linux-x86_64, linux-aarch64, darwin-x86_64, darwin-arm64"
@@ -89,7 +89,7 @@ if ! gh release view "$RELEASE_TAG" --repo "$GH_REPO" --json assets --jq '.asset
   exit 1
 fi
 
-# Download
+# Download binary + checksums
 echo "Downloading ${BIN_NAME}..." >&2
 gh release download "$RELEASE_TAG" \
   --repo "$GH_REPO" \
@@ -97,7 +97,30 @@ gh release download "$RELEASE_TAG" \
   --dir "$OUTPUT_DIR" \
   --clobber
 
-# Make executable and create symlink
+# Verify checksum (if checksums.txt exists in release)
+CHECKSUMS_FILE="${OUTPUT_DIR}/checksums.txt"
+if gh release download "$RELEASE_TAG" \
+    --repo "$GH_REPO" \
+    --pattern "checksums.txt" \
+    --dir "$OUTPUT_DIR" \
+    --clobber 2>/dev/null; then
+  expected_hash=$(grep "${BIN_NAME}" "$CHECKSUMS_FILE" | awk '{print $1}')
+  if [[ -n "$expected_hash" ]]; then
+    actual_hash=$(sha256sum "$PLATFORM_FILE" 2>/dev/null | cut -d' ' -f1 \
+      || shasum -a 256 "$PLATFORM_FILE" 2>/dev/null | cut -d' ' -f1)
+    if [[ "$actual_hash" != "$expected_hash" ]]; then
+      echo "CHECKSUM MISMATCH for ${BIN_NAME}" >&2
+      echo "  Expected: ${expected_hash}" >&2
+      echo "  Got:      ${actual_hash}" >&2
+      rm -f "$PLATFORM_FILE" "$CHECKSUMS_FILE"
+      exit 1
+    fi
+    echo "Checksum verified: ${actual_hash:0:12}..." >&2
+  fi
+  rm -f "$CHECKSUMS_FILE"
+fi
+
+# Make executable and install
 chmod +x "$PLATFORM_FILE"
 cp "$PLATFORM_FILE" "$OUTPUT_FILE"
 chmod +x "$OUTPUT_FILE"
