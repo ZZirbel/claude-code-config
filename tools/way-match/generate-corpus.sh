@@ -75,3 +75,16 @@ done < <(find "$WAYS_DIR" -name "way-*.md" -type f 2>/dev/null | sort)
 mv "$TMPFILE" "$OUTPUT"
 
 echo "Generated ${OUTPUT}: ${count} ways" >&2
+
+# Auto-embed: if way-embed binary and model are available, add embedding vectors
+WAY_EMBED_BIN="${HOME}/.claude/bin/way-embed"
+MODEL_PATH="${XDG_CACHE_HOME:-$HOME/.cache}/claude-ways/user/minilm-l6-v2-f16.gguf"
+
+if [[ -x "$WAY_EMBED_BIN" && -f "$MODEL_PATH" ]]; then
+  echo "Embedding model found — generating embedding vectors..." >&2
+  if "$WAY_EMBED_BIN" generate --corpus "$OUTPUT" --model "$MODEL_PATH" 2>&1 | grep -v "^$" >&2; then
+    echo "Embeddings added to ${OUTPUT}" >&2
+  else
+    echo "WARNING: embedding generation failed, corpus has BM25 fields only" >&2
+  fi
+fi

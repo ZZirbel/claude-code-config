@@ -38,15 +38,29 @@ check_when_preconditions() {
   return 0
 }
 
-# Detect semantic matcher: BM25 binary → gzip NCD → none
-# Sets: SEMANTIC_ENGINE, WAY_MATCH_BIN, CORPUS_PATH
+# Detect semantic matcher: embedding → BM25 binary → gzip NCD → none
+# Sets: SEMANTIC_ENGINE, WAY_MATCH_BIN, WAY_EMBED_BIN, MODEL_PATH, CORPUS_PATH, EMBED_CACHE
 detect_semantic_engine() {
+  WAY_EMBED_BIN="${HOME}/.claude/bin/way-embed"
   WAY_MATCH_BIN="${HOME}/.claude/bin/way-match"
+  MODEL_PATH="${XDG_CACHE_HOME:-$HOME/.cache}/claude-ways/user/minilm-l6-v2-f16.gguf"
   CORPUS_PATH=""
+  EMBED_CACHE=""
   local corpus_file="${WAYS_DIR}/ways-corpus.jsonl"
   [[ -f "$corpus_file" ]] && CORPUS_PATH="$corpus_file"
 
-  if [[ -x "$WAY_MATCH_BIN" ]]; then
+  if [[ -x "$WAY_EMBED_BIN" && -f "$MODEL_PATH" && -n "$CORPUS_PATH" ]]; then
+    SEMANTIC_ENGINE="embedding"
+    # XDG-compliant project-scoped cache for batch results
+    local cache_base="${XDG_CACHE_HOME:-$HOME/.cache}/claude-ways/projects"
+    local encoded_project
+    encoded_project=$(echo "${PROJECT_DIR:-$PWD}" | tr '/' '-')
+    local cache_dir="${cache_base}/${encoded_project}"
+    mkdir -p "$cache_dir" 2>/dev/null
+    EMBED_CACHE="${cache_dir}/embed-results.tsv"
+    # Clean up stale cache from prior runs
+    rm -f "$EMBED_CACHE" 2>/dev/null
+  elif [[ -x "$WAY_MATCH_BIN" ]]; then
     SEMANTIC_ENGINE="bm25"
   elif command -v gzip >/dev/null 2>&1 && command -v bc >/dev/null 2>&1; then
     SEMANTIC_ENGINE="ncd"
@@ -56,10 +70,10 @@ detect_semantic_engine() {
 }
 
 # Additive matching: pattern OR semantic (either channel can fire)
-# Args: $1=prompt $2=pattern $3=description $4=vocabulary $5=threshold
+# Args: $1=prompt $2=pattern $3=description $4=vocabulary $5=threshold $6=way_id
 # Sets: MATCH_CHANNEL ("keyword" or "semantic") on match
 match_way_prompt() {
-  local prompt="$1" pattern="$2" description="$3" vocabulary="$4" threshold="$5"
+  local prompt="$1" pattern="$2" description="$3" vocabulary="$4" threshold="$5" way_id="$6"
   MATCH_CHANNEL=""
 
   # Channel 1: Regex pattern match
@@ -68,10 +82,25 @@ match_way_prompt() {
     return 0
   fi
 
-  # Channel 2: Semantic match (only if description+vocabulary present)
-  if [[ -n "$description" && -n "$vocabulary" ]]; then
-    case "$SEMANTIC_ENGINE" in
-      bm25)
+  # Channel 2: Semantic match
+  case "$SEMANTIC_ENGINE" in
+    embedding)
+      # Lazy batch: run once per prompt eval, cache for subsequent lookups.
+      # way-embed match scores ALL corpus ways in one call (~22ms total).
+      if [[ -n "$EMBED_CACHE" && ! -f "$EMBED_CACHE" ]]; then
+        "$WAY_EMBED_BIN" match \
+            --corpus "$CORPUS_PATH" \
+            --model "$MODEL_PATH" \
+            --query "$prompt" > "$EMBED_CACHE" 2>/dev/null
+      fi
+      # Look up this way's id in cached batch results
+      if [[ -n "$way_id" && -f "$EMBED_CACHE" ]] && grep -q "^${way_id}	" "$EMBED_CACHE"; then
+        MATCH_CHANNEL="semantic"
+        return 0
+      fi
+      ;;
+    bm25)
+      if [[ -n "$description" && -n "$vocabulary" ]]; then
         local corpus_args=()
         [[ -n "$CORPUS_PATH" ]] && corpus_args=(--corpus "$CORPUS_PATH")
         if "$WAY_MATCH_BIN" pair \
@@ -83,8 +112,10 @@ match_way_prompt() {
           MATCH_CHANNEL="semantic"
           return 0
         fi
-        ;;
-      ncd)
+      fi
+      ;;
+    ncd)
+      if [[ -n "$description" && -n "$vocabulary" ]]; then
         # NCD fallback uses a fixed threshold (distance 0-1, lower = more similar).
         # This is intentionally NOT derived from frontmatter thresholds, which are
         # on the BM25 score scale (higher = better match). The two scales don't map
@@ -94,9 +125,9 @@ match_way_prompt() {
           MATCH_CHANNEL="semantic"
           return 0
         fi
-        ;;
-    esac
-  fi
+      fi
+      ;;
+  esac
 
   return 1
 }

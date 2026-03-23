@@ -24,6 +24,9 @@ WAYS_DIR="${HOME}/.claude/hooks/ways"
 source "${WAYS_DIR}/match-way.sh"
 detect_semantic_engine
 
+# Clean up embedding cache on exit (ephemeral per-prompt eval cycle)
+[[ -n "${EMBED_CACHE:-}" ]] && trap 'rm -f "$EMBED_CACHE" 2>/dev/null' EXIT
+
 # Epoch counter
 source "${WAYS_DIR}/epoch.sh"
 bump_epoch "$SESSION_ID"
@@ -87,7 +90,7 @@ scan_ways() {
     fi
 
     # Additive matching: pattern OR semantic (either channel can fire)
-    if match_way_prompt "$PROMPT" "$pattern" "$description" "$vocabulary" "$effective_threshold"; then
+    if match_way_prompt "$PROMPT" "$pattern" "$description" "$vocabulary" "$effective_threshold" "$waypath"; then
       ~/.claude/hooks/ways/show-way.sh "$waypath" "$SESSION_ID" "${MATCH_CHANNEL:-prompt}"
     fi
   done < <(find "$dir" -name "way.md" -print0 2>/dev/null)

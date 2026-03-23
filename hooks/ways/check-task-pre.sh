@@ -68,7 +68,7 @@ scan_ways_for_subagent() {
     local vocabulary=$(get_field "vocabulary")
     local threshold=$(get_field "threshold")
 
-    if match_way_prompt "$TASK_PROMPT" "$pattern" "$description" "$vocabulary" "$threshold"; then
+    if match_way_prompt "$TASK_PROMPT" "$pattern" "$description" "$vocabulary" "$threshold" "$waypath"; then
       MATCHED_WAYS+=("$waypath|${MATCH_CHANNEL:-prompt}")
     fi
   done < <(find "$dir" -name "way.md" -print0 2>/dev/null)

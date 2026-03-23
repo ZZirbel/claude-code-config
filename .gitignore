@@ -105,10 +105,17 @@
 !tools/way-match/*
 !tools/way-match/snowball/
 !tools/way-match/snowball/*
+!tools/way-embed/
+!tools/way-embed/*
+!tools/way-embed/llama.cpp
 
 # Standalone tools (user-facing CLI utilities)
 !tools/
 !tools/*
+
+# Models (GGUF weights for embedding inference)
+!models/
+!models/*
 
 # Built binaries (checked in, cross-platform APE)
 !bin/
