@@ -21,6 +21,14 @@ for cmd in jq python3; do
   fi
 done
 
+# Colors (disabled for non-terminal or --json)
+if [[ -t 1 ]]; then
+  GREEN='\033[0;32m' YELLOW='\033[1;33m' RED='\033[0;31m'
+  CYAN='\033[0;36m' DIM='\033[2m' BOLD='\033[1m' RESET='\033[0m'
+else
+  GREEN='' YELLOW='' RED='' CYAN='' DIM='' BOLD='' RESET=''
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WAYS_DIR="${HOME}/.claude/hooks/ways"
 SCANNER="${SCRIPT_DIR}/provenance-scan.py"
@@ -110,46 +118,66 @@ if $JSON_OUTPUT; then
 fi
 
 # Human-readable output
-echo "Provenance Coverage Report"
-echo "=========================="
 echo ""
-printf "Ways scanned:        %3d\n" "$TOTAL"
+echo -e "${BOLD}Provenance Coverage Report${RESET}"
+echo ""
+
+# Coverage with color-coded percentage
 if [[ "$TOTAL" -gt 0 ]]; then
-  printf "With provenance:     %3d (%d%%)\n" "$WITH" "$((WITH * 100 / TOTAL))"
+  PCT=$((WITH * 100 / TOTAL))
+  if [[ $PCT -ge 75 ]]; then
+    PCT_COLOR="$GREEN"
+  elif [[ $PCT -ge 40 ]]; then
+    PCT_COLOR="$YELLOW"
+  else
+    PCT_COLOR="$RED"
+  fi
+  printf "  Ways scanned:        %3d\n" "$TOTAL"
+  printf "  With provenance:     ${PCT_COLOR}%3d (%d%%)${RESET}\n" "$WITH" "$PCT"
+  printf "  Without provenance:  %3d\n" "$WITHOUT"
 else
-  printf "With provenance:     %3d\n" "$WITH"
+  printf "  Ways scanned:        %3d\n" "$TOTAL"
+  printf "  With provenance:     %3d\n" "$WITH"
+  printf "  Without provenance:  %3d\n" "$WITHOUT"
 fi
-printf "Without provenance:  %3d\n" "$WITHOUT"
 echo ""
 
-echo "Policy Sources ($POLICIES):"
-echo "$MANIFEST_DATA" | jq -r '.coverage.by_policy | to_entries[] | "  \(.key)\n    → \(.value.implementing_ways | join(", "))"'
+echo -e "${BOLD}Policy Sources${RESET} ${DIM}(${POLICIES}):${RESET}"
+echo "$MANIFEST_DATA" | jq -r '.coverage.by_policy | to_entries[] | .key' | while read -r policy; do
+  WAYS=$(echo "$MANIFEST_DATA" | jq -r --arg p "$policy" '.coverage.by_policy[$p].implementing_ways | join(", ")')
+  echo -e "  ${CYAN}${policy}${RESET}"
+  echo -e "    ${DIM}→ ${WAYS}${RESET}"
+done
 echo ""
 
-echo "Control References ($CONTROLS):"
-echo "$MANIFEST_DATA" | jq -r '.coverage.by_control | to_entries[] | "  \(.key)\n    → \(.value.addressing_ways | join(", "))"'
+echo -e "${BOLD}Control References${RESET} ${DIM}(${CONTROLS}):${RESET}"
+echo "$MANIFEST_DATA" | jq -r '.coverage.by_control | to_entries[] | .key' | while read -r control; do
+  WAYS=$(echo "$MANIFEST_DATA" | jq -r --arg c "$control" '.coverage.by_control[$c].addressing_ways | join(", ")')
+  echo -e "  ${control}"
+  echo -e "    ${DIM}→ ${WAYS}${RESET}"
+done
 echo ""
 
 if [[ -n "$STALE_WAYS" ]]; then
-  echo "Stale Provenance (verified > ${STALE_DAYS} days ago):"
+  echo -e "${BOLD}Stale Provenance${RESET} ${YELLOW}(verified > ${STALE_DAYS} days ago):${RESET}"
   echo "$STALE_WAYS" | while read -r way; do
     VERIFIED=$(echo "$MANIFEST_DATA" | jq -r --arg w "$way" '.ways[$w].provenance.verified')
-    echo "  $way (verified: $VERIFIED)"
+    echo -e "  ${YELLOW}${way}${RESET} ${DIM}(verified: ${VERIFIED})${RESET}"
   done
   echo ""
 fi
 
 if [[ -n "$INCOMPLETE" ]]; then
-  echo "Incomplete Provenance (missing policy, controls, or rationale):"
+  echo -e "${BOLD}Incomplete Provenance${RESET} ${YELLOW}(missing policy, controls, or rationale):${RESET}"
   echo "$INCOMPLETE" | while read -r way; do
-    echo "  $way"
+    echo -e "  ${YELLOW}${way}${RESET}"
   done
   echo ""
 fi
 
 # Cross-reference with external audit ledger if provided
 if [[ -n "$LEDGER" && -f "$LEDGER" ]]; then
-  echo "Cross-Repo Verification ($(basename "$LEDGER")):"
+  echo -e "${BOLD}Cross-Repo Verification${RESET} ${DIM}($(basename "$LEDGER")):${RESET}"
 
   # Get control IDs from ledger
   LEDGER_CONTROLS=$(jq -r '.control_disposition_map | keys[]' "$LEDGER" 2>/dev/null)
@@ -184,7 +212,8 @@ if [[ -n "$LEDGER" && -f "$LEDGER" ]]; then
   echo ""
 fi
 
-echo "Ways without provenance:"
+echo -e "${BOLD}Ways without provenance:${RESET}"
 echo "$MANIFEST_DATA" | jq -r '.coverage.without_provenance[]' | while read -r way; do
-  printf "  %s\n" "$way"
+  echo -e "  ${DIM}${way}${RESET}"
 done
+echo ""
