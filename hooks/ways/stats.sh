@@ -9,6 +9,20 @@
 #   --projects   Per-project dashboard (sessions, memory, way fires)
 #   --json       Machine-readable output
 
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+  B='' D='' C='' R=''
+  if [[ -t 1 ]]; then B='\033[1m' D='\033[2m' C='\033[0;36m' R='\033[0m'; fi
+  echo -e "${B}ways-stats${R} — Way firing statistics and project dashboard"
+  echo ""
+  echo -e "  ${C}Usage:${R}  ways-stats [--days N] [--project PATH] [--projects] [--json]"
+  echo ""
+  echo -e "  ${D}--days N       Show last N days (default: all)${R}"
+  echo -e "  ${D}--project PATH Filter to specific project${R}"
+  echo -e "  ${D}--projects     Per-project dashboard mode${R}"
+  echo -e "  ${D}--json         Machine-readable output${R}"
+  exit 0
+fi
+
 STATS_FILE="${HOME}/.claude/stats/events.jsonl"
 PROJECTS_DIR="${HOME}/.claude/projects"
 

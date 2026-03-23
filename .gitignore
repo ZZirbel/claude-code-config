@@ -95,6 +95,8 @@
 !governance-report
 !ways-stats
 !embed-status
+!embed-corpus
+!lint-ways
 !governance/
 !governance/README.md
 !governance/*.py

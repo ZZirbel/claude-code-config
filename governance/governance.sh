@@ -68,7 +68,25 @@ while [[ $# -gt 0 ]]; do
     --lint)      MODE="lint"; shift ;;
     --json)      JSON_OUT=true; shift ;;
     --manifest)  [[ $# -lt 2 ]] && { echo "Error: --manifest requires a file path" >&2; exit 1; }; MANIFEST="$2"; shift 2 ;;
-    --help|-h)   head -16 "$0" | tail -15 | sed 's/^# \?//'; exit 0 ;;
+    --help|-h)
+      _B='' _D='' _C='' _R=''
+      if [[ -t 1 ]]; then _B='\033[1m' _D='\033[2m' _C='\033[0;36m' _R='\033[0m'; fi
+      echo -e "${_B}governance-report${_R} — Provenance traceability for ways"
+      echo ""
+      echo -e "  ${_C}Usage:${_R}  governance-report [mode] [--json]"
+      echo ""
+      echo -e "  ${_D}(default)          Coverage report${_R}"
+      echo -e "  ${_D}--trace WAY        End-to-end trace for a way${_R}"
+      echo -e "  ${_D}--control PATTERN   Which ways implement a control${_R}"
+      echo -e "  ${_D}--policy PATTERN    Which ways derive from a policy${_R}"
+      echo -e "  ${_D}--gaps             Ways without provenance${_R}"
+      echo -e "  ${_D}--stale [DAYS]     Stale verified dates (default: 90)${_R}"
+      echo -e "  ${_D}--active           Cross-reference with firing stats${_R}"
+      echo -e "  ${_D}--matrix           Flat: way | control | justification${_R}"
+      echo -e "  ${_D}--lint             Validate provenance integrity${_R}"
+      echo -e "  ${_D}--json             Machine-readable output (any mode)${_R}"
+      exit 0
+      ;;
     *)           echo "Unknown option: $1 (try --help)" >&2; exit 1 ;;
   esac
 done

@@ -66,6 +66,10 @@
           {
             "type": "command",
             "command": "${HOME}/.claude/hooks/check-config-updates.sh"
+          },
+          {
+            "type": "command",
+            "command": "${HOME}/.claude/hooks/ways/check-embedding-staleness.sh"
           }
         ]
       },

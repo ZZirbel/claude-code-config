@@ -2,7 +2,8 @@
 # Way frontmatter linter and fixer
 #
 # Usage:
-#   lint-ways.sh                     # lint all ways (global + project)
+#   lint-ways.sh                     # lint all ways (global + current project)
+#   lint-ways.sh --all-projects      # lint all ways (global + every tracked project)
 #   lint-ways.sh <path>              # lint ways under a specific directory
 #   lint-ways.sh --fix               # show suggested fixes (does not auto-apply)
 #   lint-ways.sh --schema            # print the frontmatter schema
@@ -15,20 +16,41 @@ set -uo pipefail
 
 WAYS_DIR="${HOME}/.claude/hooks/ways"
 SCHEMA_FILE="${WAYS_DIR}/frontmatter-schema.yaml"
+
+# Colors (disabled for non-terminal)
+if [[ -t 1 ]]; then
+  GREEN='\033[0;32m' YELLOW='\033[1;33m' RED='\033[0;31m'
+  CYAN='\033[0;36m' DIM='\033[2m' BOLD='\033[1m' RESET='\033[0m'
+else
+  GREEN='' YELLOW='' RED='' CYAN='' DIM='' BOLD='' RESET=''
+fi
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-}"
 
 MODE="lint"
 FIX=false
 STRICT=false
+ALL_PROJECTS=false
 TARGET=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --fix)    FIX=true; shift ;;
-        --strict) STRICT=true; shift ;;
-        --schema) MODE="schema"; shift ;;
+        --fix)          FIX=true; shift ;;
+        --strict)       STRICT=true; shift ;;
+        --schema)       MODE="schema"; shift ;;
+        --all-projects) ALL_PROJECTS=true; shift ;;
         --help|-h)
-            sed -n '2,/^$/{ s/^# //; s/^#//; p }' "$0"
+            B='' D='' C='' R=''
+            if [[ -t 1 ]]; then B='\033[1m' D='\033[2m' C='\033[0;36m' R='\033[0m'; fi
+            echo -e "${B}lint-ways${R} — Way frontmatter linter"
+            echo ""
+            echo -e "  ${C}Usage:${R}  lint-ways.sh [options] [path]"
+            echo ""
+            echo -e "  ${D}(default)        Lint global + current project ways${R}"
+            echo -e "  ${D}--all-projects   Lint global + every tracked project${R}"
+            echo -e "  ${D}--fix            Show suggested fixes (does not auto-apply)${R}"
+            echo -e "  ${D}--strict         Check recommended fields${R}"
+            echo -e "  ${D}--schema         Print the frontmatter schema${R}"
+            echo -e "  ${D}<path>           Lint ways under a specific directory${R}"
             exit 0
             ;;
         *)  TARGET="$1"; shift ;;
@@ -39,7 +61,7 @@ done
 # Regenerate ways-corpus.jsonl before linting so IDF is current.
 # Only runs if the generator script exists.
 CORPUS_GEN="${HOME}/.claude/tools/way-match/generate-corpus.sh"
-if [[ -x "$CORPUS_GEN" && "$MODE" == "lint" ]]; then
+if [[ -x "$CORPUS_GEN" && "$MODE" == "lint" && -z "${GENERATE_CORPUS_RUNNING:-}" ]]; then
     bash "$CORPUS_GEN" --quiet "$WAYS_DIR" 2>/dev/null
 fi
 
@@ -143,7 +165,7 @@ lint_file() {
     frontmatter=$(awk 'NR==1 && /^---$/{p=1; next} p && /^---$/{exit} p{print}' "$filepath")
 
     [[ -z "$frontmatter" ]] && {
-        echo "  ERROR: $relpath — no YAML frontmatter"
+        echo -e "  ${RED}ERROR:${RESET} $relpath — no YAML frontmatter"
         ((ERRORS++))
         return
     }
@@ -164,10 +186,10 @@ lint_file() {
     local multiline_fields
     multiline_fields=$(echo "$frontmatter" | awk '/^[a-z_]+: *[>|] *$/{gsub(/:.*/, ""); print}')
     for mlf in $multiline_fields; do
-        echo "  ERROR: $relpath — '$mlf' uses multi-line YAML (> or |) which the trigger pipeline cannot parse. Use a single line."
+        echo -e "  ${RED}ERROR:${RESET} $relpath — '$mlf' uses multi-line YAML (> or |) which the trigger pipeline cannot parse. Use a single line."
         ((file_errors++))
         if [[ "$FIX" == "true" ]]; then
-            echo "    fix: collapse '$mlf:' value to a single line"
+            echo -e "    ${DIM}fix: collapse '$mlf:' value to a single line${RESET}"
         fi
     done
 
@@ -180,10 +202,10 @@ lint_file() {
             [[ "$field" == "$valid" ]] && { found=true; break; }
         done
         if [[ "$found" == "false" ]]; then
-            echo "  UNKNOWN: $relpath — unknown field '$field'"
+            echo -e "  ${YELLOW}UNKNOWN:${RESET} $relpath — unknown field '$field'"
             ((file_warnings++))
             if [[ "$FIX" == "true" ]]; then
-                echo "    fix: remove '$field:' line"
+                echo -e "    ${DIM}fix: remove '$field:' line${RESET}"
             fi
         fi
     done
@@ -193,11 +215,11 @@ lint_file() {
     has_desc=$(echo "$frontmatter" | grep -c '^description:' || true)
     has_vocab=$(echo "$frontmatter" | grep -c '^vocabulary:' || true)
     if [[ "$has_desc" -gt 0 && "$has_vocab" -eq 0 ]]; then
-        echo "  WARNING: $relpath — description without vocabulary (semantic matching incomplete)"
+        echo -e "  ${YELLOW}WARNING:${RESET} $relpath — description without vocabulary (semantic matching incomplete)"
         ((file_warnings++))
     fi
     if [[ "$has_vocab" -gt 0 && "$has_desc" -eq 0 ]]; then
-        echo "  WARNING: $relpath — vocabulary without description (semantic matching incomplete)"
+        echo -e "  ${YELLOW}WARNING:${RESET} $relpath — vocabulary without description (semantic matching incomplete)"
         ((file_warnings++))
     fi
 
@@ -205,7 +227,7 @@ lint_file() {
     local thresh
     thresh=$(echo "$frontmatter" | awk '/^threshold:/{gsub(/^threshold: */,"");print;exit}')
     if [[ -n "$thresh" ]] && ! echo "$thresh" | grep -qE '^[0-9]+\.?[0-9]*$'; then
-        echo "  ERROR: $relpath — threshold '$thresh' is not numeric"
+        echo -e "  ${RED}ERROR:${RESET} $relpath — threshold '$thresh' is not numeric"
         ((file_errors++))
     fi
 
@@ -222,7 +244,7 @@ lint_file() {
                 [[ "$s" == "$vs" ]] && { scope_valid=true; break; }
             done
             if [[ "$scope_valid" == "false" ]]; then
-                echo "  ERROR: $relpath — invalid scope '$s' (valid: $VALID_SCOPES)"
+                echo -e "  ${RED}ERROR:${RESET} $relpath — invalid scope '$s' (valid: $VALID_SCOPES)"
                 ((file_errors++))
             fi
         done
@@ -237,7 +259,7 @@ lint_file() {
             [[ "$macro_val" == "$vm" ]] && { macro_valid=true; break; }
         done
         if [[ "$macro_valid" == "false" ]]; then
-            echo "  ERROR: $relpath — invalid macro '$macro_val' (valid: $VALID_MACROS)"
+            echo -e "  ${RED}ERROR:${RESET} $relpath — invalid macro '$macro_val' (valid: $VALID_MACROS)"
             ((file_errors++))
         fi
     fi
@@ -251,7 +273,7 @@ lint_file() {
             [[ "$trigger_val" == "$vt" ]] && { trigger_valid=true; break; }
         done
         if [[ "$trigger_valid" == "false" ]]; then
-            echo "  ERROR: $relpath — invalid trigger '$trigger_val' (valid: $VALID_TRIGGERS)"
+            echo -e "  ${RED}ERROR:${RESET} $relpath — invalid trigger '$trigger_val' (valid: $VALID_TRIGGERS)"
             ((file_errors++))
         fi
     fi
@@ -268,7 +290,7 @@ lint_file() {
                 [[ "$wf" == "$valid_wf" ]] && { wf_valid=true; break; }
             done
             if [[ "$wf_valid" == "false" ]]; then
-                echo "  UNKNOWN: $relpath — unknown when: sub-field '$wf'"
+                echo -e "  ${YELLOW}UNKNOWN:${RESET} $relpath — unknown when: sub-field '$wf'"
                 ((file_warnings++))
             fi
         done
@@ -279,7 +301,7 @@ lint_file() {
         if [[ -n "$when_project" ]]; then
             local expanded="${when_project/#\~/$HOME}"
             if [[ ! -d "$expanded" ]]; then
-                echo "  WARNING: $relpath — when.project path '$when_project' does not exist"
+                echo -e "  ${YELLOW}WARNING:${RESET} $relpath — when.project path '$when_project' does not exist"
                 ((file_warnings++))
             fi
         fi
@@ -291,7 +313,7 @@ lint_file() {
         local has_pattern
         has_pattern=$(echo "$frontmatter" | grep -c '^pattern:' || true)
         if [[ "$has_pattern" -gt 0 && "$has_desc" -eq 0 && "$has_vocab" -eq 0 ]]; then
-            echo "  RECOMMEND: $relpath — regex-only matching; add description + vocabulary for natural language coverage"
+            echo -e "  ${CYAN}RECOMMEND:${RESET} $relpath — regex-only matching; add description + vocabulary for natural language coverage"
             ((file_warnings++))
         fi
 
@@ -308,10 +330,10 @@ lint_file() {
                 continue
             fi
             if ! echo "$frontmatter" | grep -q "^${rec}:"; then
-                echo "  RECOMMEND: $relpath — missing recommended field '$rec'"
+                echo -e "  ${CYAN}RECOMMEND:${RESET} $relpath — missing recommended field '$rec'"
                 ((file_warnings++))
                 if [[ "$FIX" == "true" ]]; then
-                    echo "    fix: add '$rec:' with appropriate value"
+                    echo -e "    ${DIM}fix: add '$rec:' with appropriate value${RESET}"
                 fi
             fi
         done
@@ -320,11 +342,11 @@ lint_file() {
     # check.md specific: verify anchor and check sections
     if [[ "$filetype" == "check" ]]; then
         if ! grep -q '^## anchor' "$filepath"; then
-            echo "  ERROR: $relpath — check.md missing '## anchor' section"
+            echo -e "  ${RED}ERROR:${RESET} $relpath — check.md missing '## anchor' section"
             ((file_errors++))
         fi
         if ! grep -q '^## check' "$filepath"; then
-            echo "  ERROR: $relpath — check.md missing '## check' section"
+            echo -e "  ${RED}ERROR:${RESET} $relpath — check.md missing '## check' section"
             ((file_errors++))
         fi
     fi
@@ -335,8 +357,9 @@ lint_file() {
 
 # ── Scan ──────────────────────────────────────────────────────────
 
-echo "=== Way Frontmatter Lint ==="
-echo "Schema: $SCHEMA_FILE"
+echo ""
+echo -e "${BOLD}Way Frontmatter Lint${RESET}"
+echo -e "${DIM}Schema: $SCHEMA_FILE${RESET}"
 echo ""
 
 scan_dir() {
@@ -353,22 +376,59 @@ scan_dir() {
     done < <(find "$dir" \( -name "way.md" -o -name "check.md" \) -print0 2>/dev/null | sort -z)
 
     echo ""
-    echo "$label: scanned $count files"
+    echo -e "${DIM}${label}: scanned $count files${RESET}"
 }
+
+PROJ_SCANNED=0
+PROJ_WITH_WAYS=0
+PROJ_WITH_SEMANTIC=0
+PROJ_TOTAL=0
 
 if [[ -n "$TARGET" ]]; then
     scan_dir "$TARGET" "Target"
+elif $ALL_PROJECTS; then
+    # Scan all tracked projects using shared crawler
+    EMBED_LIB="${WAYS_DIR}/embed-lib.sh"
+    if [[ -f "$EMBED_LIB" ]]; then
+        # shellcheck source=embed-lib.sh
+        source "$EMBED_LIB"
+
+        # Count total projects in ~/.claude/projects/
+        PROJ_TOTAL=$(find "${HOME}/.claude/projects" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
+
+        while IFS='|' read -r _encoded project_path way_count sem_count; do
+            display=$(echo "$project_path" | sed "s|^$HOME|~|")
+            scan_dir "${project_path}/.claude/ways" "Project: ${display}"
+            PROJ_SCANNED=$((PROJ_SCANNED + 1))
+            PROJ_WITH_WAYS=$((PROJ_WITH_WAYS + 1))
+            [[ $sem_count -gt 0 ]] && PROJ_WITH_SEMANTIC=$((PROJ_WITH_SEMANTIC + 1))
+        done < <(enumerate_projects || true)
+    fi
+    scan_dir "$WAYS_DIR" "Global"
 else
     if [[ -n "$PROJECT_DIR" && -d "$PROJECT_DIR/.claude/ways" ]]; then
         scan_dir "$PROJECT_DIR/.claude/ways" "Project-local"
+        PROJ_SCANNED=1
+        PROJ_WITH_WAYS=1
     fi
     scan_dir "$WAYS_DIR" "Global"
 fi
 
 echo ""
-echo "════════════════════════════"
-echo "Summary: $ERRORS errors, $WARNINGS warnings"
-echo "════════════════════════════"
+if [[ $ERRORS -gt 0 ]]; then
+  echo -e "${RED}Summary: $ERRORS errors, $WARNINGS warnings${RESET}"
+elif [[ $WARNINGS -gt 0 ]]; then
+  echo -e "${YELLOW}Summary: $ERRORS errors, $WARNINGS warnings${RESET}"
+else
+  echo -e "${GREEN}Summary: $ERRORS errors, $WARNINGS warnings${RESET}"
+fi
+
+if $ALL_PROJECTS && [[ $PROJ_TOTAL -gt 0 ]]; then
+  echo -e "${DIM}Projects: ${PROJ_TOTAL} tracked, ${PROJ_WITH_WAYS} with ways, ${PROJ_WITH_SEMANTIC} with semantic ways${RESET}"
+elif [[ $PROJ_SCANNED -gt 0 ]]; then
+  echo -e "${DIM}Projects: ${PROJ_SCANNED} scanned${RESET}"
+fi
+echo ""
 
 [[ $ERRORS -gt 0 ]] && exit 1
 exit 0
