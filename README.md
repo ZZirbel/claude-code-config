@@ -69,7 +69,7 @@ Standard utilities (`bash`, `awk`, `sed`, `grep`, `find`, `timeout`, `tr`, `sort
 **Semantic matching** uses a three-tier engine: **embedding** (all-MiniLM-L6-v2, 98% accuracy) → **BM25** (91% accuracy) → **NCD** (legacy gzip fallback). Auto-detected at runtime — the best available engine is used. The BM25 binary at `bin/way-match` is checked in as a cross-platform APE. The embedding engine requires a separate build and model download:
 
 ```bash
-cd tools/way-embed && make setup   # build, download model (21MB), generate corpus, verify
+cd tools/way-embed && make setup   # download binary + model (21MB), generate corpus, verify
 ```
 
 See [Semantic Matching](docs/hooks-and-ways.md#semantic-matching) for the full setup and engine comparison.

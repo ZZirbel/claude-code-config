@@ -2,20 +2,28 @@ Pre-built binaries and model for ADR-108 embedding-based way matching.
 
 ## Quick Install
 
+One command — downloads the right binary for your platform + model, generates corpus:
+
 ```bash
-# Detect your platform
-PLATFORM="$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m)"
+cd ~/.claude/tools/way-embed && make setup
+```
 
-# Download platform binary + model
-gh release download way-embed-v0.1.0 \
-  -p "way-embed-${PLATFORM}" -D ~/.claude/bin/
-cp ~/.claude/bin/way-embed-${PLATFORM} ~/.claude/bin/way-embed
-chmod +x ~/.claude/bin/way-embed
+This will:
+1. Download the pre-built binary for your OS/arch from this release
+2. Download the Q5_K_M model (21MB)
+3. Regenerate the corpus with embedding vectors
+4. Run verification tests
 
-gh release download way-embed-v0.1.0 -p 'minilm-l6-v2.gguf' \
-  -D "${XDG_CACHE_HOME:-~/.cache}/claude-ways/user/"
+If no pre-built binary exists for your platform, it builds from source automatically.
 
-# Regenerate corpus with embeddings
+### Manual install
+
+```bash
+# Download binary + model separately
+bash ~/.claude/tools/way-embed/download-binary.sh
+bash ~/.claude/tools/way-embed/download-model.sh
+
+# Regenerate corpus
 bash ~/.claude/tools/way-match/generate-corpus.sh
 
 # Verify

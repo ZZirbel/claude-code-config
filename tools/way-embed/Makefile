@@ -55,8 +55,9 @@ $(MODEL):
 model-upstream:
 	bash $(SRCDIR)download-model.sh --upstream
 
-# Full setup: build binary, download model, regenerate corpus with embeddings
-setup: $(BIN) $(MODEL)
+# Full setup: download (or build) binary + model, regenerate corpus
+# Tries pre-built binary from GitHub Releases first, builds from source if unavailable.
+setup: setup-binary $(MODEL)
 	@echo "Regenerating corpus with embeddings..."
 	bash $(SRCDIR)../../tools/way-match/generate-corpus.sh
 	@echo ""
@@ -64,6 +65,15 @@ setup: $(BIN) $(MODEL)
 	bash $(SRCDIR)test-embedding.sh
 	@echo ""
 	@echo "To compare against BM25: bash $(SRCDIR)compare-engines.sh"
+
+# Try download, fall back to build
+setup-binary:
+	@if bash $(SRCDIR)download-binary.sh; then \
+		echo "Pre-built binary installed."; \
+	else \
+		echo "No pre-built binary available, building from source..."; \
+		$(MAKE) $(BIN); \
+	fi
 
 # Run basic smoke test
 test: $(BIN)

@@ -77,14 +77,25 @@ mv "$TMPFILE" "$OUTPUT"
 echo "Generated ${OUTPUT}: ${count} ways" >&2
 
 # Auto-embed: if way-embed binary and model are available, add embedding vectors
-WAY_EMBED_BIN="${HOME}/.claude/bin/way-embed"
-MODEL_PATH="${XDG_CACHE_HOME:-$HOME/.cache}/claude-ways/user/minilm-l6-v2.gguf"
+# Check XDG cache first (downloaded), then ~/.claude/bin (built from source)
+XDG_WAY="${XDG_CACHE_HOME:-$HOME/.cache}/claude-ways/user"
+if [[ -x "${XDG_WAY}/way-embed" ]]; then
+  WAY_EMBED_BIN="${XDG_WAY}/way-embed"
+elif [[ -x "${HOME}/.claude/bin/way-embed" ]]; then
+  WAY_EMBED_BIN="${HOME}/.claude/bin/way-embed"
+else
+  WAY_EMBED_BIN=""
+fi
+MODEL_PATH="${XDG_WAY}/minilm-l6-v2.gguf"
 
-if [[ -x "$WAY_EMBED_BIN" && -f "$MODEL_PATH" ]]; then
+if [[ -n "$WAY_EMBED_BIN" && -x "$WAY_EMBED_BIN" && -f "$MODEL_PATH" ]]; then
   echo "Embedding model found — generating embedding vectors..." >&2
   if "$WAY_EMBED_BIN" generate --corpus "$OUTPUT" --model "$MODEL_PATH" 2>&1 | grep -v "^$" >&2; then
     echo "Embeddings added to ${OUTPUT}" >&2
   else
     echo "WARNING: embedding generation failed, corpus has BM25 fields only" >&2
   fi
+elif [[ ! -x "$WAY_EMBED_BIN" ]]; then
+  echo "Tip: install the embedding engine for 98% matching accuracy (vs 91% BM25):" >&2
+  echo "  cd ~/.claude/tools/way-embed && make setup" >&2
 fi

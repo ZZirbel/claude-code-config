@@ -42,9 +42,16 @@ check_when_preconditions() {
 # Respects "semantic_engine" in ways.json: "auto" (default), "embedding", "bm25", "ncd"
 # Sets: SEMANTIC_ENGINE, WAY_MATCH_BIN, WAY_EMBED_BIN, MODEL_PATH, CORPUS_PATH, EMBED_CACHE
 detect_semantic_engine() {
-  WAY_EMBED_BIN="${HOME}/.claude/bin/way-embed"
+  local xdg_cache="${XDG_CACHE_HOME:-$HOME/.cache}/claude-ways/user"
+  # way-embed: check XDG cache first (downloaded), then ~/.claude/bin (built from source)
+  WAY_EMBED_BIN=""
+  if [[ -x "${xdg_cache}/way-embed" ]]; then
+    WAY_EMBED_BIN="${xdg_cache}/way-embed"
+  elif [[ -x "${HOME}/.claude/bin/way-embed" ]]; then
+    WAY_EMBED_BIN="${HOME}/.claude/bin/way-embed"
+  fi
   WAY_MATCH_BIN="${HOME}/.claude/bin/way-match"
-  MODEL_PATH="${XDG_CACHE_HOME:-$HOME/.cache}/claude-ways/user/minilm-l6-v2.gguf"
+  MODEL_PATH="${xdg_cache}/minilm-l6-v2.gguf"
   CORPUS_PATH=""
   EMBED_CACHE=""
   local corpus_file="${WAYS_DIR}/ways-corpus.jsonl"
@@ -59,7 +66,7 @@ detect_semantic_engine() {
 
   # If forced, use that engine (if prerequisites met), otherwise fall through
   _try_embedding() {
-    if [[ -x "$WAY_EMBED_BIN" && -f "$MODEL_PATH" && -n "$CORPUS_PATH" ]]; then
+    if [[ -n "$WAY_EMBED_BIN" && -x "$WAY_EMBED_BIN" && -f "$MODEL_PATH" && -n "$CORPUS_PATH" ]]; then
       SEMANTIC_ENGINE="embedding"
       local cache_base="${XDG_CACHE_HOME:-$HOME/.cache}/claude-ways/projects"
       local encoded_project
