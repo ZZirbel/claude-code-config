@@ -91,7 +91,10 @@
 !scripts/task-dashboard.py
 
 # Governance traceability (separable)
+# CLI tools (root symlinks to implementation scripts)
 !governance-report
+!ways-stats
+!embed-status
 !governance/
 !governance/README.md
 !governance/*.py
