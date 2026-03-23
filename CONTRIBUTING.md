@@ -26,3 +26,16 @@ Open an issue. Include which hook or way is involved, your OS/shell, and any err
 ## Code Style
 
 It's all bash. Keep it portable (no bashisms that break on macOS default bash 3.2), use `shellcheck` if available, and keep scripts under 200 lines where possible.
+
+## Gitignore: Exclusive by Design
+
+The `.gitignore` uses an **exclusive pattern**: `*` (ignore everything) with explicit `!` exceptions for tracked files. This is intentional, not lazy.
+
+This repo *is* `~/.claude/` — the directory that controls how Claude Code thinks and acts. Every file here can influence agent behavior: hooks execute shell commands, ways inject guidance, CLAUDE.md steers reasoning, settings.json controls permissions. An accidental commit of a malicious or poorly-written file could steer Claude to do undesirable things for anyone who pulls it.
+
+The exclusive gitignore ensures:
+- **No accidental file inclusion.** New files must be explicitly opted in via `.gitignore`. You can't push a file you didn't mean to track.
+- **Clear audit surface.** `git diff .gitignore` shows exactly what's tracked. Reviewers can see the full inclusion list in one place.
+- **Defense against ignorance and malice.** Both well-meaning contributors who don't realize their file will affect Claude's behavior, and adversarial PRs that try to slip in steering content.
+
+When adding a new tracked file, add a `!filename` or `!path/` exception to `.gitignore` and explain why it needs to be tracked in your PR description.

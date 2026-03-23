@@ -28,7 +28,7 @@ _Ways architecture, matching, macros, hooks, session lifecycle_
 | [ADR-105](./system/ADR-105-progressive-disclosure-for-way-trees.md) | Progressive Disclosure for Way Trees | Accepted |
 | [ADR-106](./system/ADR-106-project-pulse-epoch-mapped-project-awareness.md) | Project Pulse — Epoch-Mapped Project Awareness | Accepted |
 | [ADR-107](./system/ADR-107-way-match-corpus-batch-mode-and-locale-support.md) | Way-Match Corpus, Batch Mode, and Locale Support | Draft |
-| [ADR-108](./system/ADR-108-embedding-based-way-matching-with-all-minilm-l6-v2.md) | Embedding-Based Way Matching with all-MiniLM-L6-v2 | Draft |
+| [ADR-108](./system/ADR-108-embedding-based-way-matching-with-all-minilm-l6-v2.md) | Embedding-Based Way Matching with all-MiniLM-L6-v2 | Accepted |
 
 ## Documentation
 _Documentation structure, tooling, coherence_

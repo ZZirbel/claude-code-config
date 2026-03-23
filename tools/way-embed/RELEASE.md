@@ -5,7 +5,7 @@ Pre-built binaries and model for ADR-108 embedding-based way matching.
 One command — downloads the right binary for your platform + model, generates corpus:
 
 ```bash
-cd ~/.claude/tools/way-embed && make setup
+cd ~/.claude && make setup
 ```
 
 This will:
@@ -44,7 +44,7 @@ bash ~/.claude/tools/way-embed/test-embedding.sh
 If your platform isn't listed:
 
 ```bash
-cd ~/.claude/tools/way-embed && make setup
+cd ~/.claude && make setup
 ```
 
 Requires: cmake, C++ compiler, git (for submodule).

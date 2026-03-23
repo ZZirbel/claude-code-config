@@ -4,6 +4,7 @@
 # Track these directories
 !.gitignore
 !CLAUDE.md
+!Makefile
 !README.md
 !LICENSE
 !CONTRIBUTING.md
@@ -68,8 +69,9 @@
 !hooks/ways/
 !hooks/ways/*.md
 !hooks/ways/*.sh
-!hooks/ways/*.jsonl
 !hooks/ways/frontmatter-schema.yaml
+# ways-corpus.jsonl is generated dynamically by `make setup` — not tracked
+# It contains per-user embedding vectors and may include project-local ways
 # Nested ways: domain/wayname[/subway...]/way.md + macro.sh + bundled tools
 !hooks/ways/*/
 !hooks/ways/**/

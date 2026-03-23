@@ -1,0 +1,169 @@
+# Installation Guide
+
+This guide covers installing claude-code-config when the path isn't a straight line — existing files, custom config, previous installs, or forks you want to keep in sync.
+
+If you're starting fresh with no `~/.claude/` directory, you don't need this guide:
+
+```bash
+git clone https://github.com/aaronsb/claude-code-config ~/.claude
+cd ~/.claude && make setup
+```
+
+Restart Claude Code. Done.
+
+## The problem
+
+Claude Code stores its configuration in `~/.claude/`. This repo *is* `~/.claude/`. That means installing it replaces the directory that Claude Code already uses — and you might have files there you care about.
+
+The installer detects this and stops rather than silently clobbering your work. This guide helps you understand what you're dealing with and pick the right path forward.
+
+## Scenario 1: You have settings but no git tracking
+
+**Signs:** `~/.claude/` exists with files like `settings.json`, `CLAUDE.md`, or `projects/`, but no `.git/` directory.
+
+This is common — Claude Code creates `~/.claude/` on first run with your settings.
+
+**What to save:**
+- `settings.json` — your permissions and preferences
+- `CLAUDE.md` — your global instructions (if you wrote any)
+- `projects/` — per-project memory and settings
+- `memory/` — auto-memory files (if using memory)
+
+**Steps:**
+
+```bash
+# 1. Back up what matters
+mkdir -p ~/claude-config-backup
+cp -a ~/.claude/settings.json ~/claude-config-backup/ 2>/dev/null
+cp -a ~/.claude/settings.local.json ~/claude-config-backup/ 2>/dev/null
+cp -a ~/.claude/CLAUDE.md ~/claude-config-backup/ 2>/dev/null
+cp -a ~/.claude/projects ~/claude-config-backup/ 2>/dev/null
+cp -a ~/.claude/memory ~/claude-config-backup/ 2>/dev/null
+
+# 2. Move the old directory aside
+mv ~/.claude ~/.claude-pre-install
+
+# 3. Install
+git clone https://github.com/aaronsb/claude-code-config ~/.claude
+cd ~/.claude && make setup
+
+# 4. Restore your files
+cp ~/claude-config-backup/settings.json ~/.claude/ 2>/dev/null
+cp ~/claude-config-backup/settings.local.json ~/.claude/ 2>/dev/null
+cp ~/claude-config-backup/CLAUDE.md ~/.claude/ 2>/dev/null
+cp -a ~/claude-config-backup/projects ~/.claude/ 2>/dev/null
+cp -a ~/claude-config-backup/memory ~/.claude/ 2>/dev/null
+```
+
+Your settings are `.gitignore`d in this repo, so they won't conflict with updates.
+
+## Scenario 2: You have your own git tracking
+
+**Signs:** `~/.claude/.git/` exists, but it's your own repo — not a clone or fork of claude-code-config.
+
+This means you're already version-controlling your Claude config. Good instinct. The question is whether you want to adopt this framework or keep your own.
+
+**Option A: Adopt this framework (replace your tracking)**
+
+```bash
+# Back up everything
+cp -a ~/.claude ~/.claude-my-version
+
+# Remove your .git and install ours
+rm -rf ~/.claude/.git
+rm -rf ~/.claude    # or mv to backup
+git clone https://github.com/aaronsb/claude-code-config ~/.claude
+cd ~/.claude && make setup
+
+# Cherry-pick your customizations back in
+# (compare ~/.claude-my-version/ with ~/.claude/ and copy what you want)
+```
+
+**Option B: Keep your tracking, adopt selectively**
+
+Read through this repo and copy the parts you want into your own config. The key pieces:
+- `hooks/` — the event-driven way system
+- `hooks/ways/` — the actual guidance content
+- `tools/way-match/` and `tools/way-embed/` — semantic matching engine
+- `settings.json` — hook registration (merge with yours)
+
+This is more work but gives you full control.
+
+## Scenario 3: Previous claude-code-config install
+
+**Signs:** `~/.claude/.git/` exists and origin points to `aaronsb/claude-code-config` or your fork of it.
+
+You're already installed. Just update:
+
+```bash
+cd ~/.claude && git pull
+make setup
+```
+
+The installer detects this automatically and runs the update path.
+
+## Scenario 4: You want a fork
+
+**Recommended for anyone who plans to customize ways.**
+
+```bash
+# 1. Fork on GitHub first (use the web UI)
+# 2. Clone your fork
+git clone https://github.com/YOUR-USERNAME/claude-code-config ~/.claude
+
+# 3. Set up upstream tracking
+cd ~/.claude
+git remote add upstream https://github.com/aaronsb/claude-code-config
+
+# 4. Set up semantic matching
+make setup
+```
+
+To pull upstream improvements later:
+
+```bash
+cd ~/.claude
+git fetch upstream
+git merge upstream/main
+# Resolve any conflicts in your custom ways
+make setup
+```
+
+The built-in update checker (`hooks/check-config-updates.sh`) detects forks and nudges you when upstream has new commits.
+
+## The nuclear option
+
+If you just want it installed and don't care what's there:
+
+```bash
+scripts/install.sh --dangerously-clobber
+```
+
+This backs up `~/.claude/` to `~/.claude-backup-YYYYMMDD-HHMMSS/` and replaces it entirely. You'll be asked to type `clobber` to confirm (unless piped/non-interactive).
+
+Your backup is a complete copy — you can always restore:
+
+```bash
+rm -rf ~/.claude
+mv ~/.claude-backup-20260323-141500 ~/.claude
+```
+
+## After installing
+
+1. **Restart Claude Code** — ways activate on session start
+2. **Check semantic matching** — `cd ~/.claude/tools/way-embed && bash test-embedding.sh`
+3. **Review ways.json** — `~/.claude/ways.json` controls which domains are active
+4. **Read the ways** — browse `~/.claude/hooks/ways/` to understand what guidance is loaded
+
+## What gets downloaded
+
+The semantic matching engine downloads two artifacts to `~/.cache/claude-ways/user/` (XDG-compliant, outside `~/.claude/`):
+
+| Artifact | Size | Source | Verification |
+|----------|------|--------|--------------|
+| `way-embed` binary | ~3MB | GitHub Releases | SHA-256 checksum |
+| `minilm-l6-v2.gguf` model | ~21MB | GitHub Releases (or HuggingFace) | SHA-256 checksum |
+
+Nothing is downloaded into `~/.claude/` itself — the repo stays clean and diffable.
+
+If the download fails, BM25 fallback activates automatically (91% vs 98% accuracy — still very good).

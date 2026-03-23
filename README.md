@@ -69,7 +69,7 @@ Standard utilities (`bash`, `awk`, `sed`, `grep`, `find`, `timeout`, `tr`, `sort
 **Semantic matching** uses a three-tier engine: **embedding** (all-MiniLM-L6-v2, 98% accuracy) → **BM25** (91% accuracy) → **NCD** (legacy gzip fallback). Auto-detected at runtime — the best available engine is used. The BM25 binary at `bin/way-match` is checked in as a cross-platform APE. The embedding engine requires a separate build and model download:
 
 ```bash
-cd tools/way-embed && make setup   # download binary + model (21MB), generate corpus, verify
+make setup   # download binary + model (21MB), generate corpus, verify
 ```
 
 See [Semantic Matching](docs/hooks-and-ways.md#semantic-matching) for the full setup and engine comparison.
@@ -81,67 +81,27 @@ See [Semantic Matching](docs/hooks-and-ways.md#semantic-matching) for the full s
 
 ## Quick Start
 
-**Fork first.** This repo is a starting point — you'll want to add your own ways for your own workflows. Fork it, then clone your fork:
-
 ```bash
-# Backup existing config if any
-[ -d ~/.claude ] && mv ~/.claude ~/.claude-backup-$(date +%Y%m%d)
+# Clone (fork first if you plan to customize)
+git clone https://github.com/aaronsb/claude-code-config ~/.claude
 
-# Clone your fork
-git clone https://github.com/YOUR-USERNAME/claude-code-config ~/.claude
+# Set up semantic matching engine (downloads ~21MB model)
+cd ~/.claude && make setup
 
-# Make hooks executable
-chmod +x ~/.claude/hooks/**/*.sh ~/.claude/hooks/*.sh 2>/dev/null
-
-# Restart Claude Code - ways are now active
+# Restart Claude Code — ways are now active
 ```
 
-The built-in ways cover software development, but the framework doesn't care about the domain. Replace them, extend them, add entirely new ones. Your fork stays synced with upstream improvements while keeping your custom ways separate.
-
-> **Just want to try it?** You can clone directly (`git clone https://github.com/aaronsb/claude-code-config ~/.claude`) — the system will nudge you if you fall behind upstream.
-
-### Agent-assisted install
-
-If you're asking a coding agent (Claude, Copilot, Cursor, etc.) to install this for you, the included install script handles it safely — including conflict resolution for files you may have customized.
-
-> **Stop and read this.** You are about to let an AI agent modify `~/.claude/` — the directory that controls how Claude Code behaves. This means the agent is editing its own configuration. That's powerful and useful, but you need to understand what you're agreeing to:
->
-> - **Review the repo first.** Browse https://github.com/aaronsb/claude-code-config before installing. Read the hooks. Understand what they do. Don't blindly trust what's here — or anywhere.
-> - **You are responsible.** If you tell an agent to install this, you own the result. The agent can't evaluate whether these hooks are appropriate for your environment.
-> - **Backup is automatic.** The installer backs up your existing `~/.claude/` before touching anything, but verify it yourself.
-
-There are several ways to install — pick whichever fits your comfort level:
+Or as a one-liner (clones to temp, verifies, then installs):
 
 ```bash
-# Clone and run the installer (interactive — prompts on conflicts)
-TMPDIR=$(mktemp -d)
-git clone https://github.com/aaronsb/claude-code-config "$TMPDIR/claude-code-config"
-"$TMPDIR/claude-code-config/scripts/install.sh" "$TMPDIR/claude-code-config"
-rm -rf "$TMPDIR"
-```
-
-```bash
-# Non-interactive (for coding agents — applies defaults without prompting)
-TMPDIR=$(mktemp -d)
-git clone https://github.com/aaronsb/claude-code-config "$TMPDIR/claude-code-config"
-"$TMPDIR/claude-code-config/scripts/install.sh" --auto "$TMPDIR/claude-code-config"
-rm -rf "$TMPDIR"
-```
-
-```bash
-# Or one-line bootstrap (clones, verifies, then runs install.sh from the clone)
 curl -sL https://raw.githubusercontent.com/aaronsb/claude-code-config/main/scripts/install.sh | bash -s -- --bootstrap
 ```
 
-The install script diffs changed files and lets you choose what to keep. With `--auto`, defaults are applied without prompting (safe for coding agents). The `curl | bash` option clones to a temp directory, verifies the clone, then re-executes from the verified copy.
+The built-in ways cover software development, but the framework is domain-agnostic. Fork it, replace the ways, add your own domains.
 
-Restart Claude Code after install — ways are now active.
+> **Already have `~/.claude/`?** The installer detects existing files and won't clobber them. See the **[install guide](docs/install-guide.md)** for how to back up, merge, or start fresh. If you're sure: `scripts/install.sh --dangerously-clobber`.
 
-| Category | Examples | Default | Conflict handling |
-|----------|---------|---------|-------------------|
-| **User config** | `CLAUDE.md`, `settings.json`, `ways.json` | Keep | Diff, merge, replace, or keep |
-| **Ways content** | `way.md` files | Keep | Diff, merge, replace, or keep |
-| **Infrastructure** | `*.sh` scripts, docs, plumbing | Update | Update or skip (with consistency warning) |
+> **Stop and read this** if you're letting an AI agent run the installer. You are about to let an agent modify `~/.claude/` — the directory that controls how Claude Code behaves. The agent is editing its own configuration. Review the repo first. You are responsible for the result.
 
 ## How It Works
 
@@ -162,7 +122,7 @@ Ways config lives in `~/.claude/ways.json`:
 
 ```json
 {
-  "disabled": ["itops"],
+  "disabled": [],
   "semantic_engine": "auto"
 }
 ```
@@ -309,7 +269,7 @@ For the attention mechanics: [context-decay.md](docs/hooks-and-ways/context-deca
 
 ## Updating
 
-At session start, `check-config-updates.sh` compares your local copy against upstream (`aaronsb/claude-code-config`). It runs silently unless you're behind — then it prints a notice with the exact commands to sync. Network calls are rate-limited to once per hour.
+At session start, `check-config-updates.sh` compares your local copy against upstream (`aaronsb/claude-code-config`). It runs silently unless you're behind — then it prints a notice with the exact commands to sync. Network calls are rate-limited to once per hour. After pulling, run `make setup` to update the semantic matching corpus.
 
 | Scenario | How detected | Sync command |
 |----------|-------------|--------------|

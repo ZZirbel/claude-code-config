@@ -97,5 +97,5 @@ if [[ -n "$WAY_EMBED_BIN" && -x "$WAY_EMBED_BIN" && -f "$MODEL_PATH" ]]; then
   fi
 elif [[ ! -x "$WAY_EMBED_BIN" ]]; then
   echo "Tip: install the embedding engine for 98% matching accuracy (vs 91% BM25):" >&2
-  echo "  cd ~/.claude/tools/way-embed && make setup" >&2
+  echo "  cd ~/.claude && make setup" >&2
 fi

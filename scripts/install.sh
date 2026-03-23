@@ -1,127 +1,134 @@
 #!/bin/bash
-# Install or update claude-code-config into ~/.claude
-# Handles file conflicts like apt: user-edited files get diffed and prompted,
-# infrastructure files recommend update with option to skip.
+# Install claude-code-config into ~/.claude
+#
+# This is a gateway, not a butler. It checks readiness, detects complexity,
+# and either proceeds with a clean install or tells you what to sort out first.
 #
 # Usage:
-#   scripts/install.sh <source_dir>     # install from a local clone
-#   scripts/install.sh --auto <dir>     # non-interactive (apply defaults)
-#   scripts/install.sh --bootstrap      # clone latest and install
-#   scripts/install.sh                  # show help
-#   curl ... | bash -s -- --bootstrap   # self-bootstrap from internet
-#   NONINTERACTIVE=1 scripts/install.sh # also non-interactive
+#   scripts/install.sh                           # install from repo root
+#   scripts/install.sh --bootstrap               # clone latest + install
+#   curl ... | bash -s -- --bootstrap            # self-bootstrap from internet
+#   scripts/install.sh --dangerously-clobber     # overwrite existing ~/.claude/
 #
-# With --bootstrap, the script clones the latest release to a temp directory,
-# verifies the clone, then re-executes itself from the verified copy.
-# The curl|bash pattern only bootstraps — the actual install logic always
-# runs from auditable, git-tracked code.
+# The happy path: clone → make setup. Everything else is guardrails.
 
 set -euo pipefail
 
 UPSTREAM_REPO="aaronsb/claude-code-config"
 UPSTREAM_URL="https://github.com/${UPSTREAM_REPO}"
+DEST="${HOME}/.claude"
+
+# --- Colors ---
+
+if [[ -t 1 ]]; then
+  RED='\033[0;31m'
+  GREEN='\033[0;32m'
+  YELLOW='\033[1;33m'
+  CYAN='\033[0;36m'
+  BOLD='\033[1m'
+  DIM='\033[2m'
+  RESET='\033[0m'
+else
+  RED='' GREEN='' YELLOW='' CYAN='' BOLD='' DIM='' RESET=''
+fi
 
 # --- Help ---
 
 show_help() {
-  cat <<'HELP'
-claude-code-config installer
+  cat <<HELP
+${BOLD}claude-code-config installer${RESET}
 
-Usage:
-  scripts/install.sh <source_dir>              Install from a local clone
-  scripts/install.sh --auto <source_dir>       Non-interactive (apply defaults)
+${CYAN}Usage:${RESET}
+  scripts/install.sh                           Install from local clone
   scripts/install.sh --bootstrap               Clone latest and install
-  scripts/install.sh --bootstrap --auto        Clone latest, non-interactive
-  NONINTERACTIVE=1 scripts/install.sh <dir>    Also non-interactive
   curl -sL <raw-url> | bash -s -- --bootstrap  Self-bootstrap from internet
 
-Examples:
-  # Clone to temp, then install with conflict resolution
-  TMPDIR=$(mktemp -d)
-  git clone https://github.com/aaronsb/claude-code-config "$TMPDIR/ccc"
-  scripts/install.sh "$TMPDIR/ccc"
-  rm -rf "$TMPDIR"
+${CYAN}Options:${RESET}
+  --bootstrap               Clone latest release to temp, then install
+  --dangerously-clobber     Overwrite existing ~/.claude/ (backs up first)
+  --help                    Show this help
 
-  # Let a coding agent install non-interactively
-  TMPDIR=$(mktemp -d)
-  git clone https://github.com/aaronsb/claude-code-config "$TMPDIR/ccc"
-  "$TMPDIR/ccc/scripts/install.sh" --auto "$TMPDIR/ccc"
-  rm -rf "$TMPDIR"
+${CYAN}What it does:${RESET}
+  1. Checks prerequisites (git, jq, make)
+  2. Detects existing ~/.claude/ state
+  3. Clones into ~/.claude/ (or tells you what to sort out first)
+  4. Runs 'make setup' for semantic matching engine
 
-  # Auto-clone and install
-  scripts/install.sh --bootstrap
+${CYAN}If you already have ~/.claude/ files:${RESET}
+  See ${UPSTREAM_URL}/blob/main/docs/install-guide.md
+  for how to prepare, back up, or merge your existing config.
 
-File conflict handling:
-  User config (CLAUDE.md, settings.json, ways.json)  → default: keep yours
-  Ways content (way.md files)                         → default: keep yours
-  Infrastructure (*.sh, docs, plumbing)               → default: update
-
-In non-interactive mode, defaults are applied without prompting.
-In interactive mode, you choose per-file: keep, replace, diff, or merge.
 HELP
 }
 
-# --- Self-bootstrap ---
-#
-# When piped via curl|bash or invoked with --bootstrap, clone the latest
-# release to a temp directory, verify it, then run from the verified copy.
+# --- Flag parsing ---
 
-needs_bootstrap() {
-  for arg in "$@"; do
-    [[ "$arg" == "--bootstrap" ]] && return 0
-  done
-  return 1
-}
+BOOTSTRAP=false
+CLOBBER=false
 
-# No source dir and no --bootstrap → show help
-has_source_dir() {
-  for arg in "$@"; do
-    [[ "$arg" != --* ]] && return 0
-  done
-  return 1
-}
+for arg in "$@"; do
+  case "$arg" in
+    --bootstrap) BOOTSTRAP=true ;;
+    --dangerously-clobber) CLOBBER=true ;;
+    --help|-h) show_help; exit 0 ;;
+  esac
+done
 
-if ! needs_bootstrap "$@" && ! has_source_dir "$@"; then
+# No flags at all → show help
+if [[ "$BOOTSTRAP" == "false" ]] && [[ ! -f "hooks/check-config-updates.sh" ]]; then
   show_help
   exit 0
 fi
 
-if needs_bootstrap "$@"; then
-  echo ""
-  echo "Fetching latest from ${UPSTREAM_REPO}..."
-  echo ""
+# --- Prerequisites ---
 
-  if ! command -v git &>/dev/null; then
-    echo "Error: git is required. Install git and try again."
+check_prereqs() {
+  local missing=()
+
+  command -v git &>/dev/null  || missing+=("git")
+  command -v jq &>/dev/null   || missing+=("jq")
+  command -v make &>/dev/null  || missing+=("make")
+
+  if [[ ${#missing[@]} -gt 0 ]]; then
+    echo -e "${RED}Missing prerequisites:${RESET} ${missing[*]}"
+    echo ""
+    echo "Install them first. Platform guides:"
+    echo "  macOS:        ${UPSTREAM_URL}/blob/main/docs/prerequisites-macos.md"
+    echo "  Arch Linux:   ${UPSTREAM_URL}/blob/main/docs/prerequisites-arch.md"
+    echo "  Debian/Ubuntu:${UPSTREAM_URL}/blob/main/docs/prerequisites-debian.md"
+    echo "  Fedora/RHEL:  ${UPSTREAM_URL}/blob/main/docs/prerequisites-fedora.md"
     exit 1
   fi
+}
+
+# --- Self-bootstrap ---
+
+if [[ "$BOOTSTRAP" == "true" ]]; then
+  check_prereqs
+
+  echo ""
+  echo -e "${BOLD}claude-code-config bootstrap${RESET}"
+  echo -e "Fetching latest from ${CYAN}${UPSTREAM_REPO}${RESET}..."
+  echo ""
 
   BOOTSTRAP_DIR=$(mktemp -d)
   trap 'rm -rf "$BOOTSTRAP_DIR"' EXIT
 
   if ! git clone --depth 1 "$UPSTREAM_URL" "$BOOTSTRAP_DIR/claude-code-config" 2>&1; then
-    echo "Error: Failed to clone ${UPSTREAM_URL}"
+    echo -e "${RED}Failed to clone ${UPSTREAM_URL}${RESET}"
     exit 1
   fi
 
   CLONE="$BOOTSTRAP_DIR/claude-code-config"
 
-  # Verify the clone is what we expect
+  # Verify the clone
   if [[ ! -f "$CLONE/hooks/check-config-updates.sh" ]]; then
-    echo "Error: Clone doesn't look like claude-code-config."
-    echo "  Expected hooks/check-config-updates.sh — not found."
+    echo -e "${RED}Clone doesn't look like claude-code-config.${RESET}"
     exit 1
   fi
 
-  # Verify clean working tree (no unexpected modifications)
-  if [[ -n "$(git -C "$CLONE" status --porcelain 2>/dev/null)" ]]; then
-    echo "Error: Clone has unexpected modifications. Aborting."
-    exit 1
-  fi
-
-  # Show what we're about to install
   CLONE_HEAD=$(git -C "$CLONE" log --oneline -1 2>/dev/null)
-  echo "Verified clone: ${CLONE_HEAD}"
+  echo -e "Verified: ${DIM}${CLONE_HEAD}${RESET}"
   echo ""
 
   # Forward flags (minus --bootstrap) to the verified copy
@@ -130,213 +137,23 @@ if needs_bootstrap "$@"; then
     [[ "$arg" != "--bootstrap" ]] && FORWARD_ARGS+=("$arg")
   done
 
-  # Run from the verified clone, then clean up via trap
-  bash "$CLONE/scripts/install.sh" "${FORWARD_ARGS[@]}" "$CLONE"
+  cd "$CLONE"
+  bash "$CLONE/scripts/install.sh" "${FORWARD_ARGS[@]}"
   exit $?
 fi
 
-# --- Config ---
+# --- Detect source ---
 
-DEST="${HOME}/.claude"
+# If we're running from a repo, use it as source
+SRC="$(cd "$(dirname "$0")/.." && pwd)"
 
-# Parse arguments: flags (--auto) and positional (source_dir)
-INTERACTIVE=true
-SRC=""
-for arg in "$@"; do
-  case "$arg" in
-    --auto) INTERACTIVE=false ;;
-    --*) ;;  # ignore unknown flags
-    *) SRC="$arg" ;;
-  esac
-done
-[[ -z "$SRC" ]] && SRC="$(cd "$(dirname "$0")/.." && pwd)"
-
-# Non-interactive mode: also activated by env var or missing tty.
-[[ "${NONINTERACTIVE:-}" == "1" ]] && INTERACTIVE=false
-if ! exec 9< /dev/tty 2>/dev/null; then
-  INTERACTIVE=false
-else
-  exec 9<&-
+if [[ ! -f "$SRC/hooks/check-config-updates.sh" ]]; then
+  echo -e "${RED}Not running from a claude-code-config repo.${RESET}"
+  echo "Use --bootstrap to clone and install, or cd to the repo first."
+  exit 1
 fi
 
-# Colors (disabled if not a terminal)
-if [[ -t 1 ]]; then
-  RED='\033[0;31m'
-  GREEN='\033[0;32m'
-  YELLOW='\033[1;33m'
-  CYAN='\033[0;36m'
-  BOLD='\033[1m'
-  RESET='\033[0m'
-else
-  RED='' GREEN='' YELLOW='' CYAN='' BOLD='' RESET=''
-fi
-
-# Counters
-COPIED=0
-UPDATED=0
-SKIPPED=0
-CONFLICTS=0
-INFRA_SKIPPED=0
-
-# --- Classification ---
-
-# Three tiers of conflict handling:
-#   "user"    — config you wrote (CLAUDE.md, settings.json, ways.json)
-#               Default: keep. Full merge/diff/replace menu.
-#   "content" — ways you may have customized (way.md files)
-#               Default: keep. Full merge/diff/replace menu.
-#   "infra"   — scripts, docs, plumbing that should match the version
-#               Default: update. Option to skip with consistency warning.
-classify() {
-  local file="$1"
-  local basename="${file##*/}"
-
-  # User config — default keep
-  case "$basename" in
-    CLAUDE.md|settings.json|ways.json) echo "user"; return ;;
-  esac
-
-  # Way content files — default keep
-  if [[ "$file" == hooks/ways/* && "$basename" == "way.md" ]]; then
-    echo "content"; return
-  fi
-
-  # Infrastructure — default update
-  echo "infra"
-}
-
-# --- Conflict UI ---
-
-# Show diff between two files, truncated to 80 lines.
-show_diff() {
-  local dst_file="$1" src_file="$2"
-  echo ""
-  echo -e "  ${BOLD}--- local${RESET}"
-  echo -e "  ${BOLD}+++ upstream${RESET}"
-  diff -u "$dst_file" "$src_file" | tail -n +3 | head -80 | sed 's/^/  /'
-  local lines
-  lines=$(diff -u "$dst_file" "$src_file" | wc -l)
-  if (( lines > 83 )); then
-    echo -e "  ${YELLOW}... ($(( lines - 83 )) more lines, run diff manually to see all)${RESET}"
-  fi
-  echo ""
-}
-
-# Prompt for user/content files. Default: keep.
-# Returns 0 if file should be replaced, 1 if kept, 2 if merged.
-prompt_content_conflict() {
-  local relpath="$1"
-  local src_file="$2"
-  local dst_file="$3"
-
-  echo ""
-  echo -e "${YELLOW}CONFLICT:${RESET} ${BOLD}${relpath}${RESET}"
-  echo -e "  Local file differs from upstream."
-
-  if [[ "$INTERACTIVE" != "true" ]]; then
-    echo -e "  ${GREEN}Kept${RESET} local version. (non-interactive)"
-    return 1
-  fi
-
-  echo ""
-
-  while true; do
-    echo -e "  ${CYAN}[K]${RESET}eep yours  ${CYAN}[R]${RESET}eplace with upstream  ${CYAN}[D]${RESET}iff  ${CYAN}[M]${RESET}erge (if available)"
-    read -rp "  Choice [K/r/d/m]: " choice < /dev/tty
-    choice="${choice:-k}"
-
-    case "${choice,,}" in
-      k)
-        echo -e "  ${GREEN}Kept${RESET} local version."
-        return 1
-        ;;
-      r)
-        echo -e "  Replaced with upstream version."
-        return 0
-        ;;
-      d)
-        show_diff "$dst_file" "$src_file"
-        ;;
-      m)
-        if command -v git &>/dev/null; then
-          local merged
-          merged=$(mktemp)
-          if git merge-file -p "$dst_file" "$dst_file" "$src_file" > "$merged" 2>/dev/null; then
-            echo -e "  ${GREEN}Clean merge.${RESET}"
-          else
-            echo -e "  ${YELLOW}Merge has conflicts${RESET} (marked with <<<<<<<)."
-            echo -e "  Review the result — conflict markers need manual resolution."
-          fi
-          cp "$merged" "$dst_file"
-          rm -f "$merged"
-          return 2
-        else
-          echo -e "  ${RED}git not available for merge.${RESET} Choose K or R."
-        fi
-        ;;
-      *)
-        echo "  Invalid choice."
-        ;;
-    esac
-  done
-}
-
-# Prompt for infrastructure files. Default: update.
-# Warns about consistency risks if skipped.
-# Returns 0 if file should be replaced, 1 if kept.
-prompt_infra_conflict() {
-  local relpath="$1"
-  local src_file="$2"
-  local dst_file="$3"
-
-  echo ""
-  echo -e "${CYAN}UPDATE:${RESET} ${BOLD}${relpath}${RESET}"
-  echo -e "  Infrastructure file has changed upstream."
-
-  if [[ "$INTERACTIVE" != "true" ]]; then
-    echo -e "  Updated. (non-interactive)"
-    return 0
-  fi
-
-  echo ""
-
-  while true; do
-    echo -e "  ${CYAN}[U]${RESET}pdate (recommended)  ${CYAN}[S]${RESET}kip  ${CYAN}[D]${RESET}iff"
-    read -rp "  Choice [U/s/d]: " choice < /dev/tty
-    choice="${choice:-u}"
-
-    case "${choice,,}" in
-      u)
-        echo -e "  Updated."
-        return 0
-        ;;
-      s)
-        echo ""
-        echo -e "  ${YELLOW}Warning:${RESET} Skipping infrastructure updates may leave your install in"
-        echo -e "  an inconsistent state — ways may reference scripts that have changed."
-        echo ""
-        echo -e "  If you need to customize infrastructure files, consider:"
-        echo -e "    - Maintaining a fork and tracking changes there"
-        echo -e "    - Submitting a PR upstream if the change is generally useful"
-        echo -e "    - Using project-local ways to override behavior without editing global scripts"
-        echo ""
-        read -rp "  Skip anyway? [y/N]: " confirm < /dev/tty
-        if [[ "${confirm,,}" == "y" ]]; then
-          echo -e "  ${YELLOW}Skipped.${RESET}"
-          return 1
-        fi
-        ;;
-      d)
-        show_diff "$dst_file" "$src_file"
-        ;;
-      *)
-        echo "  Invalid choice."
-        ;;
-    esac
-  done
-}
-
-# --- Main ---
+check_prereqs
 
 echo ""
 echo -e "${BOLD}claude-code-config installer${RESET}"
@@ -344,99 +161,163 @@ echo -e "Source: ${CYAN}${SRC}${RESET}"
 echo -e "Target: ${CYAN}${DEST}${RESET}"
 echo ""
 
-# Validate source
-if [[ ! -f "$SRC/hooks/check-config-updates.sh" ]]; then
-  echo -e "${RED}Error:${RESET} Source doesn't look like claude-code-config."
-  echo "  Expected to find hooks/check-config-updates.sh in: $SRC"
-  exit 1
-fi
+# --- Detect existing ~/.claude/ state ---
 
-# Backup
 if [[ -d "$DEST" ]]; then
+  HAS_GIT=false
+  HAS_FILES=false
+  IS_US=false
+
+  [[ -d "$DEST/.git" ]] && HAS_GIT=true
+  [[ -n "$(ls -A "$DEST" 2>/dev/null)" ]] && HAS_FILES=true
+
+  # Check if it's already our repo
+  if [[ "$HAS_GIT" == "true" ]]; then
+    REMOTE_URL=$(git -C "$DEST" remote get-url origin 2>/dev/null || true)
+    OWNER_REPO=$(echo "$REMOTE_URL" | sed -E 's#.*github\.com[:/]##; s/\.git$//')
+    if [[ "$OWNER_REPO" == "$UPSTREAM_REPO" ]]; then
+      IS_US=true
+    fi
+    # Also check if it's a fork
+    if [[ "$IS_US" == "false" ]] && command -v gh &>/dev/null; then
+      PARENT=$(gh api "repos/${OWNER_REPO}" --jq '.parent.full_name' 2>/dev/null || true)
+      [[ "$PARENT" == "$UPSTREAM_REPO" ]] && IS_US=true
+    fi
+  fi
+
+  # --- Already installed: update path ---
+  if [[ "$IS_US" == "true" ]]; then
+    echo -e "${GREEN}Already installed.${RESET} Updating..."
+    echo ""
+    echo -e "  ${DIM}cd ~/.claude && git pull${RESET}"
+    cd "$DEST"
+    git pull --ff-only 2>&1 || {
+      echo ""
+      echo -e "${YELLOW}git pull failed.${RESET} You may have local changes."
+      echo "  cd ~/.claude && git status"
+      echo "  Resolve conflicts, then: make setup"
+      exit 1
+    }
+
+    echo ""
+    echo -e "Running ${CYAN}make setup${RESET} for semantic matching..."
+    if [[ -f "$DEST/Makefile" ]]; then
+      make -C "$DEST" setup || true
+    fi
+
+    echo ""
+    echo -e "${GREEN}Updated.${RESET} Restart Claude Code for changes to take effect."
+    exit 0
+  fi
+
+  # --- Existing files: complexity detected ---
+  if [[ "$CLOBBER" == "false" ]]; then
+    echo -e "${YELLOW}~/.claude/ already exists and isn't a claude-code-config install.${RESET}"
+    echo ""
+
+    if [[ "$HAS_GIT" == "true" ]]; then
+      echo -e "  Found: ${BOLD}.git/${RESET} directory (existing git tracking)"
+      echo -e "  Remote: ${DIM}$(git -C "$DEST" remote get-url origin 2>/dev/null || echo 'none')${RESET}"
+    fi
+
+    if [[ "$HAS_FILES" == "true" ]]; then
+      local_files=$(find "$DEST" -maxdepth 1 -type f | head -5)
+      echo -e "  Found: existing files"
+      echo "$local_files" | while read -r f; do
+        echo -e "    ${DIM}$(basename "$f")${RESET}"
+      done
+      more_count=$(find "$DEST" -maxdepth 1 -type f | wc -l)
+      if (( more_count > 5 )); then
+        echo -e "    ${DIM}... and $((more_count - 5)) more${RESET}"
+      fi
+    fi
+
+    echo ""
+    echo -e "${BOLD}You need to decide what to do with these files before installing.${RESET}"
+    echo ""
+    echo "  Options:"
+    echo "    1. Back up and clobber:"
+    echo -e "       ${CYAN}$0 --dangerously-clobber${RESET}"
+    echo "       (backs up to ~/.claude-backup-YYYYMMDD/ first)"
+    echo ""
+    echo "    2. Merge manually (recommended if you have custom config):"
+    echo -e "       See ${CYAN}${UPSTREAM_URL}/blob/main/docs/install-guide.md${RESET}"
+    echo ""
+    echo "    3. Start fresh:"
+    echo -e "       ${CYAN}mv ~/.claude ~/.claude-old && $0${RESET}"
+    echo ""
+    exit 1
+  fi
+
+  # --- Clobber path (--dangerously-clobber) ---
   BACKUP="${DEST}-backup-$(date +%Y%m%d-%H%M%S)"
-  echo -e "Backing up existing config to ${CYAN}${BACKUP}${RESET}"
-  cp -a "$DEST" "$BACKUP"
-fi
-
-mkdir -p "$DEST"
-
-# Walk all tracked files in source (respects .gitignore)
-cd "$SRC"
-
-# Use git ls-files if available (respects gitignore), fall back to find
-if git -C "$SRC" rev-parse --git-dir &>/dev/null; then
-  file_list=$(git -C "$SRC" ls-files)
-else
-  file_list=$(find . -type f -not -path './.git/*' | sed 's|^\./||')
-fi
-
-while IFS= read -r relpath; do
-  # Skip git internals
-  [[ "$relpath" == .git/* ]] && continue
-
-  src_file="$SRC/$relpath"
-  dst_file="$DEST/$relpath"
-
-  # New file — just copy
-  if [[ ! -f "$dst_file" ]]; then
-    mkdir -p "$(dirname "$dst_file")"
-    cp -a "$src_file" "$dst_file"
-    (( COPIED++ ))
-    continue
-  fi
-
-  # Identical — skip
-  if diff -q "$src_file" "$dst_file" &>/dev/null; then
-    (( SKIPPED++ ))
-    continue
-  fi
-
-  # Conflict — classify and handle
-  strategy=$(classify "$relpath")
-
-  case "$strategy" in
-    user|content)
-      (( CONFLICTS++ ))
-      if prompt_content_conflict "$relpath" "$src_file" "$dst_file"; then
-        cp -a "$src_file" "$dst_file"
-      fi
-      ;;
-    infra)
-      if prompt_infra_conflict "$relpath" "$src_file" "$dst_file"; then
-        cp -a "$src_file" "$dst_file"
-        (( UPDATED++ ))
-      else
-        (( INFRA_SKIPPED++ ))
-      fi
-      ;;
-  esac
-
-done <<< "$file_list"
-
-# Initialize git tracking if not present
-if [[ ! -d "$DEST/.git" ]] && [[ -d "$SRC/.git" ]]; then
+  echo -e "${YELLOW}Clobber mode.${RESET} Backing up to ${CYAN}${BACKUP}${RESET}"
   echo ""
-  echo -e "Initializing git tracking in ${CYAN}~/.claude${RESET}"
-  cp -a "$SRC/.git" "$DEST/.git"
+
+  # Confirmation gate — interactive requires typing "clobber", non-interactive warns loudly
+  if [[ -t 0 ]]; then
+    echo -e "  This will ${RED}replace${RESET} everything in ~/.claude/ with a fresh install."
+    echo -e "  Your backup will be at: ${BACKUP}"
+    echo ""
+    read -rp "  Type 'clobber' to confirm: " confirm < /dev/tty
+    if [[ "$confirm" != "clobber" ]]; then
+      echo -e "  ${GREEN}Aborted.${RESET} Nothing changed."
+      exit 1
+    fi
+    echo ""
+  else
+    echo -e "  ${YELLOW}WARNING: Non-interactive clobber.${RESET} Backing up and replacing ~/.claude/"
+    echo -e "  Backup: ${BACKUP}"
+    echo ""
+  fi
+
+  mv "$DEST" "$BACKUP"
+  echo -e "  Backed up to ${CYAN}${BACKUP}${RESET}"
 fi
+
+# --- Fresh install ---
+
+echo -e "Cloning into ${CYAN}~/.claude/${RESET}..."
+echo ""
+
+if [[ "$SRC" == "$DEST" ]]; then
+  # We're already in place (shouldn't happen, but be safe)
+  echo -e "${GREEN}Source is already ~/.claude/.${RESET}"
+else
+  git clone "$SRC" "$DEST" 2>&1
+fi
+
+# Set remote to upstream (source might be a temp dir from bootstrap)
+git -C "$DEST" remote set-url origin "$UPSTREAM_URL" 2>/dev/null || true
 
 # Make hooks executable
-chmod +x "$DEST"/hooks/**/*.sh "$DEST"/hooks/*.sh 2>/dev/null
+find "$DEST/hooks" -name '*.sh' -exec chmod +x {} + 2>/dev/null || true
 
-# Summary
+echo ""
+echo -e "${GREEN}Installed.${RESET}"
+echo ""
+
+# --- Post-install: semantic matching setup ---
+
+echo -e "Setting up semantic matching engine..."
+echo -e "${DIM}(downloads ~21MB model + pre-built binary on first run)${RESET}"
+echo ""
+
+if [[ -f "$DEST/Makefile" ]]; then
+  make -C "$DEST" install || {
+    echo ""
+    echo -e "${YELLOW}Semantic matching setup had issues.${RESET}"
+    echo "BM25 fallback is still active. You can retry later:"
+    echo "  cd ~/.claude && make setup"
+    echo ""
+  }
+fi
+
 echo ""
 echo -e "${BOLD}Done.${RESET}"
-echo -e "  ${GREEN}${COPIED}${RESET} new files copied"
-echo -e "  ${GREEN}${UPDATED}${RESET} infrastructure files updated"
-echo -e "  ${YELLOW}${CONFLICTS}${RESET} content conflicts resolved"
-echo -e "  ${CYAN}${SKIPPED}${RESET} unchanged (skipped)"
-if (( INFRA_SKIPPED > 0 )); then
-  echo -e "  ${RED}${INFRA_SKIPPED}${RESET} infrastructure updates skipped (review recommended)"
-fi
-if [[ -n "${BACKUP:-}" ]]; then
-  echo -e "  Backup at: ${CYAN}${BACKUP}${RESET}"
-fi
 echo ""
-echo -e "Restart Claude Code for changes to take effect."
-echo -e "Review hooks at: ${CYAN}~/.claude/hooks/${RESET}"
+echo "  Restart Claude Code for ways to take effect."
+echo "  Review hooks at: ~/.claude/hooks/"
+echo ""
+echo -e "  ${DIM}Tip: cd ~/.claude && make test${RESET}"
 echo ""

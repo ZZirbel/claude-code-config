@@ -70,7 +70,7 @@ if [[ "$RELEASE_TAG" == "latest" ]]; then
     | grep '^way-embed-v' | head -1)
   if [[ -z "$RELEASE_TAG" ]]; then
     echo "No way-embed release found. Build from source:" >&2
-    echo "  cd ~/.claude/tools/way-embed && make setup" >&2
+    echo "  cd ~/.claude && make setup" >&2
     exit 1
   fi
 fi
@@ -85,7 +85,7 @@ if ! gh release view "$RELEASE_TAG" --repo "$GH_REPO" --json assets --jq '.asset
   gh release view "$RELEASE_TAG" --repo "$GH_REPO" --json assets --jq '.assets[].name' 2>/dev/null | grep "way-embed-" | sed 's/^/  /' >&2
   echo "" >&2
   echo "Build from source instead:" >&2
-  echo "  cd ~/.claude/tools/way-embed && make setup" >&2
+  echo "  cd ~/.claude && make setup" >&2
   exit 1
 fi
 

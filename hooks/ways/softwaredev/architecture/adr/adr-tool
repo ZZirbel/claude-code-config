@@ -37,9 +37,35 @@ except ImportError:
 # Configuration
 # ============================================================================
 
+def get_project_root() -> Path:
+    """Find project root via git or by walking up to find docs/architecture/."""
+    # Try git root first
+    try:
+        result = subprocess.run(
+            ['git', 'rev-parse', '--show-toplevel'],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            return Path(result.stdout.strip())
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        pass
+
+    # Walk up from cwd looking for docs/architecture/adr.yaml
+    candidate = Path.cwd()
+    for _ in range(10):
+        if (candidate / 'docs' / 'architecture' / 'adr.yaml').exists():
+            return candidate
+        if candidate.parent == candidate:
+            break
+        candidate = candidate.parent
+
+    # Last resort: assume cwd
+    return Path.cwd()
+
+
 def get_config_path() -> Path:
     """Get path to adr.yaml config file."""
-    return Path(__file__).parent.parent / 'architecture' / 'adr.yaml'
+    return get_project_root() / 'docs' / 'architecture' / 'adr.yaml'
 
 def load_config() -> dict:
     """Load configuration from adr.yaml."""
@@ -254,8 +280,7 @@ def parse_adr(path: Path) -> ADRInfo:
 
 def find_adrs() -> list[Path]:
     """Find all ADR files."""
-    docs_root = Path(__file__).parent.parent
-    arch_dir = docs_root / 'architecture'
+    arch_dir = get_project_root() / 'docs' / 'architecture'
     return sorted(arch_dir.rglob("ADR-*.md"))
 
 def get_all_adrs() -> list[ADRInfo]:
@@ -414,10 +439,9 @@ def cmd_new(args):
     slug = re.sub(r'[^a-z0-9]+', '-', args.title.lower()).strip('-')
 
     # Create file path (use first folder if multiple)
-    docs_root = Path(__file__).parent.parent
     folders = config['folder']
     primary_folder = folders[0] if isinstance(folders, list) else folders
-    folder = docs_root / 'architecture' / primary_folder
+    folder = get_project_root() / 'docs' / 'architecture' / primary_folder
     filename = f"ADR-{next_num:03d}-{slug}.md"
     filepath = folder / filename
 
@@ -610,8 +634,7 @@ def cmd_index(args):
     content = '\n'.join(lines)
 
     # Check against existing index
-    docs_root = Path(__file__).parent.parent
-    index_path = docs_root / 'architecture' / 'INDEX.md'
+    index_path = get_project_root() / 'docs' / 'architecture' / 'INDEX.md'
 
     if index_path.exists():
         existing = index_path.read_text()
