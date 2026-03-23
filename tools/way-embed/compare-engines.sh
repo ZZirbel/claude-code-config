@@ -8,7 +8,7 @@ XDG_WAY="${XDG_CACHE_HOME:-$HOME/.cache}/claude-ways/user"
 WAY_EMBED="${XDG_WAY}/way-embed"
 [[ ! -x "$WAY_EMBED" ]] && WAY_EMBED="${HOME}/.claude/bin/way-embed"
 WAY_MATCH="${HOME}/.claude/bin/way-match"
-CORPUS="${HOME}/.claude/hooks/ways/ways-corpus.jsonl"
+CORPUS="${XDG_WAY}/ways-corpus.jsonl"
 MODEL="${XDG_WAY}/minilm-l6-v2.gguf"
 FIXTURES="${HOME}/.claude/tools/way-match/test-fixtures.jsonl"
 

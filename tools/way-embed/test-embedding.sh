@@ -12,7 +12,7 @@ elif [[ -x "${HOME}/.claude/bin/way-embed" ]]; then
 else
   WAY_EMBED=""
 fi
-CORPUS="${HOME}/.claude/hooks/ways/ways-corpus.jsonl"
+CORPUS="${XDG_WAY}/ways-corpus.jsonl"
 MODEL="${XDG_WAY}/minilm-l6-v2.gguf"
 
 pass=0; fail=0; skip=0

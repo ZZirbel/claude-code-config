@@ -40,7 +40,7 @@ done
 # Only runs if the generator script exists.
 CORPUS_GEN="${HOME}/.claude/tools/way-match/generate-corpus.sh"
 if [[ -x "$CORPUS_GEN" && "$MODE" == "lint" ]]; then
-    bash "$CORPUS_GEN" "$WAYS_DIR" "$WAYS_DIR/ways-corpus.jsonl" 2>/dev/null
+    bash "$CORPUS_GEN" --quiet "$WAYS_DIR" 2>/dev/null
 fi
 
 # ── Schema loading ────────────────────────────────────────────────

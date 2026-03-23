@@ -16,7 +16,9 @@ QUIET=false
 [[ "${1:-}" == "--quiet" ]] && { QUIET=true; shift; }
 
 WAYS_DIR="${1:-${HOME}/.claude/hooks/ways}"
-OUTPUT="${2:-${WAYS_DIR}/ways-corpus.jsonl}"
+XDG_WAY="${XDG_CACHE_HOME:-$HOME/.cache}/claude-ways/user"
+OUTPUT="${2:-${XDG_WAY}/ways-corpus.jsonl}"
+mkdir -p "$XDG_WAY"
 
 log() { $QUIET || echo "$@" >&2; }
 
