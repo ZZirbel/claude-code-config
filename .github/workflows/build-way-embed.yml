@@ -23,7 +23,7 @@ jobs:
             platform: linux-aarch64
           - os: macos-latest
             platform: darwin-x86_64
-            cmake_extra: -DCMAKE_OSX_ARCHITECTURES=x86_64
+            cmake_extra: -DCMAKE_OSX_ARCHITECTURES=x86_64 -DGGML_NATIVE=OFF
           - os: macos-latest
             platform: darwin-arm64
 
