@@ -43,7 +43,7 @@ All trigger evaluation scripts respect the `scope:` frontmatter field - ways wit
 
 - **`check-task-pre.sh`** - PreToolUse:Task hook (Phase 1). Reads the Task tool's `prompt` parameter, scans ways with `scope: subagent`, matches using `match-way.sh` (same additive logic as `check-prompt.sh`). Writes matched way paths to `/tmp/.claude-subagent-stash-{session_id}/`. Never blocks Task creation.
 - **`inject-subagent.sh`** - SubagentStart hook (Phase 2). Reads the oldest stash file, claims it atomically, emits way content as JSON `hookSpecificOutput.additionalContext`. Bypasses markers entirely - subagents get fresh context regardless of what the parent triggered.
-- **`match-way.sh`** - Shared matching function sourced by `check-prompt.sh` and `check-task-pre.sh`. Provides `detect_semantic_engine()` and `match_way_prompt()` (additive pattern OR semantic). BM25 is the primary engine; a legacy NCD fallback exists if the binary is missing.
+- **`match-way.sh`** - Shared matching function sourced by `check-prompt.sh` and `check-task-pre.sh`. Provides `detect_semantic_engine()` and `match_way_prompt()` (additive pattern OR semantic). Three-tier semantic engine: embedding (all-MiniLM-L6-v2) → BM25 → NCD. See [Semantic Matching](#semantic-matching).
 
 ### IRC Communication
 
@@ -175,15 +175,52 @@ files: \.env$|config\.json    # matched against file paths
 
 Fast and precise. Most ways use this.
 
-### Semantic (BM25)
+### Semantic Matching
 
 ```yaml
 description: "API design, REST endpoints, request handling"
 vocabulary: api endpoint route handler middleware
-threshold: 2.0
+threshold: 2.0        # BM25 threshold
+embed_threshold: 0.35 # cosine similarity threshold
 ```
 
-Scores description+vocabulary against the user's prompt using Okapi BM25 with Porter2 stemming.
+Three-tier engine, auto-detected at runtime:
+
+| Tier | Engine | Binary | How it works |
+|------|--------|--------|-------------|
+| 1 | **Embedding** | `bin/way-embed` + GGUF model | all-MiniLM-L6-v2 sentence embeddings. Pre-computed 384-dim vectors in corpus. One spawn per prompt (~20ms), cosine similarity against all ways. |
+| 2 | **BM25** | `bin/way-match` | Okapi BM25 with Porter2 stemming. Scores description+vocabulary per-way. |
+| 3 | **NCD** | `gzip` + `bc` | Normalized compression distance. Legacy fallback, no binary needed. |
+
+The scanner calls `detect_semantic_engine()` which checks for each tier's prerequisites (binary exists, model file present, corpus has embeddings). First available tier wins. Removing a binary downgrades automatically.
+
+**Embedding engine** (ADR-108): Solves BM25's stem-collision problem — "SSH agent" and "AI agent" share the same BM25 stem but have distant embedding vectors. The first `match_way_prompt()` call per prompt runs `way-embed match` once (scoring all 58 ways), caches results at `${XDG_CACHE_HOME}/claude-ways/projects/<encoded-path>/embed-results.tsv`, and subsequent calls grep the cache. Cache is cleaned up on scanner exit.
+
+#### Cold Start — Setting Up Embeddings
+
+```bash
+# 1. Build the binary (requires cmake, C++ compiler)
+cd tools/way-embed
+git submodule update --init --depth 1 llama.cpp   # if not initialized
+make
+
+# 2. Download the model (Q5_K_M, 21MB)
+make model                  # from GitHub Release
+make model-upstream         # or directly from HuggingFace
+
+# 3. Regenerate corpus with embeddings
+bash tools/way-match/generate-corpus.sh
+# Auto-detects way-embed + model, adds embedding vectors to ways-corpus.jsonl
+
+# 4. Verify
+bash tools/way-embed/test-embedding.sh   # 15 tests
+bash tools/way-embed/compare-engines.sh  # head-to-head vs BM25
+```
+
+Model location: `${XDG_CACHE_HOME:-~/.cache}/claude-ways/user/minilm-l6-v2.gguf`
+Corpus: `hooks/ways/ways-corpus.jsonl` (BM25 + embedding fields, committed to git)
+
+Both user-scope (`~/.claude/hooks/ways/`) and project-scope (`.claude/ways/`) corpora are scanned. They share the same model file.
 
 ## State Triggers
 
@@ -420,6 +457,8 @@ Three test layers verify the matching and injection pipeline. See [tests/README.
 
 | Layer | Command | What it tests |
 |-------|---------|---------------|
+| **Embedding** | `bash tools/way-embed/test-embedding.sh` | ADR-108 claims: stem disambiguation, FP reduction, timing (15 tests) |
+| **Comparison** | `bash tools/way-embed/compare-engines.sh` | Head-to-head BM25 vs embedding on 64 fixtures |
 | **Fixture** | `bash tools/way-match/test-harness.sh` | BM25 scorer accuracy (32 prompts, fixed corpus) |
 | **Integration** | `bash tools/way-match/test-integration.sh` | Real way files, frontmatter extraction, multi-way discrimination |
 | **Activation** | `read and run the activation test at tests/way-activation-test.md` | Live hook pipeline: regex, BM25, negative control, subagent injection |
