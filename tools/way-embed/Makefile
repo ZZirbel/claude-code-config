@@ -43,7 +43,7 @@ verify: cmake-build
 
 # Model download (XDG cache location)
 MODEL_DIR  = $(shell echo $${XDG_CACHE_HOME:-$$HOME/.cache})/claude-ways/user
-MODEL      = $(MODEL_DIR)/minilm-l6-v2-f16.gguf
+MODEL      = $(MODEL_DIR)/minilm-l6-v2.gguf
 SRCDIR     = $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
 model: $(MODEL)
@@ -54,6 +54,16 @@ $(MODEL):
 model-upstream:
 	bash $(SRCDIR)download-model.sh --upstream
 
+# Full setup: build binary, download model, regenerate corpus with embeddings
+setup: $(BIN) $(MODEL)
+	@echo "Regenerating corpus with embeddings..."
+	bash $(SRCDIR)../../tools/way-match/generate-corpus.sh
+	@echo ""
+	@echo "Setup complete. Running verification..."
+	bash $(SRCDIR)test-embedding.sh
+	@echo ""
+	@echo "To compare against BM25: bash $(SRCDIR)compare-engines.sh"
+
 # Run basic smoke test
 test: $(BIN)
 	@echo "Testing way-embed..."
@@ -63,4 +73,4 @@ test: $(BIN)
 clean:
 	rm -rf $(BUILDDIR) $(BUILDDIR)-cosmo
 
-.PHONY: cmake-build cosmo verify test model model-upstream clean
+.PHONY: cmake-build cosmo verify test model model-upstream setup clean

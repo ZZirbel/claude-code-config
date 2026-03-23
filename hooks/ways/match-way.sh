@@ -39,6 +39,7 @@ check_when_preconditions() {
 }
 
 # Detect semantic matcher: embedding → BM25 binary → gzip NCD → none
+# Respects "semantic_engine" in ways.json: "auto" (default), "embedding", "bm25", "ncd"
 # Sets: SEMANTIC_ENGINE, WAY_MATCH_BIN, WAY_EMBED_BIN, MODEL_PATH, CORPUS_PATH, EMBED_CACHE
 detect_semantic_engine() {
   WAY_EMBED_BIN="${HOME}/.claude/bin/way-embed"
@@ -49,24 +50,51 @@ detect_semantic_engine() {
   local corpus_file="${WAYS_DIR}/ways-corpus.jsonl"
   [[ -f "$corpus_file" ]] && CORPUS_PATH="$corpus_file"
 
-  if [[ -x "$WAY_EMBED_BIN" && -f "$MODEL_PATH" && -n "$CORPUS_PATH" ]]; then
-    SEMANTIC_ENGINE="embedding"
-    # XDG-compliant project-scoped cache for batch results
-    local cache_base="${XDG_CACHE_HOME:-$HOME/.cache}/claude-ways/projects"
-    local encoded_project
-    encoded_project=$(echo "${PROJECT_DIR:-$PWD}" | tr '/' '-')
-    local cache_dir="${cache_base}/${encoded_project}"
-    mkdir -p "$cache_dir" 2>/dev/null
-    EMBED_CACHE="${cache_dir}/embed-results.tsv"
-    # Clean up stale cache from prior runs
-    rm -f "$EMBED_CACHE" 2>/dev/null
-  elif [[ -x "$WAY_MATCH_BIN" ]]; then
-    SEMANTIC_ENGINE="bm25"
-  elif command -v gzip >/dev/null 2>&1 && command -v bc >/dev/null 2>&1; then
-    SEMANTIC_ENGINE="ncd"
-  else
-    SEMANTIC_ENGINE="none"
+  # Check ways.json for engine override
+  local ways_json="${HOME}/.claude/ways.json"
+  local forced_engine="auto"
+  if [[ -f "$ways_json" ]] && command -v jq >/dev/null 2>&1; then
+    forced_engine=$(jq -r '.semantic_engine // "auto"' "$ways_json" 2>/dev/null || echo "auto")
   fi
+
+  # If forced, use that engine (if prerequisites met), otherwise fall through
+  _try_embedding() {
+    if [[ -x "$WAY_EMBED_BIN" && -f "$MODEL_PATH" && -n "$CORPUS_PATH" ]]; then
+      SEMANTIC_ENGINE="embedding"
+      local cache_base="${XDG_CACHE_HOME:-$HOME/.cache}/claude-ways/projects"
+      local encoded_project
+      encoded_project=$(echo "${PROJECT_DIR:-$PWD}" | tr '/' '-')
+      local cache_dir="${cache_base}/${encoded_project}"
+      mkdir -p "$cache_dir" 2>/dev/null
+      EMBED_CACHE="${cache_dir}/embed-results.tsv"
+      rm -f "$EMBED_CACHE" 2>/dev/null
+      return 0
+    fi
+    return 1
+  }
+
+  _try_bm25() {
+    if [[ -x "$WAY_MATCH_BIN" ]]; then
+      SEMANTIC_ENGINE="bm25"
+      return 0
+    fi
+    return 1
+  }
+
+  _try_ncd() {
+    if command -v gzip >/dev/null 2>&1 && command -v bc >/dev/null 2>&1; then
+      SEMANTIC_ENGINE="ncd"
+      return 0
+    fi
+    return 1
+  }
+
+  case "$forced_engine" in
+    embedding) _try_embedding || _try_bm25 || _try_ncd || SEMANTIC_ENGINE="none" ;;
+    bm25)      _try_bm25 || _try_ncd || SEMANTIC_ENGINE="none" ;;
+    ncd)       _try_ncd || SEMANTIC_ENGINE="none" ;;
+    *)         _try_embedding || _try_bm25 || _try_ncd || SEMANTIC_ENGINE="none" ;;
+  esac
 }
 
 # Additive matching: pattern OR semantic (either channel can fire)
