@@ -16,16 +16,20 @@ cmake-build: CMakeLists.txt way-embed.cpp | llama.cpp/CMakeLists.txt
 	@cd $(BUILDDIR) && cmake $(CMAKE_FLAGS) .. 2>&1 | tail -5
 	@cmake --build $(BUILDDIR) --target way-embed -j$$(nproc 2>/dev/null || echo 4) 2>&1 | tail -10
 
-# Build with Cosmopolitan (cross-platform APE) — experimental
-cosmo: CMakeLists.txt way-embed.cpp | llama.cpp/CMakeLists.txt
+# Build with Cosmopolitan (cross-platform APE)
+# Uses a cmake toolchain file to handle cosmocc's quirks (compiler probe skip,
+# threading, no shared libs). Build takes 5-10min due to llama.cpp size.
+# Run directly: cd tools/way-embed && make cosmo
+cosmo: CMakeLists.txt way-embed.cpp cosmocc-toolchain.cmake | llama.cpp/CMakeLists.txt
 	@mkdir -p $(BUILDDIR)-cosmo
-	@cd $(BUILDDIR)-cosmo && cmake $(CMAKE_FLAGS) \
-		-DCMAKE_C_COMPILER=$(COSMOCC) \
-		-DCMAKE_CXX_COMPILER=$(COSMOCXX) \
-		-DCMAKE_SYSTEM_NAME=Generic \
-		.. 2>&1 | tail -5
-	@cmake --build $(BUILDDIR)-cosmo --target way-embed -j$$(nproc 2>/dev/null || echo 4) 2>&1 | tail -10
+	cd $(BUILDDIR)-cosmo && cmake $(CMAKE_FLAGS) \
+		-DCMAKE_TOOLCHAIN_FILE=../cosmocc-toolchain.cmake \
+		..
+	cmake --build $(BUILDDIR)-cosmo --target way-embed -j$$(nproc 2>/dev/null || echo 4)
 	cp $(BUILDDIR)-cosmo/way-embed $(BIN)
+	@echo ""
+	@echo "APE binary: $(BIN) ($$(ls -lh $(BIN) | awk '{print $$5}'))"
+	@file $(BIN) | head -1
 
 # Ensure submodule is initialized
 llama.cpp/CMakeLists.txt:
