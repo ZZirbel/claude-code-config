@@ -8,7 +8,7 @@ set -euo pipefail
 
 WAY_EMBED="${HOME}/.claude/bin/way-embed"
 CORPUS="${HOME}/.claude/hooks/ways/ways-corpus.jsonl"
-MODEL="${XDG_CACHE_HOME:-$HOME/.cache}/claude-ways/user/minilm-l6-v2-f16.gguf"
+MODEL="${XDG_CACHE_HOME:-$HOME/.cache}/claude-ways/user/minilm-l6-v2.gguf"
 FIXTURES="${HOME}/.claude/tools/way-match/test-fixtures.jsonl"
 
 if [[ ! -x "$WAY_EMBED" ]]; then echo "error: way-embed not found at $WAY_EMBED" >&2; exit 1; fi

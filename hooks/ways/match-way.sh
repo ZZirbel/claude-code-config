@@ -43,7 +43,7 @@ check_when_preconditions() {
 detect_semantic_engine() {
   WAY_EMBED_BIN="${HOME}/.claude/bin/way-embed"
   WAY_MATCH_BIN="${HOME}/.claude/bin/way-match"
-  MODEL_PATH="${XDG_CACHE_HOME:-$HOME/.cache}/claude-ways/user/minilm-l6-v2-f16.gguf"
+  MODEL_PATH="${XDG_CACHE_HOME:-$HOME/.cache}/claude-ways/user/minilm-l6-v2.gguf"
   CORPUS_PATH=""
   EMBED_CACHE=""
   local corpus_file="${WAYS_DIR}/ways-corpus.jsonl"

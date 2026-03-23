@@ -6,7 +6,7 @@ set -euo pipefail
 
 WAY_EMBED="${HOME}/.claude/bin/way-embed"
 CORPUS="${HOME}/.claude/hooks/ways/ways-corpus.jsonl"
-MODEL="${XDG_CACHE_HOME:-$HOME/.cache}/claude-ways/user/minilm-l6-v2-f16.gguf"
+MODEL="${XDG_CACHE_HOME:-$HOME/.cache}/claude-ways/user/minilm-l6-v2.gguf"
 
 pass=0; fail=0; skip=0
 

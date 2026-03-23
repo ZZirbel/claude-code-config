@@ -78,7 +78,7 @@ echo "Generated ${OUTPUT}: ${count} ways" >&2
 
 # Auto-embed: if way-embed binary and model are available, add embedding vectors
 WAY_EMBED_BIN="${HOME}/.claude/bin/way-embed"
-MODEL_PATH="${XDG_CACHE_HOME:-$HOME/.cache}/claude-ways/user/minilm-l6-v2-f16.gguf"
+MODEL_PATH="${XDG_CACHE_HOME:-$HOME/.cache}/claude-ways/user/minilm-l6-v2.gguf"
 
 if [[ -x "$WAY_EMBED_BIN" && -f "$MODEL_PATH" ]]; then
   echo "Embedding model found — generating embedding vectors..." >&2
