@@ -18,7 +18,6 @@ UPSTREAM_URL="https://github.com/${UPSTREAM_REPO}"
 UPSTREAM_MARKER="${CLAUDE_DIR}/.claude-upstream"
 CACHE_FILE="/tmp/.claude-config-update-state-$(id -u)"
 ONE_HOUR=3600
-ONE_DAY=86400
 CURRENT_TIME=$(date +%s)
 
 # --- Helpers ---
@@ -44,15 +43,12 @@ write_cache() {
   mv -f "$tmp" "$CACHE_FILE"
 }
 
-
-
 check_marker_file() {
   [[ -f "$UPSTREAM_MARKER" ]] || return 1
   local declared
   declared=$(head -1 "$UPSTREAM_MARKER" | tr -d '[:space:]')
   [[ "$declared" == "$UPSTREAM_REPO" ]]
 }
-
 
 # Check gh CLI availability and auth status.
 # Returns 0 if gh is ready, 1 if not (with reason in GH_ISSUE).

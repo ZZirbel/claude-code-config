@@ -58,6 +58,7 @@ echo "_Ways version: ${VERSION_DISPLAY}_"
 # Read update cache written by check-config-updates.sh
 # Cache persists across sessions with hourly refresh
 CACHE_FILE="/tmp/.claude-config-update-state-$(id -u)"
+UPSTREAM_REPO="aaronsb/claude-code-config"
 if [[ -f "$CACHE_FILE" ]]; then
   CACHED_TYPE=$(sed -n 's/^type=//p' "$CACHE_FILE")
   CACHED_BEHIND=$(sed -n 's/^behind=//p' "$CACHE_FILE")
@@ -75,7 +76,6 @@ if [[ -f "$CACHE_FILE" ]]; then
     fork)
       if [[ "$CACHED_BEHIND" =~ ^[0-9]+$ ]] && (( CACHED_BEHIND > 0 )); then
         echo ""
-        UPSTREAM_REPO="aaronsb/claude-code-config"
         if [[ "$CACHED_HAS_UPSTREAM" == "true" ]]; then
           echo "**Behind ${UPSTREAM_REPO}.** Run: \`cd ~/.claude && git fetch upstream && git merge upstream/main\`"
         else
@@ -91,7 +91,6 @@ if [[ -f "$CACHE_FILE" ]]; then
     renamed_clone)
       if [[ "$CACHED_BEHIND" =~ ^[0-9]+$ ]] && (( CACHED_BEHIND > 0 )); then
         echo ""
-        UPSTREAM_REPO="aaronsb/claude-code-config"
         if [[ "$CACHED_HAS_UPSTREAM" == "true" ]]; then
           echo "**Behind ${UPSTREAM_REPO}.** Run: \`cd ~/.claude && git fetch upstream && git merge upstream/main\`"
         else
@@ -110,7 +109,7 @@ if [[ -f "$CACHE_FILE" ]]; then
       fi
       ;;
     gh_unavailable)
-      # Surface gh issue once — check-config-updates.sh handles daily gating
+      # Surface gh issue — cache refreshes hourly so this won't spam
       if [[ -n "$CACHED_REASON" ]]; then
         echo ""
         echo "_Update check skipped: ${CACHED_REASON}_"
