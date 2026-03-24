@@ -58,7 +58,7 @@ while IFS= read -r wayfile; do
   WAY_PATHS+=("$wayfile")
 
   printf "  %-30s thresh=%-5s  %s\n" "$way_id" "${thresh:-2.0}" "$(echo "$desc" | cut -c1-60)"
-done < <(find "$WAYS_DIR" -name "way.md" -type f | sort)
+done < <(find -L "$WAYS_DIR" -name "way.md" -type f | sort)
 
 echo ""
 echo "Found ${#WAY_IDS[@]} semantic ways"

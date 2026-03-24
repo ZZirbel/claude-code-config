@@ -69,7 +69,7 @@ collect_candidates() {
         CANDIDATE_DESC["$waypath"]="${heading:-$waypath}"
       fi
     fi
-  done < <(find "$dir" -name "way.md" -print0 2>/dev/null)
+  done < <(find -L "$dir" -name "way.md" -print0 2>/dev/null)
 }
 
 # Collect from project-local and global

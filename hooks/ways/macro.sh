@@ -118,7 +118,7 @@ while IFS= read -r wayfile; do
 
   echo "| **${wayname}** | ${tool_trigger} | ${keyword_display} |"
 
-done < <(find "$WAYS_DIR" -path "*/*/way.md" -type f | sort)
+done < <(find -L "$WAYS_DIR" -path "*/*/way.md" -type f | sort)
 
 echo ""
 echo "Project-local ways: \`\$PROJECT/.claude/ways/{domain}/{way}/way.md\` override global."

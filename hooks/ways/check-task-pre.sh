@@ -74,7 +74,7 @@ scan_ways_for_subagent() {
     if match_way_prompt "$TASK_PROMPT" "$pattern" "$description" "$vocabulary" "$threshold" "$waypath"; then
       MATCHED_WAYS+=("$waypath|${MATCH_CHANNEL:-prompt}")
     fi
-  done < <(find "$dir" -name "way.md" -print0 2>/dev/null)
+  done < <(find -L "$dir" -name "way.md" -print0 2>/dev/null)
 }
 
 # Scan project-local first, then global

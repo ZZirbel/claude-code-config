@@ -91,7 +91,7 @@ scan_ways_dir() {
 
     count=$((count + 1))
 
-  done < <(find "$scan_dir" -name "way.md" -type f | sort)
+  done < <(find -L "$scan_dir" -name "way.md" -type f | sort)
 
   # Also scan for way-*.md (future locale files)
   while IFS= read -r wayfile; do
@@ -116,7 +116,7 @@ scan_ways_dir() {
 
     count=$((count + 1))
 
-  done < <(find "$scan_dir" -name "way-*.md" -type f 2>/dev/null | sort)
+  done < <(find -L "$scan_dir" -name "way-*.md" -type f 2>/dev/null | sort)
 }
 
 # resolve_project_path provided by embed-lib.sh
@@ -137,7 +137,7 @@ check_ways_embed_marker() {
     if echo "$fm" | grep -q '^description:' && echo "$fm" | grep -q '^vocabulary:'; then
       semantic_count=$((semantic_count + 1))
     fi
-  done < <(find "$ways_dir" -name "way.md" -type f 2>/dev/null)
+  done < <(find -L "$ways_dir" -name "way.md" -type f 2>/dev/null)
 
   if [[ -f "$marker" ]]; then
     local state

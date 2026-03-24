@@ -373,7 +373,7 @@ scan_dir() {
         [[ "$f" == *check.md ]] && ftype="check"
         lint_file "$f" "$ftype"
         ((count++))
-    done < <(find "$dir" \( -name "way.md" -o -name "check.md" \) -print0 2>/dev/null | sort -z)
+    done < <(find -L "$dir" \( -name "way.md" -o -name "check.md" \) -print0 2>/dev/null | sort -z)
 
     echo ""
     echo -e "${DIM}${label}: scanned $count files${RESET}"

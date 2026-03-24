@@ -14,9 +14,9 @@
 content_hash() {
   local dir="$1"
   if command -v sha256sum &>/dev/null; then
-    find "$dir" -name "way.md" -type f -exec sha256sum {} + 2>/dev/null | sort | sha256sum | cut -d' ' -f1
+    find -L "$dir" -name "way.md" -type f -exec sha256sum {} + 2>/dev/null | sort | sha256sum | cut -d' ' -f1
   elif command -v shasum &>/dev/null; then
-    find "$dir" -name "way.md" -type f -exec shasum -a 256 {} + 2>/dev/null | sort | shasum -a 256 | cut -d' ' -f1
+    find -L "$dir" -name "way.md" -type f -exec shasum -a 256 {} + 2>/dev/null | sort | shasum -a 256 | cut -d' ' -f1
   else
     echo "no-hash-tool"
   fi
@@ -172,7 +172,7 @@ enumerate_projects() {
 "
 
     local way_count
-    way_count=$(find "$ways_dir" -name "way.md" -type f 2>/dev/null | wc -l | tr -d ' ')
+    way_count=$(find -L "$ways_dir" -name "way.md" -type f 2>/dev/null | wc -l | tr -d ' ')
     [[ $way_count -eq 0 ]] && continue
 
     # Count semantic ways (have both description and vocabulary)
@@ -183,7 +183,7 @@ enumerate_projects() {
       if echo "$fm" | grep -q '^description:' && echo "$fm" | grep -q '^vocabulary:'; then
         sem_count=$((sem_count + 1))
       fi
-    done < <(find "$ways_dir" -name "way.md" -type f 2>/dev/null)
+    done < <(find -L "$ways_dir" -name "way.md" -type f 2>/dev/null)
 
     echo "${encoded}|${project_path}|${way_count}|${sem_count}"
   done < <(find "$projects_dir" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | sort)

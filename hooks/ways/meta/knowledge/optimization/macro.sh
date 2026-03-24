@@ -14,7 +14,7 @@ echo ""
 printf "%-35s %6s %6s %6s %s\n" "Way" "Gaps" "Cover" "Unused" "Match"
 printf "%-35s %6s %6s %6s %s\n" "---" "----" "-----" "------" "-----"
 
-for wayfile in $(find "${HOME}/.claude/hooks/ways" -name "way.md" -print 2>/dev/null | sort); do
+for wayfile in $(find -L "${HOME}/.claude/hooks/ways" -name "way.md" -print 2>/dev/null | sort); do
   relpath="${wayfile#${HOME}/.claude/hooks/ways/}"
   relpath="${relpath%/way.md}"
 
@@ -48,7 +48,7 @@ PROJECT_DIR="${CLAUDE_PROJECT_DIR:-}"
 if [[ -n "$PROJECT_DIR" && -d "$PROJECT_DIR/.claude/ways" ]]; then
   echo ""
   echo "### Project-local ways"
-  for wayfile in $(find "$PROJECT_DIR/.claude/ways" -name "way.md" -print 2>/dev/null | sort); do
+  for wayfile in $(find -L "$PROJECT_DIR/.claude/ways" -name "way.md" -print 2>/dev/null | sort); do
     relpath="${wayfile#$PROJECT_DIR/.claude/ways/}"
     relpath="${relpath%/way.md}"
     printf "%-35s %s\n" "$relpath" "(project-local)"

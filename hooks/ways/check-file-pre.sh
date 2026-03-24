@@ -60,7 +60,7 @@ scan_ways() {
     if [[ -n "$files" && "$FP" =~ $files ]]; then
       CONTEXT+=$(~/.claude/hooks/ways/show-way.sh "$waypath" "$SESSION_ID" "file")
     fi
-  done < <(find "$dir" -name "way.md" -print0 2>/dev/null)
+  done < <(find -L "$dir" -name "way.md" -print0 2>/dev/null)
 }
 
 # Scan project-local first, then global
@@ -129,7 +129,7 @@ scan_checks() {
       check_out=$("${HOME}/.claude/hooks/ways/show-check.sh" "$waypath" "$SESSION_ID" "file" "$MATCH_SCORE")
       [[ -n "$check_out" ]] && CONTEXT+="$check_out"
     fi
-  done < <(find "$dir" -name "check.md" -print0 2>/dev/null)
+  done < <(find -L "$dir" -name "check.md" -print0 2>/dev/null)
 }
 
 scan_checks "$PROJECT_DIR/.claude/ways"

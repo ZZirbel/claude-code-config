@@ -168,7 +168,7 @@ scan_state_triggers() {
       esac
     fi
 
-  done < <(find "$dir" -name "way.md" -print0 2>/dev/null)
+  done < <(find -L "$dir" -name "way.md" -print0 2>/dev/null)
 }
 
 # Safety net: re-inject core if context was cleared without SessionStart

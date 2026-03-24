@@ -130,7 +130,7 @@ cmd_tree() {
     tokens=$(estimate_tokens "$wayfile")
     vocabcount=$(echo "$vocab" | wc -w)
     echo "NODE	${depth}	${rel}	${threshold:-none}	${type}	${vocabcount}	${tokens}"
-  done < <(find "$tree_path" -name 'way.md' -o -name 'check.md' | sort)
+  done < <(find -L "$tree_path" -name 'way.md' -o -name 'check.md' | sort)
 }
 
 # === budget command ===
@@ -146,7 +146,7 @@ cmd_budget() {
     rel=$(relpath "$wayfile")
     tokens=$(estimate_tokens "$wayfile")
     echo "WAY	${rel}	${tokens}"
-  done < <(find "$tree_path" -name 'way.md' -o -name 'check.md' | sort)
+  done < <(find -L "$tree_path" -name 'way.md' -o -name 'check.md' | sort)
 
   # Path costs (root to each leaf)
   local root_tokens=0
@@ -179,7 +179,7 @@ cmd_budget() {
     done
 
     echo "PATH	$(relpath "$dir")	${path_tokens}"
-  done < <(find "$tree_path" -name 'way.md' | sort)
+  done < <(find -L "$tree_path" -name 'way.md' | sort)
 }
 
 # === jaccard command ===
@@ -196,7 +196,7 @@ cmd_jaccard() {
     dir=$(dirname "$wayfile")
     parent=$(dirname "$dir")
     parent_children["$parent"]+="${wayfile}"$'\n'
-  done < <(find "$tree_path" -name 'way.md' | sort)
+  done < <(find -L "$tree_path" -name 'way.md' | sort)
 
   # For each parent, compute pairwise Jaccard of children's vocabularies
   for parent in "${!parent_children[@]}"; do

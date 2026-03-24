@@ -93,7 +93,7 @@ scan_ways() {
     if match_way_prompt "$PROMPT" "$pattern" "$description" "$vocabulary" "$effective_threshold" "$waypath"; then
       ~/.claude/hooks/ways/show-way.sh "$waypath" "$SESSION_ID" "${MATCH_CHANNEL:-prompt}"
     fi
-  done < <(find "$dir" -name "way.md" -print0 2>/dev/null)
+  done < <(find -L "$dir" -name "way.md" -print0 2>/dev/null)
 }
 
 # Scan project-local first, then global

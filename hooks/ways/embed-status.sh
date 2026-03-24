@@ -95,12 +95,12 @@ if [[ "$ENGINE" == "auto" ]]; then
 fi
 
 # --- Global ways ---
-GLOBAL_WAY_COUNT=$(find "$WAYS_DIR" -name "way.md" -type f 2>/dev/null | wc -l)
+GLOBAL_WAY_COUNT=$(find -L "$WAYS_DIR" -name "way.md" -type f 2>/dev/null | wc -l)
 SEMANTIC_WAY_COUNT=0
 while IFS= read -r wf; do
   fm=$(awk 'NR==1 && /^---$/{p=1;next} p && /^---$/{exit} p{print}' "$wf")
   echo "$fm" | grep -q '^description:' && echo "$fm" | grep -q '^vocabulary:' && SEMANTIC_WAY_COUNT=$((SEMANTIC_WAY_COUNT + 1))
-done < <(find "$WAYS_DIR" -name "way.md" -type f 2>/dev/null)
+done < <(find -L "$WAYS_DIR" -name "way.md" -type f 2>/dev/null)
 
 # --- Shared library ---
 EMBED_LIB="${HOME}/.claude/hooks/ways/embed-lib.sh"
