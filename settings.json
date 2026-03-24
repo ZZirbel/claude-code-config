@@ -57,15 +57,15 @@
           },
           {
             "type": "command",
+            "command": "${HOME}/.claude/hooks/check-config-updates.sh"
+          },
+          {
+            "type": "command",
             "command": "${HOME}/.claude/hooks/ways/show-core.sh"
           },
           {
             "type": "command",
             "command": "${HOME}/.claude/hooks/ways/init-project-ways.sh"
-          },
-          {
-            "type": "command",
-            "command": "${HOME}/.claude/hooks/check-config-updates.sh"
           },
           {
             "type": "command",

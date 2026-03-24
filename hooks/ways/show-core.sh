@@ -15,31 +15,112 @@ WAYS_DIR="${HOME}/.claude/hooks/ways"
 # Output static content (skip frontmatter)
 awk 'BEGIN{fm=0} /^---$/{fm++; next} fm!=1' "${WAYS_DIR}/core.md"
 
-# Append ways version: tag (if any) + commit + clean/dirty state
+# Build version status from git describe + update cache
 CLAUDE_DIR="${HOME}/.claude"
-WAYS_VERSION=$(git -C "$CLAUDE_DIR" describe --tags --always --dirty 2>/dev/null || echo "unknown")
+# Prefer release tags (v*) over tool-specific tags (way-embed-v*, etc.)
+RAW_VERSION=$(git -C "$CLAUDE_DIR" describe --tags --match 'v*' --always --dirty 2>/dev/null || echo "unknown")
+
+# Parse git describe output into components
+# Formats: "v0.1.0" (on tag), "v0.1.0-29-ge0841be" (after tag), "e0841be" (no tags), any + "-dirty"
+IS_DIRTY=false
+DESCRIBE="$RAW_VERSION"
+if [[ "$DESCRIBE" == *-dirty ]]; then
+  IS_DIRTY=true
+  DESCRIBE="${DESCRIBE%-dirty}"
+fi
+
+if [[ "$DESCRIBE" =~ ^(.+)-([0-9]+)-g([0-9a-f]+)$ ]]; then
+  # Between tags: tag-distance-ghash
+  TAG="${BASH_REMATCH[1]}"
+  DISTANCE="${BASH_REMATCH[2]}"
+  HASH="${BASH_REMATCH[3]}"
+  VERSION_DISPLAY="${TAG} + ${DISTANCE} commits (${HASH})"
+elif [[ "$DESCRIBE" =~ ^v[0-9] ]]; then
+  # Exactly on a tag
+  TAG="$DESCRIBE"
+  DISTANCE=0
+  HASH=""
+  VERSION_DISPLAY="${TAG} (release)"
+else
+  # No tags — bare hash
+  TAG=""
+  DISTANCE=""
+  HASH="$DESCRIBE"
+  VERSION_DISPLAY="${DESCRIBE}"
+fi
+
+$IS_DIRTY && VERSION_DISPLAY="${VERSION_DISPLAY} · dirty"
+
 echo ""
 echo "---"
-echo "_Ways version: ${WAYS_VERSION}_"
+echo "_Ways version: ${VERSION_DISPLAY}_"
 
-# Check if ways might be stale using last fetch timestamp (no network call)
-# FETCH_HEAD mtime tells us when we last fetched — if it's old, nudge the user
-FETCH_HEAD="$CLAUDE_DIR/.git/FETCH_HEAD"
-if [[ -f "$FETCH_HEAD" ]]; then
-  FETCH_AGE_DAYS=$(( ( $(date +%s) - $(stat -c '%Y' "$FETCH_HEAD" 2>/dev/null || stat -f '%m' "$FETCH_HEAD" 2>/dev/null || echo 0) ) / 86400 ))
-  if (( FETCH_AGE_DAYS >= 3 )); then
-    echo ""
-    echo "**Ways last synced ${FETCH_AGE_DAYS} days ago.** This session may be missing recent improvements."
-    echo "Updating is highly recommended: \`git -C ~/.claude pull\`"
-  fi
-elif git -C "$CLAUDE_DIR" remote get-url origin &>/dev/null; then
-  # Has a remote but never fetched — worth mentioning
-  echo ""
-  echo "**Ways have never been synced with remote.** Updating is highly recommended: \`git -C ~/.claude pull\`"
+# Read update cache written by check-config-updates.sh
+# Cache persists across sessions with hourly refresh
+CACHE_FILE="/tmp/.claude-config-update-state-$(id -u)"
+if [[ -f "$CACHE_FILE" ]]; then
+  CACHED_TYPE=$(sed -n 's/^type=//p' "$CACHE_FILE")
+  CACHED_BEHIND=$(sed -n 's/^behind=//p' "$CACHE_FILE")
+  CACHED_HAS_UPSTREAM=$(sed -n 's/^has_upstream=//p' "$CACHE_FILE")
+  CACHED_FORK_OWNER=$(sed -n 's/^fork_owner=//p' "$CACHE_FILE")
+  CACHED_REASON=$(sed -n 's/^reason=//p' "$CACHE_FILE")
+
+  case "$CACHED_TYPE" in
+    clone)
+      if [[ "$CACHED_BEHIND" =~ ^[0-9]+$ ]] && (( CACHED_BEHIND > 0 )); then
+        echo ""
+        echo "**${CACHED_BEHIND} commit(s) behind origin/main.** Run: \`cd ~/.claude && git pull\`"
+      fi
+      ;;
+    fork)
+      if [[ "$CACHED_BEHIND" =~ ^[0-9]+$ ]] && (( CACHED_BEHIND > 0 )); then
+        echo ""
+        UPSTREAM_REPO="aaronsb/claude-code-config"
+        if [[ "$CACHED_HAS_UPSTREAM" == "true" ]]; then
+          echo "**Behind ${UPSTREAM_REPO}.** Run: \`cd ~/.claude && git fetch upstream && git merge upstream/main\`"
+        else
+          echo "**Behind ${UPSTREAM_REPO}.** First add upstream, then sync:"
+          echo "\`git -C ~/.claude remote add upstream https://github.com/${UPSTREAM_REPO}\`"
+          echo "\`cd ~/.claude && git fetch upstream && git merge upstream/main\`"
+        fi
+      elif [[ -n "$CACHED_FORK_OWNER" ]]; then
+        echo ""
+        echo "_Fork: ${CACHED_FORK_OWNER}/claude-code-config (up to date)_"
+      fi
+      ;;
+    renamed_clone)
+      if [[ "$CACHED_BEHIND" =~ ^[0-9]+$ ]] && (( CACHED_BEHIND > 0 )); then
+        echo ""
+        UPSTREAM_REPO="aaronsb/claude-code-config"
+        if [[ "$CACHED_HAS_UPSTREAM" == "true" ]]; then
+          echo "**Behind ${UPSTREAM_REPO}.** Run: \`cd ~/.claude && git fetch upstream && git merge upstream/main\`"
+        else
+          echo "**Behind ${UPSTREAM_REPO}.** First add upstream:"
+          echo "\`git -C ~/.claude remote add upstream https://github.com/${UPSTREAM_REPO}\`"
+          echo "\`cd ~/.claude && git fetch upstream && git merge upstream/main\`"
+        fi
+      fi
+      ;;
+    plugin)
+      INSTALLED=$(sed -n 's/^installed=//p' "$CACHE_FILE")
+      LATEST=$(sed -n 's/^latest=//p' "$CACHE_FILE")
+      if [[ "$CACHED_BEHIND" =~ ^[0-9]+$ ]] && (( CACHED_BEHIND > 0 )); then
+        echo ""
+        echo "**Plugin update available (v${INSTALLED} -> v${LATEST}).** Run: \`/plugin update disciplined-methodology\`"
+      fi
+      ;;
+    gh_unavailable)
+      # Surface gh issue once — check-config-updates.sh handles daily gating
+      if [[ -n "$CACHED_REASON" ]]; then
+        echo ""
+        echo "_Update check skipped: ${CACHED_REASON}_"
+      fi
+      ;;
+  esac
 fi
 
 # If dirty, enumerate what's changed
-if [[ "$WAYS_VERSION" == *-dirty ]]; then
+if $IS_DIRTY; then
   dirty_files=$(git -C "$CLAUDE_DIR" status --short 2>/dev/null | awk '{print $NF}')
   dirty_count=$(echo "$dirty_files" | wc -l | tr -d ' ')
   MAX_SHOW=5
