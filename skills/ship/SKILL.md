@@ -133,10 +133,30 @@ git branch  # Should show only main (and any other active work branches)
 This keeps the repo tidy. Stale local branches and dangling remote tracking refs
 accumulate fast if you skip this.
 
+### 8. Publish (if applicable)
+
+After merge, check if the project has publishing targets:
+
+```bash
+make help 2>/dev/null | grep -iE 'release|dist|publish|deploy'
+```
+
+If found, ask the user whether to publish:
+- **`make release`** — version bump, tag, publish artifacts
+- **`make dist`** — build distributable artifacts without publishing
+- **`make deploy`** — deploy to staging/production
+
+Don't auto-publish — always confirm. Publishing is a one-way door (npm publish, GitHub Release, AUR push).
+
+If no Makefile targets exist but the changes warrant a release (new feature, breaking change), suggest:
+- Tagging: `git tag -a vX.Y.Z -m "summary" && git push origin --tags`
+- GitHub Release: `gh release create vX.Y.Z --generate-notes`
+
 ## Key Principles
 
 - **Don't ask permission for each step** — assess state, propose the full remaining flow, then execute
-- **Pause only at decision points**: commit message wording, PR description, review gate
+- **Pause only at decision points**: commit message wording, PR description, review gate, publish
 - **If already mid-flow**, pick up from current state — don't restart
 - **One commit is fine** for most changes; only split if there are genuinely separate concerns
 - **Repo flavor drives review**, not just change size — a one-line fix in a team repo still pauses
+- **Merge ≠ ship** for projects with artifacts — check for `make release` after merge
