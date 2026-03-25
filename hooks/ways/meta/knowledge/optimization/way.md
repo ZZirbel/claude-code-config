@@ -30,7 +30,7 @@ suggest → interpret → apply → test → verify
 2. **Interpret**: Gaps vs intentional unused (see below)
 3. **Apply**: `/ways-tests suggest <way> --apply` (git-safe, shows diff)
 4. **Test**: `/ways-tests score-all "<sample prompt>"` to verify discrimination
-5. **Verify**: `bash tools/way-match/test-harness.sh --bm25-only` for regression
+5. **Verify**: `bash tools/way-match/test-harness.sh --verbose` for regression
 
 ## Reading Suggest Output
 

@@ -25,18 +25,19 @@ Each way lives in `{domain}/{wayname}/way.md` with YAML frontmatter.
 
 ## Matching Strategy
 
-**Use semantic matching (BM25).** This is the primary matching strategy for prompt-triggered ways.
+**Use semantic matching.** This is the primary matching strategy for prompt-triggered ways. The engine uses embeddings (cosine similarity) with BM25 as fallback.
 
 ```markdown
 ---
 description: what this way covers, in natural language
 vocabulary: domain specific keywords users would say
 threshold: 2.0            # BM25 score threshold (higher = stricter)
+embed_threshold: 0.35     # cosine similarity threshold (optional, per-way tuning)
 scope: agent
 ---
 ```
 
-Regex-only matching (`pattern:` without `description:`/`vocabulary:`) will miss any phrasing you didn't predict. Users don't say "code.?quality" — they say "clean this up" or "this function is a mess." BM25 with a good vocabulary handles the variation. Regex doesn't.
+Regex-only matching (`pattern:` without `description:`/`vocabulary:`) will miss any phrasing you didn't predict. Users don't say "code.?quality" — they say "clean this up" or "this function is a mess." Semantic matching with a good description and vocabulary handles the variation. Regex doesn't.
 
 If you still want regex-only, that's your choice, but expect poor recall on natural language prompts.
 
@@ -64,11 +65,12 @@ threshold: 90             # percentage (0-100)
 - `files:` - Regex matched against file paths (Edit/Write)
 - `commands:` - Regex matched against bash commands
 
-**Semantic (BM25):**
+**Semantic:**
 - `description:` - Natural language reference text for what this way covers
 - `vocabulary:` - Space-separated domain keywords users would say
 - `threshold:` - BM25 score threshold (default 2.0, higher = stricter)
-- Degradation: embedding → BM25 binary → skip
+- `embed_threshold:` - Cosine similarity override (optional, per-way tuning)
+- Engine: embedding → BM25 → skip (regex still works without either)
 
 **State-based:**
 - `trigger:` - State condition type (`context-threshold`, `file-exists`, `session-start`)
