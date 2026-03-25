@@ -20,12 +20,14 @@ check_when_preconditions() {
   local when_project
   when_project=$(echo "$frontmatter" | awk '/^when:/{found=1;next} found && /^  project:/{gsub(/^  project: */,"");print;exit} found && /^[^ ]/{exit}')
 
+  local when_file_exists
+  when_file_exists=$(echo "$frontmatter" | awk '/^when:/{found=1;next} found && /^  file_exists:/{gsub(/^  file_exists: */,"");print;exit} found && /^[^ ]/{exit}')
+
   # No when: block → no gate → allow
-  [[ -z "$when_project" ]] && return 0
+  [[ -z "$when_project" && -z "$when_file_exists" ]] && return 0
 
   # when.project: check if current project dir matches
   if [[ -n "$when_project" ]]; then
-    # Expand ~ to $HOME for comparison
     local expanded_project="${when_project/#\~/$HOME}"
     local resolved_project
     resolved_project=$(cd "$expanded_project" 2>/dev/null && pwd -P || echo "$expanded_project")
@@ -33,6 +35,13 @@ check_when_preconditions() {
     resolved_current=$(cd "${PROJECT_DIR:-.}" 2>/dev/null && pwd -P || echo "${PROJECT_DIR:-.}")
 
     [[ "$resolved_current" != "$resolved_project" ]] && return 1
+  fi
+
+  # when.file_exists: check if file exists relative to PROJECT_DIR
+  if [[ -n "$when_file_exists" ]]; then
+    local resolved_dir
+    resolved_dir=$(cd "${PROJECT_DIR:-.}" 2>/dev/null && pwd -P || echo "${PROJECT_DIR:-.}")
+    [[ ! -e "${resolved_dir}/${when_file_exists}" ]] && return 1
   fi
 
   return 0

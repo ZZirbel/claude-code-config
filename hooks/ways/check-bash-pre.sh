@@ -97,6 +97,9 @@ scan_checks() {
     scope="${scope:-agent}"
     scope_matches "$scope" "$CURRENT_SCOPE" || continue
 
+    # Check when: preconditions -- deterministic gate before matching
+    check_when_preconditions "$frontmatter" || continue
+
     # Match against command + description
     local query="$CMD $DESC"
     MATCH_SCORE="0"
