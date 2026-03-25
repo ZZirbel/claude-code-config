@@ -5,6 +5,7 @@ files: Makefile$|makefile$|GNUmakefile$|\.mk$
 commands: make
 threshold: 1.5
 scope: agent, subagent
+macro: append
 provenance:
   controls:
     - id: IEEE 828 (Configuration Management)
