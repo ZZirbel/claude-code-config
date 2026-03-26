@@ -107,7 +107,7 @@ detect_semantic_engine() {
 
 # Additive matching: pattern OR semantic (either channel can fire)
 # Args: $1=prompt $2=pattern $3=description $4=vocabulary $5=threshold $6=way_id
-# Sets: MATCH_CHANNEL ("keyword" or "semantic") on match
+# Sets: MATCH_CHANNEL ("keyword", "semantic:embedding", or "semantic:bm25") on match
 match_way_prompt() {
   local prompt="$1" pattern="$2" description="$3" vocabulary="$4" threshold="$5" way_id="$6"
   MATCH_CHANNEL=""
@@ -138,7 +138,7 @@ match_way_prompt() {
       fi
       # Look up this way's id in cached batch results (fixed-string grep)
       if [[ -n "$way_id" && -f "$EMBED_CACHE" ]] && grep -qF "${way_id}	" "$EMBED_CACHE"; then
-        MATCH_CHANNEL="semantic"
+        MATCH_CHANNEL="semantic:embedding"
         return 0
       fi
       ;;
@@ -152,7 +152,7 @@ match_way_prompt() {
             --query "$prompt" \
             --threshold "${threshold:-2.0}" \
             "${corpus_args[@]}" 2>/dev/null; then
-          MATCH_CHANNEL="semantic"
+          MATCH_CHANNEL="semantic:bm25"
           return 0
         fi
       fi
