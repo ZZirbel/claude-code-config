@@ -6,6 +6,7 @@ deciders:
   - claude
 related:
   - ADR-014
+  - ADR-110
 ---
 
 # ADR-107: Way-Match Corpus, Batch Mode, and Locale Support
@@ -210,9 +211,30 @@ The test harness groups fixtures by language, runs each group with the appropria
 - Locale support doesn't require all ways to be translated. English is and remains the default.
 - The defensive boundary (no runtime writes to `~/.claude/`) applies to all phases.
 
+## Interaction with ADR-110
+
+ADR-110 (Way File Separation and Graph-Compatible Structure) refines the scope of Phase 3 locale support:
+
+**Locale applies only to way files.** The `way-{lang}.md` naming convention and the tiered localization model (Tier 1 stub, Tier 2 full translation) apply exclusively to the way document. Other files in a way directory are locale-independent:
+
+- `macro.sh` — detection logic is language-independent. A file length scanner doesn't care what language the guidance is written in.
+- `provenance.yaml` — governance controls and policy mappings don't vary by language. ISO/IEC 25010 applies equally whether the way is written in English or Spanish.
+
+This simplifies the locale migration: only way files need translation or vocabulary stubs. The complete coverage requirement ("if any `way-es.md` exists, every directory needs one") still applies, but the per-directory cost is one file, not three.
+
+**Corpus generation absorbs new fields.** ADR-110 adds conventional body sections (`<!-- epistemic: ... -->`, `## See Also`) that the corpus generator (Phase 1) can extract alongside `description`, `vocabulary`, and `threshold`. The `ways-corpus.jsonl` schema gains optional fields:
+
+```jsonl
+{"id":"code/quality","description":"...","vocabulary":"...","threshold":2.0,"epistemic":"heuristic","see_also":["code/testing","code/errors"]}
+```
+
+These fields are inert to matching — `way-match` and `way-embed` ignore them. They're carried through for downstream consumers (graph generators, Logseq vault builder, sibling scoring).
+
+**Provenance is no longer in the corpus.** Before ADR-110, provenance lived in frontmatter and the corpus generator had to decide whether to include or strip it. With provenance in a sidecar file, the corpus generator reads only way.md — cleaner separation with no stripping logic needed.
+
 ## Alternatives Considered
 
-- **Embeddings (fastembed, ONNX, llamafile)**: Would solve the semantic gap ("make it faster" → performance) that BM25 can't handle. Rejected for now — BM25 at 0 FP with 55+ semantic ways is sufficient. Embeddings require shipping a model file (25-130MB), which changes the trust profile from "source-auditable" to "model-auditable." The defensible trigger for reconsidering: measurable false negatives in production that vocabulary tuning cannot fix, across a corpus that has outgrown manual curation. We're not there.
+- **Embeddings (fastembed, ONNX, llamafile)**: Would solve the semantic gap ("make it faster" → performance) that BM25 can't handle. This was rejected when ADR-107 was drafted but subsequently implemented in ADR-108 (Embedding-Based Way Matching with all-MiniLM-L6-v2). The matching pipeline now uses embedding as the primary engine with BM25 as fallback — selected at session start, not both. The embedding engine also enables ADR-110's sibling scoring (way-vs-way similarity for authoring calibration).
 - **Runtime corpus regeneration**: Regen the JSONL on every prompt if any way.md is newer. Rejected — this writes to `~/.claude/` during project work, which is a poisoning vector. The corpus is a build artifact, not a cache.
 - **Embed corpus in the binary**: Compile `ways-corpus.jsonl` into the binary as a C array (like `BUILTIN_WAYS[]` but generated). Would eliminate the external file. Rejected — requires recompiling the binary every time a way changes. The current model (binary rarely changes, corpus changes with ways) is more practical.
 - **Move to Python/Node for matching**: Would make stemmer/locale swapping trivial (NLTK, etc). Rejected — adds a runtime dependency. The ways system runs on bash + coreutils + one static binary. That property is worth preserving.
@@ -221,6 +243,8 @@ The test harness groups fixtures by language, runs each group with the appropria
 ## References
 
 - ADR-014: TF-IDF/BM25 Binary for Semantic Way Matching (predecessor)
+- ADR-108: Embedding-Based Way Matching with all-MiniLM-L6-v2 (supersedes the embeddings alternative)
+- ADR-110: Way File Separation and Graph-Compatible Structure (refines Phase 3 scope)
 - `tools/way-match/way-match.c`: Current implementation (907 lines)
 - `hooks/ways/frontmatter-schema.yaml`: Authoritative field definitions
 - [Snowball stemmer project](https://snowballstem.org/): Multi-language stemming algorithms
