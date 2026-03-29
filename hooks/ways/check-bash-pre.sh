@@ -42,7 +42,7 @@ scan_ways() {
   while IFS= read -r -d '' wayfile; do
     # Extract way path relative to ways dir (e.g., "softwaredev/delivery/github")
     waypath="${wayfile#$dir/}"
-    waypath="${waypath%/way.md}"
+    waypath="$(way_id_from_path "$wayfile" "$dir")"
 
     # Extract frontmatter
     frontmatter=$(awk 'NR==1 && /^---$/{p=1; next} p && /^---$/{exit} p{print}' "$wayfile")
@@ -68,7 +68,7 @@ scan_ways() {
     if [[ -n "$DESC" && -n "$pattern" && "$DESC" =~ $pattern ]]; then
       CONTEXT+=$(~/.claude/hooks/ways/show-way.sh "$waypath" "$SESSION_ID" "bash")
     fi
-  done < <(find -L "$dir" -name "way.md" -print0 2>/dev/null)
+  done < <(find_way_files "$dir")
 }
 
 # Scan project-local first, then global

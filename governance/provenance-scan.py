@@ -203,7 +203,7 @@ def scan_ways(ways_dir):
     ways = {}
     ways_dir = Path(ways_dir)
 
-    for way_file in sorted(ways_dir.rglob('way.md')):
+    for way_file in sorted(p for p in ways_dir.rglob('*.md') if p.name != 'check.md'):
         # Extract way key from path: everything between ways_dir and way.md
         rel = way_file.relative_to(ways_dir)
         parts = rel.parts

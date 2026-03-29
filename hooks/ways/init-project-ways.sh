@@ -36,12 +36,12 @@ GIEOF
 # Project Ways Template
 
 Ways are contextual guidance that loads once per session when triggered.
-Each way lives in its own directory: `{domain}/{wayname}/way.md`
+Each way lives in its own directory: `{domain}/{wayname}/{wayname}.md`
 
 ## Creating a Way
 
 1. Create a directory: `.claude/ways/{domain}/{wayname}/`
-2. Add `way.md` with YAML frontmatter + guidance
+2. Add `{wayname}.md` with YAML frontmatter + guidance
 
 ### Pattern matching (for known keywords):
 

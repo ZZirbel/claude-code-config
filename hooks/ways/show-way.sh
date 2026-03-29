@@ -49,16 +49,25 @@ WAY_MARKER_NAME=$(echo "$WAY" | tr '/' '-')
 # SECURITY: Project-local macros only run if project is in trusted list
 WAY_DIR=""
 IS_PROJECT_LOCAL=false
-if [[ -f "$PROJECT_DIR/.claude/ways/${WAY}/way.md" ]]; then
-  WAY_FILE="$PROJECT_DIR/.claude/ways/${WAY}/way.md"
-  WAY_DIR="$PROJECT_DIR/.claude/ways/${WAY}"
-  IS_PROJECT_LOCAL=true
-elif [[ -f "${HOME}/.claude/hooks/ways/${WAY}/way.md" ]]; then
-  WAY_FILE="${HOME}/.claude/hooks/ways/${WAY}/way.md"
-  WAY_DIR="${HOME}/.claude/hooks/ways/${WAY}"
-else
-  exit 0
+# Find the way file — any .md file with frontmatter in the way directory
+_find_way_file() {
+  local dir="$1"
+  for f in "$dir"/*.md; do
+    [[ -f "$f" ]] && head -1 "$f" 2>/dev/null | grep -q '^---$' && echo "$f" && return 0
+  done
+  return 1
+}
+
+WAY_FILE=""
+if [[ -d "$PROJECT_DIR/.claude/ways/${WAY}" ]]; then
+  WAY_FILE=$(_find_way_file "$PROJECT_DIR/.claude/ways/${WAY}")
+  [[ -n "$WAY_FILE" ]] && IS_PROJECT_LOCAL=true
 fi
+if [[ -z "$WAY_FILE" && -d "${HOME}/.claude/hooks/ways/${WAY}" ]]; then
+  WAY_FILE=$(_find_way_file "${HOME}/.claude/hooks/ways/${WAY}")
+fi
+WAY_DIR="$(dirname "${WAY_FILE:-/dev/null}")"
+[[ -z "$WAY_FILE" ]] && exit 0
 
 # Check if project is trusted for macro execution
 # Add trusted project paths (one per line) to ~/.claude/trusted-project-macros
@@ -164,7 +173,12 @@ if [[ "$_parent_dir" != "$WAY" ]]; then
   for _ways_base in "$PROJECT_DIR/.claude/ways" "${HOME}/.claude/hooks/ways"; do
     [[ -d "${_ways_base}/${_parent_dir}" ]] || continue
     for _sib_dir in "${_ways_base}/${_parent_dir}"/*/; do
-      [[ -f "${_sib_dir}way.md" ]] || continue
+      # Check for any .md file with frontmatter in sibling dir
+      _has_way=false
+      for _sf in "${_sib_dir}"*.md; do
+        [[ -f "$_sf" ]] && head -1 "$_sf" 2>/dev/null | grep -q '^---$' && { _has_way=true; break; }
+      done
+      $_has_way || continue
       _sibling_total=$((_sibling_total + 1))
       _sib_name="${_sib_dir#${_ways_base}/}"
       _sib_name="${_sib_name%/}"

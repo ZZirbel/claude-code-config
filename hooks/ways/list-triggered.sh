@@ -57,8 +57,9 @@ for marker in $markers; do
     seen_ways[$waypath]=1
 
     # Check if way.md exists
-    if [[ -f "${WAYS_DIR}/${waypath}/way.md" ]]; then
-      title=$(grep -m1 '^# ' "${WAYS_DIR}/${waypath}/way.md" | sed 's/^# //')
+    _way_f=$(find "${WAYS_DIR}/${waypath}" -maxdepth 1 -name "*.md" ! -name "check.md" -print -quit 2>/dev/null)
+    if [[ -n "$_way_f" ]]; then
+      title=$(grep -m1 '^# ' "$_way_f" | sed 's/^# //')
       echo "- **${waypath}**: ${title}"
     else
       echo "- **${waypath}** _(project-local)_"

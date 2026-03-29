@@ -78,7 +78,7 @@ scan_ways_dir() {
 
     # Derive id from path
     relpath="${wayfile#$scan_dir/}"
-    id="${id_prefix}${relpath%/way.md}"
+    id="${id_prefix}${relpath%/*}"
 
     # Escape JSON strings (handle quotes and backslashes)
     desc_escaped=$(printf '%s' "$description" | sed 's/\\/\\\\/g; s/"/\\"/g')
@@ -91,32 +91,10 @@ scan_ways_dir() {
 
     count=$((count + 1))
 
-  done < <(find -L "$scan_dir" -name "way.md" -type f | sort)
+  done < <(find -L "$scan_dir" -name "*.md" ! -name "check.md" -type f | sort)
 
-  # Also scan for way-*.md (future locale files)
-  while IFS= read -r wayfile; do
-    frontmatter=$(awk 'NR==1 && /^---$/{p=1;next} p && /^---$/{exit} p{print}' "$wayfile")
-    description=$(echo "$frontmatter" | awk '/^description:/{gsub(/^description: */,"");print;exit}')
-    vocabulary=$(echo "$frontmatter" | awk '/^vocabulary:/{gsub(/^vocabulary: */,"");print;exit}')
-    threshold=$(echo "$frontmatter" | awk '/^threshold:/{gsub(/^threshold: */,"");print;exit}')
-    embed_threshold=$(echo "$frontmatter" | awk '/^embed_threshold:/{gsub(/^embed_threshold: */,"");print;exit}')
-
-    [[ -z "$description" || -z "$vocabulary" ]] && continue
-
-    relpath="${wayfile#$scan_dir/}"
-    id="${id_prefix}${relpath%.md}"
-
-    desc_escaped=$(printf '%s' "$description" | sed 's/\\/\\\\/g; s/"/\\"/g')
-    vocab_escaped=$(printf '%s' "$vocabulary" | sed 's/\\/\\\\/g; s/"/\\"/g')
-    thresh_val="${threshold:-2.0}"
-    embed_thresh_val="${embed_threshold:-0.35}"
-
-    printf '{"id":"%s","description":"%s","vocabulary":"%s","threshold":%s,"embed_threshold":%s}\n' \
-      "$id" "$desc_escaped" "$vocab_escaped" "$thresh_val" "$embed_thresh_val" >> "$TMPFILE"
-
-    count=$((count + 1))
-
-  done < <(find -L "$scan_dir" -name "way-*.md" -type f 2>/dev/null | sort)
+  # Note: locale-specific files ({name}-{lang}.md) are also caught by the
+  # *.md find above. Their id will include the parent dir like any other way.
 }
 
 # resolve_project_path provided by embed-lib.sh
@@ -137,7 +115,7 @@ check_ways_embed_marker() {
     if echo "$fm" | grep -q '^description:' && echo "$fm" | grep -q '^vocabulary:'; then
       semantic_count=$((semantic_count + 1))
     fi
-  done < <(find -L "$ways_dir" -name "way.md" -type f 2>/dev/null)
+  done < <(find -L "$ways_dir" -name "*.md" ! -name "check.md" -type f 2>/dev/null)
 
   if [[ -f "$marker" ]]; then
     local state

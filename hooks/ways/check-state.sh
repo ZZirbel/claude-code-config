@@ -123,7 +123,7 @@ scan_state_triggers() {
   while IFS= read -r -d '' wayfile; do
     # Extract way path relative to ways dir
     local waypath="${wayfile#$dir/}"
-    waypath="${waypath%/way.md}"
+    waypath="$(way_id_from_path "$wayfile" "$dir")"
 
     # Check for trigger: field in frontmatter
     local trigger=$(awk 'NR==1 && /^---$/{p=1; next} p && /^---$/{exit} p && /^trigger:/' "$wayfile" | sed 's/^trigger: *//')
@@ -168,7 +168,7 @@ scan_state_triggers() {
       esac
     fi
 
-  done < <(find -L "$dir" -name "way.md" -print0 2>/dev/null)
+  done < <(find_way_files "$dir")
 }
 
 # Safety net: re-inject core if context was cleared without SessionStart

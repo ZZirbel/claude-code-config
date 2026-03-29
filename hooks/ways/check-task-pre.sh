@@ -45,7 +45,7 @@ scan_ways_for_subagent() {
 
   while IFS= read -r -d '' wayfile; do
     waypath="${wayfile#$dir/}"
-    waypath="${waypath%/way.md}"
+    waypath="$(way_id_from_path "$wayfile" "$dir")"
 
     # Extract frontmatter
     frontmatter=$(awk 'NR==1 && /^---$/{p=1; next} p && /^---$/{exit} p{print}' "$wayfile")
@@ -74,7 +74,7 @@ scan_ways_for_subagent() {
     if match_way_prompt "$TASK_PROMPT" "$pattern" "$description" "$vocabulary" "$threshold" "$waypath"; then
       MATCHED_WAYS+=("$waypath|${MATCH_CHANNEL:-prompt}")
     fi
-  done < <(find -L "$dir" -name "way.md" -print0 2>/dev/null)
+  done < <(find_way_files "$dir")
 }
 
 # Scan project-local first, then global

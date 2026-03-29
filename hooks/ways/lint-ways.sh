@@ -374,7 +374,9 @@ scan_dir() {
         [[ "$f" == *check.md ]] && ftype="check"
         lint_file "$f" "$ftype"
         ((count++))
-    done < <(find -L "$dir" \( -name "way.md" -o -name "check.md" \) -print0 2>/dev/null | sort -z)
+    done < <(find -L "$dir" -name "*.md" -print0 2>/dev/null | sort -z | while IFS= read -r -d '' f; do
+        head -1 "$f" 2>/dev/null | grep -q '^---$' && printf '%s\0' "$f"
+    done)
 
     echo ""
     echo -e "${DIM}${label}: scanned $count files${RESET}"
@@ -462,10 +464,10 @@ lint_jaccard() {
         local waydir
         waydir=$(dirname "$wayfile")
         local has_children
-        has_children=$(find -L "$waydir" -mindepth 2 -name 'way.md' 2>/dev/null | head -1)
+        has_children=$(find -L "$waydir" -mindepth 2 -name '*.md' ! -name 'check.md' 2>/dev/null | head -1)
         [[ -z "$has_children" ]] && continue
         roots+=("$waydir")
-    done < <(find -L "$dir" -name 'way.md' -print 2>/dev/null | sort)
+    done < <(find -L "$dir" -name '*.md' ! -name 'check.md' -print 2>/dev/null | sort)
 
     # Filter to outermost roots only (skip any root that's inside another root)
     local -A outermost
@@ -481,10 +483,10 @@ lint_jaccard() {
         while IFS=$'\t' read -r tag way_a way_b score; do
             [[ "$tag" != "PAIR" ]] && continue
             if awk "BEGIN{exit ($score > 0.25) ? 0 : 1}"; then
-                echo -e "  ${RED}ERROR:${RESET} ${way_a%/way.md} <-> ${way_b%/way.md} — Jaccard ${score} (> 0.25 collision)"
+                echo -e "  ${RED}ERROR:${RESET} ${way_a%/*.md} <-> ${way_b%/*.md} — Jaccard ${score} (> 0.25 collision)"
                 ((ERRORS++))
             elif awk "BEGIN{exit ($score > 0.15) ? 0 : 1}"; then
-                echo -e "  ${YELLOW}WARNING:${RESET} ${way_a%/way.md} <-> ${way_b%/way.md} — Jaccard ${score} (> 0.15 overlap)"
+                echo -e "  ${YELLOW}WARNING:${RESET} ${way_a%/*.md} <-> ${way_b%/*.md} — Jaccard ${score} (> 0.15 overlap)"
                 ((WARNINGS++))
             fi
         done < <(bash "$TREE_ANALYZER" jaccard "$tree_root" 2>/dev/null)

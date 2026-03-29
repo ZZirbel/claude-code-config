@@ -64,13 +64,17 @@ while IFS= read -r waypath; do
   # Resolve way file (project-local > global)
   WAY_FILE=""
   WAY_DIR=""
-  if [[ -f "$PROJECT_DIR/.claude/ways/${waypath}/way.md" ]]; then
-    WAY_FILE="$PROJECT_DIR/.claude/ways/${waypath}/way.md"
-    WAY_DIR="$PROJECT_DIR/.claude/ways/${waypath}"
-  elif [[ -f "${HOME}/.claude/hooks/ways/${waypath}/way.md" ]]; then
-    WAY_FILE="${HOME}/.claude/hooks/ways/${waypath}/way.md"
-    WAY_DIR="${HOME}/.claude/hooks/ways/${waypath}"
-  fi
+  # Find way file — any .md with frontmatter in the way directory
+  for _base in "$PROJECT_DIR/.claude/ways" "${HOME}/.claude/hooks/ways"; do
+    [[ -d "${_base}/${waypath}" ]] || continue
+    for _f in "${_base}/${waypath}"/*.md; do
+      [[ -f "$_f" ]] && head -1 "$_f" 2>/dev/null | grep -q '^---$' && {
+        WAY_FILE="$_f"
+        WAY_DIR="${_base}/${waypath}"
+        break 2
+      }
+    done
+  done
   [[ -z "$WAY_FILE" ]] && continue
 
   # Check domain disabled

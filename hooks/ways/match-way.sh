@@ -9,6 +9,24 @@
 
 WAYS_DIR="${WAYS_DIR:-${HOME}/.claude/hooks/ways}"
 
+# Find way files in a directory. A way file is any .md file with YAML frontmatter
+# (starts with ---) in a way directory. Excludes check.md files.
+# Outputs null-terminated paths suitable for while read -d ''.
+find_way_files() {
+  local dir="$1"
+  find -L "$dir" -name "*.md" ! -name "check.md" -print0 2>/dev/null | while IFS= read -r -d '' f; do
+    head -1 "$f" 2>/dev/null | grep -q '^---$' && printf '%s\0' "$f"
+  done
+}
+
+# Extract way ID from a way file path relative to a ways directory.
+# e.g., /home/user/.claude/hooks/ways/softwaredev/code/quality/quality.md → softwaredev/code/quality
+way_id_from_path() {
+  local filepath="$1" basedir="$2"
+  local rel="${filepath#$basedir/}"
+  echo "${rel%/*}"
+}
+
 # Check `when:` preconditions — deterministic gate before any matching.
 # Returns 0 if all preconditions are met (or no when: block), 1 if any fail.
 # Args: $1=frontmatter (raw text)

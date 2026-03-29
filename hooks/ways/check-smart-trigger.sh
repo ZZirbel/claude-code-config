@@ -25,7 +25,7 @@ collect_candidates() {
 
   while IFS= read -r -d '' wayfile; do
     local waypath="${wayfile#$dir/}"
-    waypath="${waypath%/way.md}"
+    waypath="$(way_id_from_path "$wayfile" "$dir")"
 
     # Skip if already fired this session
     local marker="/tmp/.claude-way-${waypath//\//-}-${SESSION_ID}"
@@ -66,7 +66,7 @@ collect_candidates() {
         CANDIDATE_DESC["$waypath"]="${heading:-$waypath}"
       fi
     fi
-  done < <(find -L "$dir" -name "way.md" -print0 2>/dev/null)
+  done < <(find_way_files "$dir")
 }
 
 # Collect from project-local and global
