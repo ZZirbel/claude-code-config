@@ -1,0 +1,14 @@
+policy:
+  - uri: docs/hooks-and-ways/extending.md
+    type: governance-doc
+controls:
+  - id: ISO 9001:2015 7.5 (Documented Information)
+    justifications:
+      - Way file format specification ensures documented information is appropriate and suitable
+      - Frontmatter schema (match, pattern, files, commands) standardizes trigger documentation
+      - Writing voice guidance ensures guidance is readable by context-free readers
+verified: 2026-02-05
+rationale: >
+  Format spec and authoring guidance for writing effective ways.
+  Only injected when editing way files — heavier reference that
+  isn't needed for general "ways" conversations.

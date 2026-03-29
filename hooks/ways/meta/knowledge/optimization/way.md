@@ -4,19 +4,6 @@ vocabulary: optimize vocabulary suggest gaps coverage unused threshold tune scor
 threshold: 2.0
 macro: prepend
 scope: agent
-provenance:
-  policy:
-    - uri: docs/hooks-and-ways/extending.md
-      type: governance-doc
-  controls:
-    - id: ISO 9001:2015 10.2 (Improvement)
-      justifications:
-        - Systematic vocabulary analysis ensures ways fire accurately
-        - Gap/coverage metrics provide evidence-based improvement decisions
-  verified: 2026-02-16
-  rationale: >
-    Optimization workflow for tuning way vocabulary and matching quality.
-    Fires when discussing way improvement, not general authoring.
 ---
 # Way Optimization
 

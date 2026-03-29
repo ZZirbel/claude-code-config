@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Scan way.md files and generate a provenance traceability manifest.
+"""Scan way files and generate a provenance traceability manifest.
 
 Usage:
     python3 provenance-scan.py [--ways-dir DIR] [--output FILE]
 
-Scans all way.md files for provenance: blocks in YAML frontmatter
-and generates a JSON manifest mapping ways to their policy sources.
+Scans way directories for provenance data — either from provenance.yaml
+sidecar files (ADR-110) or provenance: blocks in YAML frontmatter (legacy).
+Generates a JSON manifest mapping ways to their policy sources.
 """
 
 import json
@@ -16,12 +17,30 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-def parse_frontmatter(path):
-    """Extract YAML frontmatter from a way.md file.
+def parse_sidecar(sidecar_path):
+    """Parse a provenance.yaml sidecar file.
 
-    Uses a simple line-based parser — no PyYAML dependency required.
-    Handles the nested provenance: block specifically.
+    The sidecar contains the provenance content directly (no wrapping
+    provenance: key). We prepend 'provenance:' and indent the content
+    so parse_provenance_block() can handle it uniformly.
     """
+    lines = Path(sidecar_path).read_text().splitlines()
+    # Wrap as if it were inside a provenance: block in frontmatter
+    wrapped = ['provenance:'] + ['  ' + line for line in lines]
+    return parse_provenance_block(wrapped)
+
+
+def parse_frontmatter(path):
+    """Extract provenance from a way directory.
+
+    Checks for provenance.yaml sidecar first (ADR-110), falls back to
+    parsing provenance: block from way.md YAML frontmatter (legacy).
+    """
+    sidecar = Path(path).parent / 'provenance.yaml'
+    if sidecar.exists():
+        return parse_sidecar(sidecar)
+
+    # Legacy: parse from frontmatter
     lines = Path(path).read_text().splitlines()
 
     if not lines or lines[0].strip() != '---':
@@ -180,20 +199,19 @@ def parse_provenance_block(lines):
 
 
 def scan_ways(ways_dir):
-    """Scan a directory tree for way.md files with provenance."""
+    """Scan a directory tree for way files with provenance."""
     ways = {}
     ways_dir = Path(ways_dir)
 
     for way_file in sorted(ways_dir.rglob('way.md')):
-        # Extract domain/wayname from path
+        # Extract way key from path: everything between ways_dir and way.md
         rel = way_file.relative_to(ways_dir)
         parts = rel.parts
-        if len(parts) < 3:  # domain/wayname/way.md
+        if len(parts) < 2:  # need at least domain/way.md
             continue
 
-        domain = parts[0]
-        wayname = parts[1]
-        way_key = f"{domain}/{wayname}"
+        # way_key is the directory path (e.g. softwaredev/code/quality)
+        way_key = str(rel.parent)
 
         parsed = parse_frontmatter(way_file)
         provenance = parsed.get('provenance')

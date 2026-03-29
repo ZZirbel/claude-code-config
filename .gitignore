@@ -78,6 +78,7 @@
 !hooks/ways/**/*.md
 !hooks/ways/**/*.sh
 !hooks/ways/**/*.yaml.template
+!hooks/ways/**/provenance.yaml
 !hooks/ways/**/adr-tool
 !hooks/ways/**/chart-tool
 

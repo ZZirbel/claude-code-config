@@ -3,24 +3,6 @@ description: threat modeling, STRIDE analysis, trust boundaries, attack surface 
 vocabulary: threat model stride attack surface trust boundary mitigation adversary dread spoofing tampering repudiation elevation
 threshold: 2.0
 scope: agent, subagent
-provenance:
-  policy:
-    - uri: governance/policies/operations.md
-      type: governance-doc
-  controls:
-    - id: OWASP Threat Modeling Cheat Sheet
-      justifications:
-        - STRIDE framework applied at design phase before code review
-        - Trust boundaries identified between components and external systems
-    - id: NIST SP 800-30 (Risk Assessment)
-      justifications:
-        - Risk register documents accepted risks with expiration dates
-        - Likelihood and impact assessed for each identified threat
-  verified: 2026-02-17
-  rationale: >
-    Security Way covers code-level detection (SQL injection, XSS, secrets).
-    Threat modeling operates at design altitude — understanding adversaries,
-    trust boundaries, and systemic risks before they become code bugs.
 ---
 # Threat Modeling Way
 

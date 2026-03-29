@@ -1,0 +1,18 @@
+policy:
+  - uri: docs/hooks-and-ways/extending.md
+    type: governance-doc
+  - uri: docs/hooks-and-ways/rationale.md
+    type: governance-doc
+controls:
+  - id: ISO/IEC 27001:2022 5.2 (Policy)
+    justifications:
+      - Domain organization (global vs project-local) establishes policy hierarchy
+      - Enable/disable mechanism via ways.json provides controlled policy application
+  - id: NIST SP 800-53 PL-2 (System Security and Privacy Plans)
+    justifications:
+      - Ways index at session start documents active security and privacy guidance
+      - State machine ensures each policy is delivered exactly once per session
+verified: 2026-02-05
+rationale: >
+  Overview of the ways system for orientation when ways are mentioned
+  in conversation. Authoring details live in knowledge/authoring.

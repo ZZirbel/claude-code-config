@@ -1,0 +1,14 @@
+controls:
+  - id: IEEE 828 (Configuration Management)
+    justifications:
+      - Makefile codifies build, test, and release procedures as reproducible targets
+      - make help provides discoverable project interface documentation
+  - id: NIST SP 800-53 SA-11 (Developer Testing and Evaluation)
+    justifications:
+      - Standardized make test / make lint targets ensure consistent test execution
+      - CI and local environments run identical commands via Make
+verified: 2026-03-13
+rationale: >
+  A Makefile provides a language-agnostic, zero-dependency task interface that
+  codifies project operations as reproducible targets. This standardization
+  supports configuration management (IEEE 828) and consistent developer testing (SA-11).

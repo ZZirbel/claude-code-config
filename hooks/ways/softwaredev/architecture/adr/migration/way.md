@@ -4,20 +4,6 @@ vocabulary: migrate adopt convert bootstrap setup greenfield legacy rename renum
 threshold: 3.0
 macro: prepend
 scope: agent, subagent
-provenance:
-  policy:
-    - uri: governance/policies/code-lifecycle.md
-      type: governance-doc
-  controls:
-    - id: NIST SP 800-53 CM-3 (Configuration Change Control)
-      justifications:
-        - Migration workflow preserves decision history during tooling adoption
-        - Legacy range in adr.yaml maintains traceability for pre-domain ADRs
-  verified: 2026-02-17
-  rationale: >
-    Migration guidance ensures existing architectural decisions survive tooling adoption
-    with full traceability. CM-3 is satisfied by preserving decision history through
-    controlled migration rather than starting fresh.
 ---
 # ADR Migration
 
