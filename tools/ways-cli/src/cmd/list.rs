@@ -7,6 +7,7 @@ use serde_json::json;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use crate::cmd::context;
 use crate::session;
 
 /// A fired way with all its session state.
@@ -34,8 +35,16 @@ pub fn run(session: Option<&str>, sort: &str, json_out: bool) -> Result<()> {
     };
 
     let current_epoch = session::get_epoch(&session_id);
-    let current_tokens_k = session::get_token_position(&session_id) / 1000;
-    let context_window_k = session::detect_context_window(&session_id) / 1000;
+
+    // Use accurate context data from transcript when available
+    let (current_tokens_k, context_window_k) = match context::get_context(None) {
+        Ok(ctx) => (ctx.tokens_used / 1000, ctx.tokens_total / 1000),
+        Err(_) => {
+            // Fallback to session markers
+            let tok = session::get_token_position(&session_id) / 1000;
+            (tok, if tok > 200 { 1000 } else { 200 })
+        }
+    };
     let redisclose_threshold_k = context_window_k * 25 / 100;
 
     // Collect metrics from JSONL (has trigger, depth, parent)

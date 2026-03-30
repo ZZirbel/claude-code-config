@@ -1,3 +1,4 @@
+pub mod context;
 pub mod corpus;
 pub mod embed;
 pub mod governance;

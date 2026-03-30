@@ -16,6 +16,15 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Context window usage — accurate token counts from transcript
+    Context {
+        /// Project directory (default: detect from cwd or CLAUDE_PROJECT_DIR)
+        #[arg(long)]
+        project: Option<String>,
+        /// Machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
     /// Validate way frontmatter against the schema
     Lint {
         /// Path to scan (default: project ways if in project, else global)
@@ -314,6 +323,7 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
+        Commands::Context { project, json } => cmd::context::run(project.as_deref(), json),
         Commands::Lint { path, schema, check, fix, global } => cmd::lint::run(path, schema, check, fix, global),
         Commands::Corpus { ways_dir, quiet, if_stale } => cmd::corpus::run(ways_dir, quiet, if_stale),
         Commands::Match { query, corpus } => cmd::match_bm25::run(query, corpus),
