@@ -87,7 +87,7 @@ ENGINE="${CONFIGURED:-auto}"
 if [[ "$ENGINE" == "auto" ]]; then
   if [[ -n "$WAY_EMBED" && "$MODEL_EXISTS" == "true" && "$CORPUS_EXISTS" == "true" ]]; then
     ENGINE="embedding (auto)"
-  elif [[ -x "${HOME}/.claude/bin/way-match" ]]; then
+  elif [[ -x "${HOME}/.claude/bin/ways" ]]; then
     ENGINE="bm25 (auto)"
   else
     ENGINE="none (auto)"

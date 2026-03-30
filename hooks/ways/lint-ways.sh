@@ -60,10 +60,9 @@ done
 
 # ── Corpus regeneration ──────────────────────────────────────────
 # Regenerate ways-corpus.jsonl before linting so IDF is current.
-# Only runs if the generator script exists.
-CORPUS_GEN="${HOME}/.claude/tools/way-match/generate-corpus.sh"
-if [[ -x "$CORPUS_GEN" && "$MODE" == "lint" && -z "${GENERATE_CORPUS_RUNNING:-}" ]]; then
-    bash "$CORPUS_GEN" --quiet "$WAYS_DIR" 2>/dev/null
+WAYS_BIN="${HOME}/.claude/bin/ways"
+if [[ -x "$WAYS_BIN" && "$MODE" == "lint" && -z "${GENERATE_CORPUS_RUNNING:-}" ]]; then
+    "$WAYS_BIN" corpus --quiet 2>/dev/null
 fi
 
 # ── Schema loading ────────────────────────────────────────────────

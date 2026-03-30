@@ -27,7 +27,7 @@ while [[ -L "$SOURCE" ]]; do
   [[ "$SOURCE" != /* ]] && SOURCE="$DIR/$SOURCE"
 done
 SCRIPT_DIR="$(cd "$(dirname "$SOURCE")" && pwd)"
-SCANNER="${SCRIPT_DIR}/provenance-scan.py"
+WAYS_BIN="${HOME}/.claude/bin/ways"
 VERIFIER="${SCRIPT_DIR}/provenance-verify.sh"
 STATS_FILE="${HOME}/.claude/stats/events.jsonl"
 
@@ -40,7 +40,7 @@ else
 fi
 
 # Check dependencies
-for cmd in jq python3; do
+for cmd in jq; do
   if ! command -v "$cmd" &>/dev/null; then
     echo -e "${RED}Error:${RESET} $cmd is required but not installed." >&2
     exit 1
@@ -99,7 +99,7 @@ if [[ -n "$MANIFEST" ]]; then
   fi
   MANIFEST_DATA=$(cat "$MANIFEST")
 else
-  MANIFEST_DATA=$(python3 "$SCANNER" 2>/dev/null)
+  MANIFEST_DATA=$("$WAYS_BIN" provenance 2>/dev/null)
 fi
 
 # ============================================================
