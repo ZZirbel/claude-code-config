@@ -65,7 +65,7 @@
           },
           {
             "type": "command",
-            "command": "${HOME}/.claude/hooks/ways/init-project-ways.sh"
+            "command": "${HOME}/.claude/bin/ways init"
           },
           {
             "type": "command",
@@ -108,7 +108,7 @@
           },
           {
             "type": "command",
-            "command": "${HOME}/.claude/hooks/ways/init-project-ways.sh"
+            "command": "${HOME}/.claude/bin/ways init"
           }
         ]
       }

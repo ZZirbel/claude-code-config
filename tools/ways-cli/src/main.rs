@@ -108,6 +108,12 @@ enum Commands {
         #[arg(long, default_value = "2")]
         min_freq: u32,
     },
+    /// Initialize project .claude/ways/ structure
+    Init {
+        /// Project directory (default: CLAUDE_PROJECT_DIR or cwd)
+        #[arg(long)]
+        project: Option<String>,
+    },
     /// Usage statistics from event log
     Stats {
         /// Last N days only
@@ -243,6 +249,7 @@ fn main() -> Result<()> {
         Commands::Graph { ways_dir, output } => cmd::graph::run(ways_dir, output),
         Commands::Tree { path, jaccard } => cmd::tree::run(path, jaccard),
         Commands::Provenance { ways_dir } => cmd::provenance::run(ways_dir),
+        Commands::Init { project } => cmd::init::run(project.as_deref()),
         Commands::Stats { days, project, json } => {
             cmd::stats::run(days, project.as_deref(), json)
         }
