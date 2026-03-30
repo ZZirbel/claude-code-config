@@ -108,6 +108,18 @@ enum Commands {
         #[arg(long, default_value = "2")]
         min_freq: u32,
     },
+    /// Usage statistics from event log
+    Stats {
+        /// Last N days only
+        #[arg(long)]
+        days: Option<u32>,
+        /// Filter to specific project path
+        #[arg(long)]
+        project: Option<String>,
+        /// Machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
     /// List ways triggered in the current session
     List {
         /// Session ID (if omitted, shows all recent markers)
@@ -231,6 +243,9 @@ fn main() -> Result<()> {
         Commands::Graph { ways_dir, output } => cmd::graph::run(ways_dir, output),
         Commands::Tree { path, jaccard } => cmd::tree::run(path, jaccard),
         Commands::Provenance { ways_dir } => cmd::provenance::run(ways_dir),
+        Commands::Stats { days, project, json } => {
+            cmd::stats::run(days, project.as_deref(), json)
+        }
         Commands::List { session } => cmd::list::run(session.as_deref()),
         Commands::Status { json } => cmd::status::run(json),
         Commands::Scan { mode } => match mode {

@@ -8,6 +8,7 @@ pub mod provenance;
 pub mod siblings;
 pub mod scan;
 pub mod show;
+pub mod stats;
 pub mod status;
 pub mod suggest;
 pub mod tree;
