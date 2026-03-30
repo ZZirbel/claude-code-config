@@ -1,114 +1,86 @@
-# ADR-111 Phase 2: Hook Infrastructure Consolidation
+# ADR-111 Phase 3: ways CLI — Session State + Diagnostics
 
 **Branch:** `staging/ADR-111`
-**Status:** Phase 2 complete. All absorbable scripts consolidated.
+**Status:** 59 commits, 19 subcommands, 8 integration tests, all passing.
 
-## What's done (25 commits on this branch)
+## This session's work (commits 42-59)
 
-### Phase 1 — ways CLI binary (Rust, 3.1 MB, 15 subcommands)
-- `lint`, `corpus`, `graph`, `match`, `embed`, `siblings`, `tree`, `provenance`
-- `suggest`, `show` (way/check/core), `scan` (prompt/command/file/state)
-- `status`, `stats`, `list`, `init`
-- Pure Rust BM25 (rust-stemmers), scores match C version within 0.005
-- Embedding via subprocess to existing way-embed binary
-
-### Phase 1 tool replacement (-7,869 lines deleted)
-- `way-match.c` + `snowball/` (2,110 lines C) → `ways match`
-- `generate-corpus.sh` (250 lines) → `ways corpus`
-- `lint-ways.sh` (525 lines) → `ways lint`
-- `way-tree-analyze.sh` (270 lines) → `ways tree`
-- `provenance-scan.py` (330 lines) → `ways provenance`
-- `embed-lib.sh` (190 lines) → absorbed into `ways corpus`
-- `embed-suggest.sh` (100 lines) → `ways suggest`
-- `bin/way-match` (C binary) → `ways match`
-
-### Phase 2 — session state + display
-- `session.rs`: markers, epochs, token positions, scope, event logging
-- `show-way.sh` (222 lines) → `ways show way`
-- `show-check.sh` (169 lines) → `ways show check`
-- `show-core.sh` (162 lines) → `ways show core`
-- `token-position.sh` (111 lines) → `session.rs`
-
-### Phase 2 — hook rewrite + script absorption
-- `check-prompt.sh`: 101 → 27 lines (one `ways scan prompt` call)
-- `check-bash-pre.sh`: 142 → 18 lines (one `ways scan command` call)
-- `check-file-pre.sh`: 138 → 18 lines (one `ways scan file` call)
-- `check-state.sh`: 217 → 17 lines (one `ways scan state` call)
-- `match-way.sh` (183 lines) DELETED
-- `detect-scope.sh` (39 lines) DELETED
-- `epoch.sh` (35 lines) DELETED
-- `log-event.sh` (18 lines) DELETED — inlined where still needed
-- `embed-status.sh` (301 lines) DELETED → `ways status`
-- `stats.sh` (348 lines) DELETED → `ways stats`
-- `list-triggered.sh` (71 lines) DELETED → `ways list`
-- `check-embedding-staleness.sh` (60 lines) DELETED → `ways corpus --if-stale`
-- `init-project-ways.sh` (81 lines) DELETED → `ways init`
-- `model-match.sh` (27 lines) DELETED
-- `check-smart-trigger.sh` (125 lines) DELETED (broken, needs redesign)
-
-### Infrastructure
-- Makefile: build-only (`make ways`, `make setup`, `make install`, `make test`)
-- `make install` symlinks to `~/.local/bin/ways` (globally available)
-- `way-embed/Makefile` updated to call `ways corpus`
-- `settings.json` updated: staleness check → `ways corpus --if-stale`, init → `ways init`
-- Code quality: `scan.rs` and `show.rs` split into module directories (all under 500 lines)
-
-### Net: +6,138 / -7,869 lines. 15 subcommands. 595 lines of bash remain.
-
-## What remains (permanent bash — stays by design)
-
-| Script | Lines | Reason |
-|--------|-------|--------|
-| `macro.sh` | 161 | Runs arbitrary bash (macros are shell by design) |
-| `inject-subagent.sh` | 146 | Two-phase subagent injection, complex state |
-| `check-task-pre.sh` | 128 | Subagent stash pattern |
-| `check-response.sh` | 48 | Response topic extraction |
-| `check-prompt.sh` | 27 | Thin dispatcher → `ways scan prompt` |
-| `clear-markers.sh` | 26 | Tiny, rm markers |
-| `check-file-pre.sh` | 18 | Thin dispatcher → `ways scan file` |
-| `check-bash-pre.sh` | 18 | Thin dispatcher → `ways scan command` |
-| `check-state.sh` | 17 | Thin dispatcher → `ways scan state` |
-| `mark-tasks-active.sh` | 6 | 6 lines, trivial |
-
-## What's next (future sessions)
-
-### Session simulator integration test
-- Spec at `tools/ways-cli/tests/SIMULATION-SPEC.md`
-- Deterministic replay of synthetic Claude Code sessions
-- 8 scenarios covering matching, idempotency, checks, progressive disclosure, scope, re-disclosure
-- Build as cargo integration tests
-
-### Cross-compilation + CI
-- `cargo-zigbuild` for 4-platform matrix (linux-x86_64, linux-aarch64, darwin-x86_64, darwin-arm64)
-- GitHub Actions workflow replacing the way-embed-only CI
-- `make release` target producing tarballs with checksums
+### Integration tests + CI
+- Session simulator: 8 scenarios covering matching, idempotency, commands, files, checks, progressive disclosure, scope, epochs
+- Cross-compilation CI: GitHub Actions for 4 platforms (linux-x86_64/aarch64, darwin-x86_64/arm64)
+- `make test-sim`, `make release` targets
 
 ### Governance consolidation
-- `governance.sh` (543 lines) + `provenance-verify.sh` → `ways governance`
-- Already calls `ways provenance` for scanning; the report/query modes are the remaining work
+- `governance.sh` (543 lines) → `ways governance` (9 modes, --json, --global)
+- Refactored `provenance.rs` with public `generate_manifest()` API
 
-### Smart trigger redesign
-- Old `check-smart-trigger.sh` deleted (was broken)
-- Needs rethinking for the binary architecture — model-confirmed matching could be a `ways scan` flag
+### Matching engine fix
+- **Embedding-primary matching**: when embed is available, BM25 is fallback only
+- Previously 84 BM25 vs 8 embed matches; now embed is sole semantic authority
+- This is a significant behavioral improvement in match precision
 
-### Possible future absorptions
-- `inject-subagent.sh` (146) — complex but could become `ways inject`
-- `check-task-pre.sh` (128) — could become `ways scan task`
-- These are lower priority; the current thin-dispatch pattern works fine
+### Project-scoped commands
+- `ways stats`, `ways lint`, `ways governance`: detect project from cwd, `--global` to bypass
+- Project detection: walks up from `$PWD` looking for `.claude/settings.json` or `CLAUDE.md`
+
+### New commands
+- `ways context`: accurate token counts from transcript API data, model detection
+- `ways reset`: session state recovery, dry-run default, `--confirm` to execute
+- `ways lint --fix`: auto-fix multi-line YAML, missing check sections
+
+### Enhanced `ways list`
+- Epoch-ordered table with distance, trigger channel, check decay
+- Colored pin symbols (⌖ column) linking table rows to forecast bar
+- Zoomed forecast bar showing re-disclosure timeline with token scale
+- Zone summary: ● now / ◐ approaching / ○ distant
+- `--sort=epoch|name|distance`, `--json`
+
+### Shared table formatter
+- `table.rs`: column alignment, ANSI-aware truncation, width caps
+- Retrofitted: `tree`, `match`, `siblings` commands
+
+### Directory-per-session state (major refactor)
+- `/tmp/.claude-sessions/{session_id}/` replaces flat `/tmp/.claude-*-{uuid}` markers
+- Way IDs are real paths now — no more dash-encoding or filesystem disambiguation
+- Cleanup is `rm -rf` one directory — no cross-session contamination
+- Fixed: clear-markers.sh was globally nuking all sessions on any SessionStart
+
+### Schema fix
+- Added `when` block (project, file_exists) to check section in frontmatter-schema.yaml
+- Fixed 2 persistent lint warnings on makefile.check.md
+
+## What's next
+
+### Code review pass
+- `governance.rs` at 896 lines — split into module directory (like scan/, show/)
+- `lint.rs` at 614, `list.rs` at 581, `session.rs` at 546 — review for splits
+- Check for dead code from the session state refactor (old flat-marker patterns)
+- Verify all `scan/mod.rs` paths use new session directory structure
+
+### Cross-compilation + release packaging
+- The CI workflow exists but hasn't been tested against GitHub Actions
+- `make release` works locally; need to verify zigbuild for ARM cross-compile
+- Consider: should `governance.sh` and `provenance-verify.sh` be deleted now?
+- Binary size check after all additions (was 3.1MB, now 3.6MB)
+
+### Remaining absorptions (lower priority)
+- `scripts/context-usage.sh` → already superseded by `ways context` (can delete)
+- `governance.sh` → already superseded by `ways governance` (can delete)
+- Smart trigger redesign (old script was deleted as broken)
 
 ### Ship PRs
-- `staging/ADR-110` → `main` (file rename + docs, 10 commits)
-- `staging/ADR-111` → `main` (ways CLI + consolidation, 25 commits)
-- Or squash-merge both into one PR if preferred
+- `staging/ADR-111` → `main` (57 commits, consider squash strategy)
 
 ## How to resume
 
-```
+```bash
 git checkout staging/ADR-111
 cat .claude/todo-ADR-111-phase2.md
-ways --help
-make test
+make test && make test-sim
+ways list
+ways context
 ```
 
 The ways binary is LIVE — hooks fire against it every message.
-All 15 embedding tests pass. Smoke tests pass. BM25 parity confirmed.
+Session state now in `/tmp/.claude-sessions/{session_id}/` (directory tree).
+All 8 simulation tests pass. Lint: 0 errors, 0 warnings.
