@@ -222,13 +222,13 @@ fn predict_next(w: &FiredWay, current_epoch: u64, current_tokens_k: u64, rediscl
     };
 
     if token_pct >= 100 {
-        return "\x1b[0;32m● re-disclose now\x1b[0m".to_string();
+        return "\x1b[0;32m● now\x1b[0m".to_string();
     }
     if token_pct >= 75 {
-        return format!("\x1b[1;33m◐ {token_pct}% to re-disclose\x1b[0m");
+        return format!("\x1b[1;33m◐ {token_pct}%\x1b[0m");
     }
     if token_pct >= 50 {
-        return format!("\x1b[2m◔ {token_pct}% to re-disclose\x1b[0m");
+        return format!("\x1b[2m◔ {token_pct}%\x1b[0m");
     }
 
     // Epoch-based: when would a check become relevant again?
@@ -260,7 +260,7 @@ fn predict_next(w: &FiredWay, current_epoch: u64, current_tokens_k: u64, rediscl
 
 fn print_token_timeline(
     ways: &[FiredWay],
-    way_bar_positions: &[Option<usize>],
+    _way_bar_positions: &[Option<usize>],
     unique_positions: &[usize],
     pin_symbols: &[char],
     pin_colors: &[&str],
@@ -276,7 +276,13 @@ fn print_token_timeline(
     };
     let filled = (pct as usize * bar_width / 100).min(bar_width);
 
-    // Count zones
+    // Collect re-disclosure points
+    struct RdPoint {
+        at_k: u64,
+        cluster: usize,
+        past: bool,
+    }
+    let mut points: Vec<RdPoint> = Vec::new();
     let mut zone_past = 0u32;
     let mut zone_soon = 0u32;
     let mut zone_later = 0u32;
@@ -284,7 +290,29 @@ fn print_token_timeline(
     for w in ways {
         let fire_pos_k = w.token_pos / 1000;
         let redisclose_at_k = fire_pos_k + redisclose_threshold_k;
-        if current_tokens_k >= redisclose_at_k {
+        let past = current_tokens_k >= redisclose_at_k;
+
+        // Determine cluster index from the full-bar position (same as table pins)
+        let full_bar_pos = if context_window_k > 0 {
+            ((redisclose_at_k * bar_width as u64) / context_window_k) as usize
+        } else {
+            0
+        }
+        .min(bar_width - 1);
+
+        let ci = unique_positions
+            .iter()
+            .position(|&p| p == full_bar_pos)
+            .unwrap_or(0)
+            % pin_symbols.len();
+
+        points.push(RdPoint {
+            at_k: redisclose_at_k,
+            cluster: ci,
+            past,
+        });
+
+        if past {
             zone_past += 1;
         } else {
             let dist = redisclose_at_k.saturating_sub(current_tokens_k);
@@ -296,38 +324,7 @@ fn print_token_timeline(
         }
     }
 
-    // Layer 1: Pin symbols at their bar positions
-    // Each unique position gets the same symbol/color as the table rows
-    let mut marker_line: Vec<Option<usize>> = vec![None; bar_width]; // cluster index
-
-    for bp in way_bar_positions.iter().filter_map(|p| *p) {
-        if bp < bar_width {
-            let ci = unique_positions
-                .iter()
-                .position(|&p| p == bp)
-                .unwrap_or(0)
-                % pin_symbols.len();
-            marker_line[bp] = Some(ci);
-        }
-    }
-
-    let mut marker_str = String::from("  ");
-    for i in 0..bar_width {
-        match marker_line[i] {
-            Some(ci) => {
-                marker_str.push_str(&format!(
-                    "{}{}{}",
-                    pin_colors[ci],
-                    pin_symbols[ci],
-                    "\x1b[0m"
-                ));
-            }
-            None => marker_str.push(' '),
-        }
-    }
-    println!("{marker_str}");
-
-    // Layer 2: Usage bar
+    // Usage bar (compact, full window)
     let bar_color = if pct < 50 {
         "\x1b[0;32m"
     } else if pct < 75 {
@@ -348,7 +345,71 @@ fn print_token_timeline(
         "  {bar_color}{bar}\x1b[0m {pct}% ({current_tokens_k}K / {context_window_k}K)"
     );
 
-    // Layer 3: Zone summary with re-disclosure interval
+    // Forecast bar: zoomed view from current position to furthest re-disclosure
+    let future_points: Vec<&RdPoint> = points.iter().filter(|p| !p.past).collect();
+
+    if !future_points.is_empty() {
+        let min_rd = future_points.iter().map(|p| p.at_k).min().unwrap_or(current_tokens_k);
+        let max_rd = future_points.iter().map(|p| p.at_k).max().unwrap_or(context_window_k);
+
+        // Zoom range: from current position to max re-disclosure + some padding
+        let zoom_start = current_tokens_k;
+        let zoom_end = (max_rd + (max_rd - min_rd) / 4).min(context_window_k); // pad 25%
+        let zoom_span = zoom_end.saturating_sub(zoom_start).max(1);
+
+        // Build zoomed marker line
+        let mut zoom_markers: Vec<Option<usize>> = vec![None; bar_width];
+        for p in &future_points {
+            let offset = p.at_k.saturating_sub(zoom_start);
+            let pos = ((offset * bar_width as u64) / zoom_span) as usize;
+            let pos = pos.min(bar_width - 1);
+            // Keep highest-priority cluster (lowest index wins for visibility)
+            if zoom_markers[pos].is_none() {
+                zoom_markers[pos] = Some(p.cluster);
+            }
+        }
+
+        // Render zoomed forecast
+        println!();
+        println!(
+            "  \x1b[1mForecast\x1b[0m \x1b[2m({zoom_start}K → {zoom_end}K)\x1b[0m"
+        );
+
+        // Marker line
+        let mut marker_str = String::from("  ");
+        for i in 0..bar_width {
+            match zoom_markers[i] {
+                Some(ci) => {
+                    marker_str.push_str(&format!(
+                        "{}{}\x1b[0m",
+                        pin_colors[ci], pin_symbols[ci]
+                    ));
+                }
+                None => marker_str.push('·'),
+            }
+        }
+        println!("{marker_str}");
+
+        // Scale labels
+        let mid_k = zoom_start + zoom_span / 2;
+        let mid_pos = bar_width / 2;
+        let end_label = format!("{zoom_end}K");
+        let end_pos = bar_width - end_label.len();
+        let mut label_line = String::from("  ");
+        let start_label = format!("{zoom_start}K");
+        label_line.push_str(&format!("\x1b[2m{start_label}"));
+        let pad1 = mid_pos.saturating_sub(start_label.len());
+        label_line.push_str(&" ".repeat(pad1));
+        let mid_label = format!("{mid_k}K");
+        label_line.push_str(&mid_label);
+        let pad2 = end_pos.saturating_sub(mid_pos + mid_label.len());
+        label_line.push_str(&" ".repeat(pad2));
+        label_line.push_str(&end_label);
+        label_line.push_str("\x1b[0m");
+        println!("{label_line}");
+    }
+
+    // Zone summary
     let mut zones = Vec::new();
     if zone_past > 0 {
         zones.push(format!("\x1b[0;32m● {zone_past} re-disclose now\x1b[0m"));
@@ -360,20 +421,12 @@ fn print_token_timeline(
         zones.push(format!("\x1b[2m○ {zone_later} distant\x1b[0m"));
     }
 
-    let redisclose_pct = if context_window_k > 0 {
-        redisclose_threshold_k * 100 / context_window_k
-    } else {
-        0
-    };
-    let summary = if zones.is_empty() {
-        format!("\x1b[2mre-disclosure: {redisclose_pct}% interval ({redisclose_threshold_k}K tokens)\x1b[0m")
-    } else {
-        format!(
-            "{}  \x1b[2m│ {redisclose_threshold_k}K interval\x1b[0m",
+    if !zones.is_empty() {
+        println!(
+            "  {}  \x1b[2m│ {redisclose_threshold_k}K interval\x1b[0m",
             zones.join("  ")
-        )
-    };
-    println!("  {summary}");
+        );
+    }
 }
 
 // ── Data collection ────────────────────────────────────────────
