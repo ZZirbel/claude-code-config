@@ -184,7 +184,8 @@ fn predict_next(w: &FiredWay, current_epoch: u64, current_tokens_k: u64, rediscl
         if epoch_distance < needed_distance {
             if needed_distance > 500 {
                 return format!(
-                    "\x1b[2mcheck ~e{next_epoch} (suppressed — exceeds session)\x1b[0m"
+                    "\x1b[2mcheck ~{} (suppressed)\x1b[0m",
+                    fmt_epoch(next_epoch)
                 );
             }
             return format!("\x1b[2mcheck at epoch ~{next_epoch}\x1b[0m");
@@ -391,6 +392,16 @@ fn resolve_way_id(marker_name: &str) -> String {
     }
 
     try_resolve(&parts, &ways_dir).unwrap_or_else(|| marker_name.replace('-', "/"))
+}
+
+fn fmt_epoch(n: u64) -> String {
+    if n >= 1_000_000 {
+        format!("{:.1e}", n as f64)
+    } else if n >= 10_000 {
+        format!("{}K", n / 1000)
+    } else {
+        format!("e{n}")
+    }
 }
 
 fn format_trigger(trigger: &str) -> String {
