@@ -115,6 +115,19 @@ check:
       values: [agent, subagent, teammate]
       required: optional
       default: agent
+    when:
+      type: block
+      required: optional
+      role: Deterministic gate checked before any matching
+      subfields:
+        project:
+          type: path
+          required: optional
+          role: Only fire in this project directory
+        file_exists:
+          type: path
+          required: optional
+          role: Only fire when this file exists in the project
 
 # Provenance sidecar schema (ADR-110)
 # Lives in provenance.yaml alongside the way file, not in frontmatter.

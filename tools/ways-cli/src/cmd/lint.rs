@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
-pub fn run(path: Option<String>, schema: bool, check: bool) -> Result<()> {
+pub fn run(path: Option<String>, schema: bool, check: bool, fix: bool, global: bool) -> Result<()> {
     let ways_dir = home_dir().join(".claude/hooks/ways");
     let schema_path = ways_dir.join("frontmatter-schema.yaml");
 
@@ -23,10 +23,34 @@ pub fn run(path: Option<String>, schema: bool, check: bool) -> Result<()> {
 
     let mut errors = 0u32;
     let mut warnings = 0u32;
+    let mut fixes = 0u32;
 
-    let is_targeted = path.is_some();
-    let scan_dir = path.map(PathBuf::from).unwrap_or(ways_dir.clone());
-    let file_count = scan_and_lint(&scan_dir, &ways_dir, &schema_data, &mut errors, &mut warnings)?;
+    // Determine scan directory:
+    // 1. Explicit path arg wins
+    // 2. CLAUDE_PROJECT_DIR .claude/ways/ if it exists (unless --global)
+    // 3. Global ways dir
+    let (scan_dir, is_targeted) = if let Some(ref p) = path {
+        (PathBuf::from(p), true)
+    } else if !global {
+        let project_dir = std::env::var("CLAUDE_PROJECT_DIR")
+            .ok()
+            .or_else(detect_project_dir);
+        if let Some(ref pd) = project_dir {
+            let project_ways = PathBuf::from(pd).join(".claude/ways");
+            if project_ways.is_dir() {
+                eprintln!("Project: {pd}");
+                eprintln!();
+                (project_ways, true)
+            } else {
+                (ways_dir.clone(), false)
+            }
+        } else {
+            (ways_dir.clone(), false)
+        }
+    } else {
+        (ways_dir.clone(), false)
+    };
+    let file_count = scan_and_lint(&scan_dir, &ways_dir, &schema_data, &mut errors, &mut warnings, &mut fixes, fix)?;
 
     // Provenance sidecar validation
     lint_provenance_sidecars(&scan_dir, &ways_dir, &mut errors)?;
@@ -34,6 +58,9 @@ pub fn run(path: Option<String>, schema: bool, check: bool) -> Result<()> {
     let label = if is_targeted { "Target" } else { "Global" };
     eprintln!("{label}: scanned {file_count} files");
     eprintln!();
+    if fixes > 0 {
+        eprintln!("Fixed: {fixes} issue(s)");
+    }
     eprintln!("Summary: {errors} errors, {warnings} warnings");
 
     if check && errors > 0 {
@@ -93,16 +120,18 @@ fn extract_fields(doc: &serde_yaml::Value, type_name: &str) -> HashSet<String> {
 
 fn extract_when_subfields(doc: &serde_yaml::Value) -> HashSet<String> {
     let mut fields = HashSet::new();
-    if let Some(subfields) = doc
-        .get("way")
-        .and_then(|v| v.get("preconditions"))
-        .and_then(|v| v.get("when"))
-        .and_then(|v| v.get("subfields"))
-        .and_then(|v| v.as_mapping())
-    {
-        for (name, _) in subfields {
-            if let Some(n) = name.as_str() {
-                fields.insert(n.to_string());
+    for type_name in &["way", "check"] {
+        if let Some(subfields) = doc
+            .get(*type_name)
+            .and_then(|v| v.get("preconditions"))
+            .and_then(|v| v.get("when"))
+            .and_then(|v| v.get("subfields"))
+            .and_then(|v| v.as_mapping())
+        {
+            for (name, _) in subfields {
+                if let Some(n) = name.as_str() {
+                    fields.insert(n.to_string());
+                }
             }
         }
     }
@@ -136,6 +165,8 @@ fn scan_and_lint(
     schema: &Schema,
     errors: &mut u32,
     warnings: &mut u32,
+    fixes: &mut u32,
+    fix: bool,
 ) -> Result<usize> {
     let mut files: Vec<(PathBuf, bool)> = Vec::new(); // (path, is_check)
 
@@ -169,7 +200,7 @@ fn scan_and_lint(
     files.sort_by(|a, b| a.0.cmp(&b.0));
 
     for (path, is_check) in &files {
-        lint_file(path, *is_check, ways_dir, schema, errors, warnings)?;
+        lint_file(path, *is_check, ways_dir, schema, errors, warnings, fixes, fix)?;
     }
 
     Ok(files.len())
@@ -184,8 +215,11 @@ fn lint_file(
     schema: &Schema,
     errors: &mut u32,
     warnings: &mut u32,
+    fixes: &mut u32,
+    fix: bool,
 ) -> Result<()> {
-    let content = std::fs::read_to_string(path)?;
+    let mut content = std::fs::read_to_string(path)?;
+    let mut modified = false;
     let relpath = path.strip_prefix(ways_dir).unwrap_or(path);
     let rel = relpath.display();
 
@@ -205,13 +239,27 @@ fn lint_file(
     };
 
     // Multi-line YAML values (> or |) — trigger pipeline can't parse them
-    for line in fm_str.lines() {
-        if let Some(field) = line.strip_suffix(": >").or_else(|| line.strip_suffix(": |")) {
-            let field = field.trim();
-            eprintln!("  ERROR: {rel} — '{field}' uses multi-line YAML (> or |) which the trigger pipeline cannot parse. Use a single line.");
-            *errors += 1;
+    if fix {
+        if let Some(fixed) = fix_multiline_yaml(&content) {
+            let count = count_multiline_yaml(&fm_str);
+            if count > 0 {
+                content = fixed;
+                modified = true;
+                *fixes += count as u32;
+                eprintln!("  FIXED: {rel} — collapsed {count} multi-line YAML value(s) to single line");
+            }
+        }
+    } else {
+        for line in fm_str.lines() {
+            if let Some(field) = line.strip_suffix(": >").or_else(|| line.strip_suffix(": |")) {
+                let field = field.trim();
+                eprintln!("  ERROR: {rel} — '{field}' uses multi-line YAML (> or |) which the trigger pipeline cannot parse. Use a single line.");
+                *errors += 1;
+            }
         }
     }
+    // Re-extract frontmatter after potential fix
+    let fm_str = extract_frontmatter_raw(&content).unwrap_or_default();
 
     // Unknown fields
     for line in fm_str.lines() {
@@ -303,14 +351,38 @@ fn lint_file(
 
     // check file: verify anchor and check sections
     if is_check {
-        if !content.contains("\n## anchor") && !content.starts_with("## anchor") {
-            eprintln!("  ERROR: {rel} — check file missing '## anchor' section");
-            *errors += 1;
+        let has_anchor = content.contains("\n## anchor") || content.starts_with("## anchor");
+        let has_check = content.contains("\n## check") || content.starts_with("## check");
+
+        if fix && (!has_anchor || !has_check) {
+            let mut appended = String::new();
+            if !has_anchor {
+                appended.push_str("\n## anchor\n\n(TODO: add anchor context)\n");
+                *fixes += 1;
+                eprintln!("  FIXED: {rel} — added stub '## anchor' section");
+            }
+            if !has_check {
+                appended.push_str("\n## check\n\n(TODO: add check items)\n");
+                *fixes += 1;
+                eprintln!("  FIXED: {rel} — added stub '## check' section");
+            }
+            content.push_str(&appended);
+            modified = true;
+        } else {
+            if !has_anchor {
+                eprintln!("  ERROR: {rel} — check file missing '## anchor' section");
+                *errors += 1;
+            }
+            if !has_check {
+                eprintln!("  ERROR: {rel} — check file missing '## check' section");
+                *errors += 1;
+            }
         }
-        if !content.contains("\n## check") && !content.starts_with("## check") {
-            eprintln!("  ERROR: {rel} — check file missing '## check' section");
-            *errors += 1;
-        }
+    }
+
+    // Write back if modified
+    if modified {
+        std::fs::write(path, &content)?;
     }
 
     Ok(())
@@ -448,6 +520,91 @@ fn extract_when_block(fm: &str) -> String {
         }
     }
     lines.join("\n")
+}
+
+fn count_multiline_yaml(fm: &str) -> usize {
+    fm.lines()
+        .filter(|l| l.ends_with(": >") || l.ends_with(": |"))
+        .count()
+}
+
+/// Collapse multi-line YAML values (> or |) in frontmatter to single lines.
+fn fix_multiline_yaml(content: &str) -> Option<String> {
+    let mut lines = content.lines().peekable();
+    let mut result = Vec::new();
+
+    // Find frontmatter boundaries
+    let first = lines.next()?;
+    if first != "---" {
+        return None;
+    }
+    result.push("---".to_string());
+
+    let mut in_frontmatter = true;
+    let mut found_end = false;
+
+    while let Some(line) = lines.next() {
+        if in_frontmatter && line == "---" {
+            in_frontmatter = false;
+            found_end = true;
+            result.push("---".to_string());
+            continue;
+        }
+
+        if in_frontmatter {
+            if line.ends_with(": >") || line.ends_with(": |") {
+                // Collect the field name (strip the ": >" or ": |" suffix, keep "field:")
+                let field_prefix = &line[..line.len() - 3]; // strip ": >" or ": |", keep "field"
+                // Collect continuation lines (indented)
+                let mut parts = Vec::new();
+                while let Some(next) = lines.peek() {
+                    if next.starts_with("  ") || next.is_empty() {
+                        let trimmed = next.trim();
+                        if !trimmed.is_empty() {
+                            parts.push(trimmed.to_string());
+                        }
+                        lines.next();
+                    } else {
+                        break;
+                    }
+                }
+                let collapsed = parts.join(" ");
+                result.push(format!("{field_prefix}: {collapsed}"));
+            } else {
+                result.push(line.to_string());
+            }
+        } else {
+            result.push(line.to_string());
+        }
+    }
+
+    if !found_end {
+        return None;
+    }
+
+    // Preserve trailing newline if original had one
+    let mut out = result.join("\n");
+    if content.ends_with('\n') {
+        out.push('\n');
+    }
+    Some(out)
+}
+
+/// Detect project directory by walking up from cwd looking for .claude/ markers.
+fn detect_project_dir() -> Option<String> {
+    let cwd = std::env::current_dir().ok()?;
+    let mut dir = cwd.as_path();
+    loop {
+        let claude_dir = dir.join(".claude");
+        if claude_dir.is_dir()
+            && (claude_dir.join("settings.json").exists()
+                || dir.join("CLAUDE.md").exists()
+                || claude_dir.join("settings.local.json").exists())
+        {
+            return Some(dir.to_string_lossy().to_string());
+        }
+        dir = dir.parent()?;
+    }
 }
 
 fn home_dir() -> PathBuf {
