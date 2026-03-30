@@ -1,5 +1,5 @@
 # Way frontmatter schema — single source of truth
-# Read by: lint-ways.sh, ways-tests skill, authoring way
+# Read by: ways lint, ways-tests skill, authoring way
 #
 # Fields are categorized by role and marked required/recommended/optional.
 # "required" means the linter flags its absence as an error.

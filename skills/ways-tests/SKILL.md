@@ -321,16 +321,16 @@ Validate way frontmatter against the official schema. Use the linter script for 
 
 ```bash
 # Lint all ways (global + project-local)
-bash ~/.claude/hooks/ways/lint-ways.sh
-
-# Lint with fix suggestions
-bash ~/.claude/hooks/ways/lint-ways.sh --fix
+ways lint
 
 # Print the frontmatter schema
-bash ~/.claude/hooks/ways/lint-ways.sh --schema
+ways lint --schema
 
 # Lint a specific directory
-bash ~/.claude/hooks/ways/lint-ways.sh hooks/ways/meta/
+ways lint hooks/ways/meta/
+
+# Exit non-zero on errors (for CI)
+ways lint --check
 ```
 
 The linter checks:
@@ -345,7 +345,7 @@ The linter does NOT flag absence of optional fields. A way without `when:`, `mac
 
 ### Frontmatter Schema Reference
 
-Run `bash ~/.claude/hooks/ways/lint-ways.sh --schema` for the full field reference. Key categories:
+Run `ways lint --schema` for the full field reference. Key categories:
 
 **Trigger fields**: `pattern`, `description`, `vocabulary`, `threshold`, `files`, `commands`, `trigger`
 **Scope/preconditions**: `scope`, `when:` (with sub-field `project:`)

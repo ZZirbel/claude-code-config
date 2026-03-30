@@ -34,7 +34,7 @@ If you still want regex-only, that's your choice, but expect poor recall on natu
 - `commands:` — regex matched against bash commands
 - `trigger:` — state-based (context-threshold, file-exists, session-start)
 
-**All values must be single-line.** Do not use YAML folded (`>`) or literal (`|`) scalars — the trigger pipeline parsers only read the first line, silently returning `>` as the value. Use `lint-ways.sh` to catch this.
+**All values must be single-line.** Do not use YAML folded (`>`) or literal (`|`) scalars — the trigger pipeline parsers only read the first line, silently returning `>` as the value. Use `ways lint` to catch this.
 
 For state-based triggers:
 ```markdown
