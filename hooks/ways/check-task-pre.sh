@@ -64,7 +64,7 @@ IS_TEAMMATE=false
 [[ -z "$TASK_PROMPT" ]] && exit 0
 [[ -z "$SESSION_ID" ]] && exit 0
 
-STASH_DIR="/tmp/.claude-subagent-stash-${SESSION_ID}"
+STASH_DIR="/tmp/.claude-sessions/${SESSION_ID}/subagent-stash"
 mkdir -p "$STASH_DIR"
 
 MATCHED_WAYS=()

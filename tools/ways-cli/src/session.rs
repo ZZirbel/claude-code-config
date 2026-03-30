@@ -1,25 +1,34 @@
 //! Session state management — markers, epochs, token positions, scope detection.
 //!
-//! All session state lives in /tmp as flat files, scoped by session ID.
-//! This module owns all reads and writes to those markers.
+//! All session state lives in /tmp/.claude-sessions/{session_id}/ as a
+//! directory tree. Way IDs map directly to paths (no dash-encoding).
+//! This module owns all reads and writes to session state.
 
 use std::path::{Path, PathBuf};
 
-const MARKER_PREFIX: &str = "/tmp/.claude-way-";
-const EPOCH_PREFIX: &str = "/tmp/.claude-epoch-";
-const EPOCH_WAY_PREFIX: &str = "/tmp/.claude-way-epoch-";
-const TOKEN_PREFIX: &str = "/tmp/.claude-way-tokens-";
-const CHECK_FIRES_PREFIX: &str = "/tmp/.claude-check-fires-";
-const CORE_PREFIX: &str = "/tmp/.claude-core-";
-const TEAMMATE_PREFIX: &str = "/tmp/.claude-teammate-";
-const METRICS_PREFIX: &str = "/tmp/.claude-way-metrics-";
+const SESSIONS_ROOT: &str = "/tmp/.claude-sessions";
 
 /// Re-disclosure fires when a way has drifted this % of the context window.
 const REDISCLOSE_PCT: u64 = 25;
 
-// ── Marker names ────────────────────────────────────────────────
+// ── Session directory ──────────────────────────────────────────
 
-/// Sanitize a way ID for use in marker filenames (replace / with -).
+/// Root directory for a session's state.
+fn session_dir(session_id: &str) -> PathBuf {
+    PathBuf::from(format!("{SESSIONS_ROOT}/{session_id}"))
+}
+
+/// Ensure a path's parent directories exist.
+fn ensure_parent(path: &Path) {
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+}
+
+// ── Marker names (legacy compat) ───────────────────────────────
+
+/// Sanitize a way ID for use in flat marker filenames (replace / with -).
+/// Only needed for legacy code paths; new code uses directory paths.
 pub fn marker_name(way_id: &str) -> String {
     way_id.replace('/', "-")
 }
@@ -28,52 +37,50 @@ pub fn marker_name(way_id: &str) -> String {
 
 /// Check if a way has been shown this session.
 pub fn way_is_shown(way_id: &str, session_id: &str) -> bool {
-    marker_path(way_id, session_id).exists()
+    way_marker_path(way_id, session_id).exists()
 }
 
 /// Write the way marker with the current token position.
 pub fn stamp_way_marker(way_id: &str, session_id: &str, token_position: u64) {
-    let path = marker_path(way_id, session_id);
+    let path = way_marker_path(way_id, session_id);
+    ensure_parent(&path);
     let _ = std::fs::write(&path, token_position.to_string());
 }
 
-fn marker_path(way_id: &str, session_id: &str) -> PathBuf {
-    PathBuf::from(format!(
-        "{}{}-{}",
-        MARKER_PREFIX,
-        marker_name(way_id),
-        session_id
-    ))
+fn way_marker_path(way_id: &str, session_id: &str) -> PathBuf {
+    // Use .marker file inside the way's directory to avoid
+    // file/directory collision (parent way is both a marker and a prefix for children)
+    session_dir(session_id).join("ways").join(way_id).join(".marker")
 }
 
 // ── Epochs ──────────────────────────────────────────────────────
 
 /// Read the current epoch for a session.
 pub fn get_epoch(session_id: &str) -> u64 {
-    let path = format!("{}{}", EPOCH_PREFIX, session_id);
-    read_u64(&path)
+    let path = session_dir(session_id).join("epoch");
+    read_u64_path(&path)
 }
 
 /// Bump the epoch counter, returning the new value.
 pub fn bump_epoch(session_id: &str) -> u64 {
-    let path = format!("{}{}", EPOCH_PREFIX, session_id);
-    let next = read_u64(&path) + 1;
+    let path = session_dir(session_id).join("epoch");
+    ensure_parent(&path);
+    let next = read_u64_path(&path) + 1;
     let _ = std::fs::write(&path, next.to_string());
     next
 }
 
 /// Stamp when a way was last shown (epoch).
 pub fn stamp_way_epoch(way_id: &str, session_id: &str, epoch: u64) {
-    let name = marker_name(way_id);
-    let path = format!("{}{}-{}", EPOCH_WAY_PREFIX, name, session_id);
+    let path = session_dir(session_id).join("way-epochs").join(way_id).join(".value");
+    ensure_parent(&path);
     let _ = std::fs::write(&path, epoch.to_string());
 }
 
 /// Get the epoch when a way was last shown.
 pub fn get_way_epoch(way_id: &str, session_id: &str) -> u64 {
-    let name = marker_name(way_id);
-    let path = format!("{}{}-{}", EPOCH_WAY_PREFIX, name, session_id);
-    read_u64(&path)
+    let path = session_dir(session_id).join("way-epochs").join(way_id).join(".value");
+    read_u64_path(&path)
 }
 
 /// Get epoch distance since a way last fired.
@@ -92,20 +99,17 @@ pub fn get_token_position(session_id: &str) -> u64 {
     let project_slug = project_dir.replace(['/', '.'], "-");
     let conv_dir = home_dir().join(format!(".claude/projects/{project_slug}"));
 
-    // Find the most recent transcript JSONL
     let transcript = find_newest_jsonl(&conv_dir);
     let transcript = match transcript {
         Some(t) => t,
         None => return 0,
     };
 
-    // Read the last assistant message's usage data
     let content = match std::fs::read_to_string(&transcript) {
         Ok(c) => c,
         Err(_) => return 0,
     };
 
-    // Find the highest token count from assistant messages
     let mut max_tokens: u64 = 0;
     for line in content.lines().rev() {
         if let Ok(val) = serde_json::from_str::<serde_json::Value>(line) {
@@ -118,7 +122,7 @@ pub fn get_token_position(session_id: &str) -> u64 {
                     if total > max_tokens {
                         max_tokens = total;
                     }
-                    break; // Most recent is enough
+                    break;
                 }
             }
         }
@@ -126,19 +130,24 @@ pub fn get_token_position(session_id: &str) -> u64 {
     max_tokens
 }
 
+/// Read the token position when a way was last shown.
+pub fn get_token_position_for_way(way_id: &str, session_id: &str) -> u64 {
+    let path = session_dir(session_id).join("way-tokens").join(way_id).join(".value");
+    read_u64_path(&path)
+}
+
 /// Stamp the token position when a way was last shown.
 pub fn stamp_way_tokens(way_id: &str, session_id: &str, position: u64) {
-    let name = marker_name(way_id);
-    let path = format!("{}{}-{}", TOKEN_PREFIX, name, session_id);
+    let path = session_dir(session_id).join("way-tokens").join(way_id).join(".value");
+    ensure_parent(&path);
     let _ = std::fs::write(&path, position.to_string());
 }
 
 /// Check if token distance exceeds re-disclosure threshold.
 /// Returns Some(distance) if exceeded, None if not.
 pub fn token_distance_exceeded(way_id: &str, session_id: &str) -> Option<u64> {
-    let name = marker_name(way_id);
-    let tokens_path = format!("{}{}-{}", TOKEN_PREFIX, name, session_id);
-    let last_tokens = read_u64(&tokens_path);
+    let tokens_path = session_dir(session_id).join("way-tokens").join(way_id).join(".value");
+    let last_tokens = read_u64_path(&tokens_path);
     let current = get_token_position(session_id);
     let distance = current.saturating_sub(last_tokens);
 
@@ -153,7 +162,7 @@ pub fn token_distance_exceeded(way_id: &str, session_id: &str) -> Option<u64> {
 }
 
 /// Detect context window size from the model in use.
-pub fn detect_context_window(session_id: &str) -> u64 {
+pub fn detect_context_window(_session_id: &str) -> u64 {
     let project_dir = std::env::var("CLAUDE_PROJECT_DIR")
         .unwrap_or_else(|_| std::env::var("PWD").unwrap_or_else(|_| ".".to_string()));
     let project_slug = project_dir.replace(['/', '.'], "-");
@@ -169,7 +178,6 @@ pub fn detect_context_window(session_id: &str) -> u64 {
         Err(_) => return 200_000,
     };
 
-    // Find model name from last assistant message
     for line in content.lines().rev() {
         if let Ok(val) = serde_json::from_str::<serde_json::Value>(line) {
             if val.get("type").and_then(|t| t.as_str()) == Some("assistant") {
@@ -189,24 +197,24 @@ pub fn detect_context_window(session_id: &str) -> u64 {
 
 /// Get and increment fire count for a check.
 pub fn bump_check_fires(way_id: &str, session_id: &str) -> u64 {
-    let name = marker_name(way_id);
-    let path = format!("{}{}-{}", CHECK_FIRES_PREFIX, name, session_id);
-    let count = read_u64(&path) + 1;
+    let path = session_dir(session_id).join("check-fires").join(way_id).join(".value");
+    ensure_parent(&path);
+    let count = read_u64_path(&path) + 1;
     let _ = std::fs::write(&path, count.to_string());
     count
 }
 
 /// Get current fire count without incrementing.
 pub fn get_check_fires(way_id: &str, session_id: &str) -> u64 {
-    let name = marker_name(way_id);
-    let path = format!("{}{}-{}", CHECK_FIRES_PREFIX, name, session_id);
-    read_u64(&path)
+    let path = session_dir(session_id).join("check-fires").join(way_id).join(".value");
+    read_u64_path(&path)
 }
 
 // ── Core marker ─────────────────────────────────────────────────
 
 pub fn stamp_core(session_id: &str) {
-    let path = format!("{}{}", CORE_PREFIX, session_id);
+    let path = session_dir(session_id).join("core");
+    ensure_parent(&path);
     let ts = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
@@ -215,12 +223,12 @@ pub fn stamp_core(session_id: &str) {
 }
 
 pub fn core_is_shown(session_id: &str) -> bool {
-    Path::new(&format!("{}{}", CORE_PREFIX, session_id)).exists()
+    session_dir(session_id).join("core").exists()
 }
 
 /// Read the timestamp from the core marker.
 pub fn core_marker_ts(session_id: &str) -> Option<u64> {
-    let path = format!("{}{}", CORE_PREFIX, session_id);
+    let path = session_dir(session_id).join("core");
     std::fs::read_to_string(&path)
         .ok()
         .and_then(|s| s.trim().parse().ok())
@@ -228,7 +236,7 @@ pub fn core_marker_ts(session_id: &str) -> Option<u64> {
 
 /// Remove the core marker (for re-injection after context clear).
 pub fn clear_core(session_id: &str) {
-    let path = format!("{}{}", CORE_PREFIX, session_id);
+    let path = session_dir(session_id).join("core");
     let _ = std::fs::remove_file(&path);
 }
 
@@ -236,8 +244,8 @@ pub fn clear_core(session_id: &str) {
 
 /// Detect execution scope: "agent" or "teammate".
 pub fn detect_scope(session_id: &str) -> String {
-    let path = format!("{}{}", TEAMMATE_PREFIX, session_id);
-    if Path::new(&path).exists() {
+    let path = session_dir(session_id).join("teammate");
+    if path.exists() {
         "teammate".to_string()
     } else {
         "agent".to_string()
@@ -246,14 +254,14 @@ pub fn detect_scope(session_id: &str) -> String {
 
 /// Read team name from teammate marker.
 pub fn detect_team(session_id: &str) -> Option<String> {
-    let path = format!("{}{}", TEAMMATE_PREFIX, session_id);
+    let path = session_dir(session_id).join("teammate");
     std::fs::read_to_string(&path).ok().map(|s| s.trim().to_string())
 }
 
 /// Check if a way's scope field matches the current scope.
 pub fn scope_matches(scope_field: &str, current_scope: &str) -> bool {
     if scope_field.is_empty() {
-        return current_scope == "agent"; // default scope
+        return current_scope == "agent";
     }
     scope_field.split(',').any(|s| s.trim() == current_scope)
 }
@@ -262,7 +270,8 @@ pub fn scope_matches(scope_field: &str, current_scope: &str) -> bool {
 
 /// Append a tree disclosure metric.
 pub fn append_metric(session_id: &str, metric: &serde_json::Value) {
-    let path = format!("{}{}.jsonl", METRICS_PREFIX, session_id);
+    let path = session_dir(session_id).join("metrics.jsonl");
+    ensure_parent(&path);
     if let Ok(line) = serde_json::to_string(metric) {
         let _ = std::fs::OpenOptions::new()
             .create(true)
@@ -304,19 +313,15 @@ pub fn log_event(fields: &[(&str, &str)]) {
 
 /// UTC timestamp without chrono dependency.
 fn chrono_utc_now() -> String {
-    // Read /proc/uptime-based or fallback
     let secs = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs();
-    // Format as ISO 8601 — manual since we don't want a chrono dep
     let days_since_epoch = secs / 86400;
     let time_of_day = secs % 86400;
     let hours = time_of_day / 3600;
     let minutes = (time_of_day % 3600) / 60;
     let seconds = time_of_day % 60;
-
-    // Approximate date from days since epoch (good enough for logging)
     let (year, month, day) = days_to_ymd(days_since_epoch);
     format!(
         "{year:04}-{month:02}-{day:02}T{hours:02}:{minutes:02}:{seconds:02}Z"
@@ -329,7 +334,6 @@ pub fn days_to_ymd_pub(days: u64) -> (u64, u64, u64) {
 }
 
 fn days_to_ymd(days: u64) -> (u64, u64, u64) {
-    // Simplified civil calendar conversion
     let z = days + 719468;
     let era = z / 146097;
     let doe = z - era * 146097;
@@ -367,13 +371,11 @@ pub fn domain_disabled(domain: &str) -> bool {
 /// Resolve a way ID to its file path. Project-local takes precedence.
 /// Returns (path, is_project_local).
 pub fn resolve_way_file(way_id: &str, project_dir: &str) -> Option<(PathBuf, bool)> {
-    // Project-local first
     let local_dir = PathBuf::from(project_dir).join(format!(".claude/ways/{way_id}"));
     if let Some(f) = find_way_in_dir(&local_dir) {
         return Some((f, true));
     }
 
-    // Global
     let global_dir = home_dir().join(format!(".claude/hooks/ways/{way_id}"));
     if let Some(f) = find_way_in_dir(&global_dir) {
         return Some((f, false));
@@ -411,7 +413,6 @@ fn find_way_in_dir(dir: &Path) -> Option<PathBuf> {
         if name.contains(".check.") {
             continue;
         }
-        // Check for frontmatter
         if let Ok(content) = std::fs::read_to_string(&path) {
             if content.starts_with("---\n") {
                 return Some(path);
@@ -436,9 +437,78 @@ fn find_check_in_dir(dir: &Path) -> Option<PathBuf> {
     None
 }
 
+// ── Session enumeration (for list/reset) ────────────────────────
+
+/// List all session IDs that have state directories.
+pub fn list_sessions() -> Vec<String> {
+    let root = PathBuf::from(SESSIONS_ROOT);
+    if !root.is_dir() {
+        return Vec::new();
+    }
+    let mut sessions = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&root) {
+        for entry in entries.flatten() {
+            if entry.path().is_dir() {
+                if let Some(name) = entry.file_name().to_str() {
+                    sessions.push(name.to_string());
+                }
+            }
+        }
+    }
+    sessions.sort();
+    sessions
+}
+
+/// List all way IDs that have fired in a session (from the ways/ subdirectory).
+pub fn list_fired_ways(session_id: &str) -> Vec<String> {
+    let ways_dir = session_dir(session_id).join("ways");
+    collect_way_ids(&ways_dir, &ways_dir)
+}
+
+/// List all way IDs that have epoch stamps in a session.
+pub fn list_way_epochs(session_id: &str) -> Vec<(String, u64)> {
+    let epochs_dir = session_dir(session_id).join("way-epochs");
+    let ids = collect_way_ids(&epochs_dir, &epochs_dir);
+    ids.into_iter()
+        .map(|id| {
+            let epoch = read_u64_path(&epochs_dir.join(&id).join(".value"));
+            (id, epoch)
+        })
+        .collect()
+}
+
+/// Recursively collect way IDs from a directory tree.
+/// Way IDs are directories containing a .marker or .value sentinel file.
+fn collect_way_ids(dir: &Path, base: &Path) -> Vec<String> {
+    let mut ids = Vec::new();
+    if !dir.is_dir() {
+        return ids;
+    }
+    // Check if this directory itself is a way (has .marker or .value)
+    if dir.join(".marker").exists() || dir.join(".value").exists() {
+        if let Ok(rel) = dir.strip_prefix(base) {
+            let id = rel.display().to_string();
+            if !id.is_empty() {
+                ids.push(id);
+            }
+        }
+    }
+    // Recurse into subdirectories
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                ids.extend(collect_way_ids(&path, base));
+            }
+        }
+    }
+    ids.sort();
+    ids
+}
+
 // ── Helpers ─────────────────────────────────────────────────────
 
-fn read_u64(path: &str) -> u64 {
+fn read_u64_path(path: &Path) -> u64 {
     std::fs::read_to_string(path)
         .ok()
         .and_then(|s| s.trim().parse().ok())

@@ -5,7 +5,6 @@
 use anyhow::Result;
 use serde_json::json;
 use std::collections::HashMap;
-use std::path::PathBuf;
 
 use crate::cmd::context;
 use crate::session;
@@ -432,56 +431,31 @@ fn print_token_timeline(
 // ── Data collection ────────────────────────────────────────────
 
 fn collect_fired_ways(session_id: &str, metrics: &HashMap<String, MetricEntry>) -> Vec<FiredWay> {
-    let pattern = format!("/tmp/.claude-way-epoch-*-{session_id}");
-    let epoch_markers: Vec<PathBuf> = glob::glob(&pattern)
-        .map(|paths| paths.filter_map(|p| p.ok()).collect())
-        .unwrap_or_default();
+    // Way IDs are now real paths in the session directory — no parsing needed
+    let way_epochs = session::list_way_epochs(session_id);
 
-    let mut ways = Vec::new();
+    way_epochs
+        .into_iter()
+        .map(|(way_id, epoch_at_fire)| {
+            let token_pos = session::get_token_position_for_way(&way_id, session_id);
+            let check_fires = session::get_check_fires(&way_id, session_id);
 
-    for marker in &epoch_markers {
-        let name = marker.file_name().and_then(|n| n.to_str()).unwrap_or("");
-        let name = name
-            .strip_prefix(".claude-way-epoch-")
-            .unwrap_or(name);
+            let (trigger, depth, parent) = metrics
+                .get(&way_id)
+                .map(|m| (m.trigger.clone(), m.depth, m.parent.clone()))
+                .unwrap_or_else(|| ("unknown".to_string(), 0, "none".to_string()));
 
-        // Strip session UUID from end: -{8hex}-{4hex}-{4hex}-{4hex}-{12hex}
-        let way_name = match name.rfind(session_id) {
-            Some(pos) => &name[..pos.saturating_sub(1)], // -1 for the leading dash
-            None => continue,
-        };
-        let way_id = resolve_way_id(way_name);
-
-        let epoch_at_fire = read_u64(&format!(
-            "/tmp/.claude-way-epoch-{way_name}-{session_id}",
-            way_name = way_name
-        ));
-        let token_pos = read_u64(&format!(
-            "/tmp/.claude-way-tokens-{way_name}-{session_id}",
-            way_name = way_name
-        ));
-        let check_fires = read_u64(&format!(
-            "/tmp/.claude-check-fires-{way_name}-{session_id}",
-            way_name = way_name
-        ));
-
-        let (trigger, depth, parent) = metrics
-            .get(&way_id)
-            .map(|m| (m.trigger.clone(), m.depth, m.parent.clone()))
-            .unwrap_or_else(|| ("unknown".to_string(), 0, "none".to_string()));
-
-        ways.push(FiredWay {
-            id: way_id,
-            epoch_at_fire,
-            token_pos,
-            trigger,
-            depth,
-            check_fires,
-            parent,
-        });
-    }
-
-    ways
+            FiredWay {
+                id: way_id,
+                epoch_at_fire,
+                token_pos,
+                trigger,
+                depth,
+                check_fires,
+                parent,
+            }
+        })
+        .collect()
 }
 
 struct MetricEntry {
@@ -491,7 +465,7 @@ struct MetricEntry {
 }
 
 fn load_metrics(session_id: &str) -> HashMap<String, MetricEntry> {
-    let path = format!("/tmp/.claude-way-metrics-{session_id}.jsonl");
+    let path = format!("/tmp/.claude-sessions/{session_id}/metrics.jsonl");
     let content = match std::fs::read_to_string(&path) {
         Ok(c) => c,
         Err(_) => return HashMap::new(),
@@ -516,72 +490,26 @@ fn load_metrics(session_id: &str) -> HashMap<String, MetricEntry> {
 }
 
 fn detect_session() -> Option<String> {
-    // Find the session with the newest epoch marker
-    let mut newest: Option<(std::time::SystemTime, String)> = None;
+    // Find the session directory with the newest modification time
+    let sessions = session::list_sessions();
+    if sessions.is_empty() {
+        return None;
+    }
+    if sessions.len() == 1 {
+        return Some(sessions.into_iter().next().unwrap());
+    }
 
-    for entry in std::fs::read_dir("/tmp").ok()? {
-        let entry = entry.ok()?;
-        let name = entry.file_name();
-        let name = name.to_string_lossy();
-        if !name.starts_with(".claude-epoch-") {
-            continue;
-        }
-        let sid = name.strip_prefix(".claude-epoch-")?.to_string();
-        if let Ok(meta) = entry.metadata() {
+    let mut newest: Option<(std::time::SystemTime, String)> = None;
+    for sid in sessions {
+        let dir = format!("/tmp/.claude-sessions/{sid}");
+        if let Ok(meta) = std::fs::metadata(&dir) {
             let mtime = meta.modified().unwrap_or(std::time::UNIX_EPOCH);
             if newest.as_ref().map_or(true, |(t, _)| mtime > *t) {
                 newest = Some((mtime, sid));
             }
         }
     }
-
     newest.map(|(_, s)| s)
-}
-
-/// Resolve a dash-separated marker name to a way ID by testing against the filesystem.
-/// e.g., "meta-knowledge-authoring-pii-free" → "meta/knowledge/authoring/pii-free"
-/// Handles ambiguous cases like "adr-context" (sibling to "adr") by preferring
-/// paths where every segment maps to an existing directory.
-fn resolve_way_id(marker_name: &str) -> String {
-    let ways_dir = std::env::var("HOME")
-        .map(|h| PathBuf::from(h).join(".claude/hooks/ways"))
-        .unwrap_or_else(|_| PathBuf::from("/tmp"));
-
-    let parts: Vec<&str> = marker_name.split('-').collect();
-
-    fn try_resolve(parts: &[&str], base: &std::path::Path) -> Option<String> {
-        if parts.is_empty() {
-            return None;
-        }
-
-        // Try split points from longest prefix to shortest.
-        // For each, the segment must be an existing directory.
-        // At the leaf (all parts consumed), the directory must exist.
-        for i in (1..=parts.len()).rev() {
-            let segment = parts[..i].join("-");
-            let candidate = base.join(&segment);
-
-            if !candidate.is_dir() {
-                continue;
-            }
-
-            if i == parts.len() {
-                // All parts consumed, directory exists — match
-                return Some(segment);
-            }
-
-            // Recurse for remaining parts
-            if let Some(rest) = try_resolve(&parts[i..], &candidate) {
-                return Some(format!("{segment}/{rest}"));
-            }
-            // Recursion failed — this split doesn't lead to a valid full path.
-            // Try a shorter prefix (the loop continues).
-        }
-
-        None
-    }
-
-    try_resolve(&parts, &ways_dir).unwrap_or_else(|| marker_name.replace('-', "/"))
 }
 
 fn fmt_epoch(n: u64) -> String {
@@ -611,13 +539,6 @@ fn truncate(s: &str, max: usize) -> String {
     } else {
         format!("{}…", &s[..max - 1])
     }
-}
-
-fn read_u64(path: &str) -> u64 {
-    std::fs::read_to_string(path)
-        .ok()
-        .and_then(|s| s.trim().parse().ok())
-        .unwrap_or(0)
 }
 
 fn print_json(ways: &[FiredWay], current_epoch: u64, current_tokens_k: u64, context_window_k: u64, redisclose_threshold_k: u64) {

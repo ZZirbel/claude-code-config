@@ -20,7 +20,7 @@ PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(echo "$INPUT" | jq -r '.cwd // empty')}"
 
 [[ -z "$SESSION_ID" ]] && exit 0
 
-STASH_DIR="/tmp/.claude-subagent-stash-${SESSION_ID}"
+STASH_DIR="/tmp/.claude-sessions/${SESSION_ID}/subagent-stash"
 [[ ! -d "$STASH_DIR" ]] && exit 0
 
 # Claim the oldest stash file (FIFO for parallel Task invocations)
@@ -47,7 +47,8 @@ done <<< "$CHANNELS"
 # If this is a teammate spawn, write a marker the teammate's own hooks can detect
 # The marker persists for the teammate's session lifetime
 if [[ "$IS_TEAMMATE" == "true" ]]; then
-  echo "${TEAM_NAME}" > "/tmp/.claude-teammate-${SESSION_ID}"
+  mkdir -p "/tmp/.claude-sessions/${SESSION_ID}"
+  echo "${TEAM_NAME}" > "/tmp/.claude-sessions/${SESSION_ID}/teammate"
 fi
 
 [[ -z "$WAYS" ]] && exit 0

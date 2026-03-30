@@ -3,28 +3,17 @@
 # Called on SessionStart and after compaction
 #
 # Reads session_id from stdin JSON input (Claude Code hook format)
-# Clears ALL markers so guidance can trigger fresh in the new session
+# Clears this session's state directory only — other sessions stay intact
 
 INPUT=$(cat)
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty' 2>/dev/null)
 
-# Clear markers for THIS session only (other sessions stay intact)
+# Clear session state
 if [[ -n "$SESSION_ID" ]]; then
-  rm -f /tmp/.claude-way-*-"${SESSION_ID}" 2>/dev/null
-  rm -f /tmp/.claude-core-"${SESSION_ID}" 2>/dev/null
-  rm -f /tmp/.claude-tasks-active-"${SESSION_ID}" 2>/dev/null
-  rm -rf /tmp/.claude-subagent-stash-"${SESSION_ID}" 2>/dev/null
-  rm -f /tmp/.claude-epoch-"${SESSION_ID}" 2>/dev/null
-  rm -f /tmp/.claude-check-fires-*-"${SESSION_ID}" 2>/dev/null
-  rm -f /tmp/.claude-way-metrics-"${SESSION_ID}".jsonl 2>/dev/null
+  rm -rf "/tmp/.claude-sessions/${SESSION_ID}" 2>/dev/null
 else
   # No session ID — legacy fallback, clear everything
-  rm -f /tmp/.claude-way-* 2>/dev/null
-  rm -f /tmp/.claude-core-* 2>/dev/null
-  rm -f /tmp/.claude-tasks-active-* 2>/dev/null
-  rm -rf /tmp/.claude-subagent-stash-* 2>/dev/null
-  rm -f /tmp/.claude-epoch-* 2>/dev/null
-  rm -f /tmp/.claude-check-fires-* 2>/dev/null
+  rm -rf /tmp/.claude-sessions 2>/dev/null
 fi
 
 # Log session event

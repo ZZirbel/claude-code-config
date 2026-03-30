@@ -148,22 +148,14 @@ fn fixture_home() -> PathBuf {
 }
 
 fn clean_markers(session_id: &str) {
-    if let Ok(entries) = std::fs::read_dir("/tmp") {
-        for entry in entries.flatten() {
-            let name = entry.file_name();
-            let name = name.to_string_lossy();
-            if name.contains(session_id) && name.starts_with(".claude-") {
-                let _ = std::fs::remove_file(entry.path());
-            }
-        }
-    }
+    let session_dir = format!("/tmp/.claude-sessions/{session_id}");
+    let _ = std::fs::remove_dir_all(&session_dir);
 }
 
 // ── Assertion helpers ──────────────────────────────────────────
 
 fn assert_marker_exists(way_id: &str, session_id: &str) {
-    let name = way_id.replace('/', "-");
-    let path = format!("/tmp/.claude-way-{name}-{session_id}");
+    let path = format!("/tmp/.claude-sessions/{session_id}/ways/{way_id}/.marker");
     assert!(
         Path::new(&path).exists(),
         "Expected marker for '{way_id}' but it doesn't exist at {path}"
@@ -171,8 +163,7 @@ fn assert_marker_exists(way_id: &str, session_id: &str) {
 }
 
 fn assert_marker_absent(way_id: &str, session_id: &str) {
-    let name = way_id.replace('/', "-");
-    let path = format!("/tmp/.claude-way-{name}-{session_id}");
+    let path = format!("/tmp/.claude-sessions/{session_id}/ways/{way_id}/.marker");
     assert!(
         !Path::new(&path).exists(),
         "Expected NO marker for '{way_id}' but found one at {path}"
@@ -180,7 +171,7 @@ fn assert_marker_absent(way_id: &str, session_id: &str) {
 }
 
 fn assert_epoch(session_id: &str, expected: u64) {
-    let path = format!("/tmp/.claude-epoch-{session_id}");
+    let path = format!("/tmp/.claude-sessions/{session_id}/epoch");
     let actual: u64 = std::fs::read_to_string(&path)
         .unwrap_or_else(|_| panic!("No epoch file at {path}"))
         .trim()
@@ -190,8 +181,7 @@ fn assert_epoch(session_id: &str, expected: u64) {
 }
 
 fn assert_check_fires(way_id: &str, session_id: &str, expected: u64) {
-    let name = way_id.replace('/', "-");
-    let path = format!("/tmp/.claude-check-fires-{name}-{session_id}");
+    let path = format!("/tmp/.claude-sessions/{session_id}/check-fires/{way_id}/.value");
     let actual: u64 = std::fs::read_to_string(&path)
         .unwrap_or("0".to_string())
         .trim()
@@ -326,7 +316,9 @@ fn scenario_6_scope_filtering() {
     assert_marker_absent("testdomain/scoped-way", &s.id);
 
     // Turn 2: create teammate marker, try again
-    let teammate_marker = format!("/tmp/.claude-teammate-{}", s.id);
+    let teammate_dir = format!("/tmp/.claude-sessions/{}", s.id);
+    std::fs::create_dir_all(&teammate_dir).unwrap();
+    let teammate_marker = format!("{teammate_dir}/teammate");
     std::fs::write(&teammate_marker, "test-team").unwrap();
 
     s.scan_prompt("teammate delegate collaborate subagent");
