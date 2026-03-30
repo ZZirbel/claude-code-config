@@ -129,7 +129,7 @@ pub fn run(session: Option<&str>, sort: &str, json_out: bool) -> Result<()> {
     // Column headers
     println!(
         "  \x1b[1m{:<34} {:>5} {:>5} {:<11} {} {}\x1b[0m",
-        "Way", "Epoch", "Dist", "Trigger", "⌖", "Next"
+        "Way", "Epoch", "Dist", "Trigger", "⌖", "Re-disclosure"
     );
     println!(
         "  \x1b[2m{}\x1b[0m",
