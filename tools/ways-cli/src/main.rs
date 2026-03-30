@@ -152,6 +152,23 @@ enum Commands {
         #[command(subcommand)]
         mode: ScanCommand,
     },
+    /// Reset session state when ways stop firing or fire incorrectly.
+    ///
+    /// Clears markers, epoch counters, and check fire counts from /tmp.
+    /// Use when: a way should fire but doesn't (stale marker), checks
+    /// fire too aggressively (inflated epoch), or after debugging the
+    /// way tree. Default is dry run — add --confirm to actually delete.
+    Reset {
+        /// Target a specific session ID
+        #[arg(long)]
+        session: Option<String>,
+        /// Clear all sessions (not just the current one)
+        #[arg(long)]
+        all: bool,
+        /// Actually delete (default is dry run that shows what would be cleared)
+        #[arg(long)]
+        confirm: bool,
+    },
     /// Governance provenance queries — report, trace, control, policy, gaps, stale, active, matrix, lint
     Governance {
         #[command(subcommand)]
@@ -331,6 +348,9 @@ fn main() -> Result<()> {
             ShowCommand::Core { session } => cmd::show::core(&session),
         },
         Commands::Suggest { file, min_freq } => cmd::suggest::run(file, min_freq),
+        Commands::Reset { session, all, confirm } => {
+            cmd::reset::run(session.as_deref(), all, confirm)
+        }
         Commands::Governance { mode, json } => {
             let gov_mode = match mode {
                 GovernanceCommand::Report => cmd::governance::Mode::Report,
