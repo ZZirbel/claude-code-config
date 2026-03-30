@@ -323,6 +323,11 @@ fn chrono_utc_now() -> String {
     )
 }
 
+/// Public wrapper for governance module.
+pub fn days_to_ymd_pub(days: u64) -> (u64, u64, u64) {
+    days_to_ymd(days)
+}
+
 fn days_to_ymd(days: u64) -> (u64, u64, u64) {
     // Simplified civil calendar conversion
     let z = days + 719468;

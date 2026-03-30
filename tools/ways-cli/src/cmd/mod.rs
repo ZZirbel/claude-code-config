@@ -1,5 +1,6 @@
 pub mod corpus;
 pub mod embed;
+pub mod governance;
 pub mod graph;
 pub mod init;
 pub mod lint;

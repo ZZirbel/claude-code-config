@@ -18,7 +18,7 @@ struct Cli {
 enum Commands {
     /// Validate way frontmatter against the schema
     Lint {
-        /// Path to scan (default: global ways directory)
+        /// Path to scan (default: project ways if in project, else global)
         path: Option<String>,
         /// Show the frontmatter schema reference
         #[arg(long)]
@@ -26,6 +26,12 @@ enum Commands {
         /// Exit non-zero on errors (for CI)
         #[arg(long)]
         check: bool,
+        /// Auto-fix what can be fixed (multi-line YAML, missing check sections)
+        #[arg(long)]
+        fix: bool,
+        /// Scan global ways (ignore CLAUDE_PROJECT_DIR)
+        #[arg(long)]
+        global: bool,
     },
     /// Generate the ways corpus for matching engines
     Corpus {
@@ -119,12 +125,15 @@ enum Commands {
         /// Last N days only
         #[arg(long)]
         days: Option<u32>,
-        /// Filter to specific project path
+        /// Filter to specific project path (default: CLAUDE_PROJECT_DIR)
         #[arg(long)]
         project: Option<String>,
         /// Machine-readable JSON output
         #[arg(long)]
         json: bool,
+        /// Show stats across all projects (ignore CLAUDE_PROJECT_DIR)
+        #[arg(long)]
+        global: bool,
     },
     /// List ways triggered in the current session
     List {
@@ -142,6 +151,14 @@ enum Commands {
     Scan {
         #[command(subcommand)]
         mode: ScanCommand,
+    },
+    /// Governance provenance queries — report, trace, control, policy, gaps, stale, active, matrix, lint
+    Governance {
+        #[command(subcommand)]
+        mode: GovernanceCommand,
+        /// Machine-readable JSON output
+        #[arg(long, global = true)]
+        json: bool,
     },
 }
 
@@ -235,11 +252,46 @@ enum ShowCommand {
     },
 }
 
+#[derive(Subcommand)]
+enum GovernanceCommand {
+    /// Coverage report (default)
+    Report,
+    /// End-to-end provenance trace for a single way
+    Trace {
+        /// Way ID (e.g., "softwaredev/code/quality")
+        way: String,
+    },
+    /// Which ways implement a control
+    Control {
+        /// Search pattern for control IDs
+        pattern: String,
+    },
+    /// Which ways derive from a policy
+    Policy {
+        /// Search pattern for policy URIs
+        pattern: String,
+    },
+    /// Ways without provenance
+    Gaps,
+    /// Ways with stale verified dates
+    Stale {
+        /// Days before considered stale (default: 90)
+        #[arg(default_value = "90")]
+        days: u32,
+    },
+    /// Cross-reference provenance with firing stats
+    Active,
+    /// Flat spreadsheet: way | control | justification
+    Matrix,
+    /// Validate provenance integrity
+    Lint,
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Lint { path, schema, check } => cmd::lint::run(path, schema, check),
+        Commands::Lint { path, schema, check, fix, global } => cmd::lint::run(path, schema, check, fix, global),
         Commands::Corpus { ways_dir, quiet, if_stale } => cmd::corpus::run(ways_dir, quiet, if_stale),
         Commands::Match { query, corpus } => cmd::match_bm25::run(query, corpus),
         Commands::Embed { query, corpus, model } => cmd::embed::run(query, corpus, model),
@@ -250,8 +302,8 @@ fn main() -> Result<()> {
         Commands::Tree { path, jaccard } => cmd::tree::run(path, jaccard),
         Commands::Provenance { ways_dir } => cmd::provenance::run(ways_dir),
         Commands::Init { project } => cmd::init::run(project.as_deref()),
-        Commands::Stats { days, project, json } => {
-            cmd::stats::run(days, project.as_deref(), json)
+        Commands::Stats { days, project, json, global } => {
+            cmd::stats::run(days, project.as_deref(), json, global)
         }
         Commands::List { session } => cmd::list::run(session.as_deref()),
         Commands::Status { json } => cmd::status::run(json),
@@ -279,5 +331,19 @@ fn main() -> Result<()> {
             ShowCommand::Core { session } => cmd::show::core(&session),
         },
         Commands::Suggest { file, min_freq } => cmd::suggest::run(file, min_freq),
+        Commands::Governance { mode, json } => {
+            let gov_mode = match mode {
+                GovernanceCommand::Report => cmd::governance::Mode::Report,
+                GovernanceCommand::Trace { way } => cmd::governance::Mode::Trace(way),
+                GovernanceCommand::Control { pattern } => cmd::governance::Mode::Control(pattern),
+                GovernanceCommand::Policy { pattern } => cmd::governance::Mode::Policy(pattern),
+                GovernanceCommand::Gaps => cmd::governance::Mode::Gaps,
+                GovernanceCommand::Stale { days } => cmd::governance::Mode::Stale(days),
+                GovernanceCommand::Active => cmd::governance::Mode::Active,
+                GovernanceCommand::Matrix => cmd::governance::Mode::Matrix,
+                GovernanceCommand::Lint => cmd::governance::Mode::Lint,
+            };
+            cmd::governance::run(gov_mode, json)
+        }
     }
 }

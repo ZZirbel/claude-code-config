@@ -1,17 +1,38 @@
 use anyhow::Result;
-use serde_json::json;
+use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 pub fn run(ways_dir: Option<String>) -> Result<()> {
+    let manifest = generate_manifest(ways_dir)?;
+
+    println!("{}", serde_json::to_string_pretty(&manifest)?);
+
+    let ways_len = manifest["ways_scanned"].as_u64().unwrap_or(0);
+    let with_len = manifest["ways_with_provenance"].as_u64().unwrap_or(0);
+    let without_len = manifest["ways_without_provenance"].as_u64().unwrap_or(0);
+    let policy_len = manifest["coverage"]["by_policy"].as_object().map(|m: &serde_json::Map<_, _>| m.len()).unwrap_or(0);
+    let control_len = manifest["coverage"]["by_control"].as_object().map(|m: &serde_json::Map<_, _>| m.len()).unwrap_or(0);
+
+    eprintln!("Ways scanned: {}", ways_len);
+    eprintln!("  With provenance: {} ({:.0}%)", with_len, if ways_len == 0 { 0.0 } else { with_len as f64 / ways_len as f64 * 100.0 });
+    eprintln!("  Without provenance: {}", without_len);
+    eprintln!("  Policy sources: {}", policy_len);
+    eprintln!("  Control references: {}", control_len);
+
+    Ok(())
+}
+
+/// Generate the full provenance manifest as a JSON Value.
+/// Used by both `ways provenance` and `ways governance`.
+pub fn generate_manifest(ways_dir: Option<String>) -> Result<Value> {
     let root = ways_dir
         .map(PathBuf::from)
         .unwrap_or_else(|| home_dir().join(".claude/hooks/ways"));
 
     let (ways, with_prov, without_prov) = scan_provenance(&root)?;
 
-    // Build inverted indices
     let mut by_policy: HashMap<String, Vec<String>> = HashMap::new();
     let mut by_control: HashMap<String, Vec<String>> = HashMap::new();
 
@@ -46,29 +67,20 @@ pub fn run(ways_dir: Option<String>) -> Result<()> {
         }
     }
 
-    let manifest = json!({
+    Ok(json!({
         "manifest_version": "1.0.0",
         "generator": "ways provenance",
         "ways_scanned": ways.len(),
         "ways_with_provenance": with_prov.len(),
         "ways_without_provenance": without_prov.len(),
+        "ways": ways,
         "coverage": {
             "with_provenance": with_prov,
             "without_provenance": without_prov,
             "by_policy": by_policy,
             "by_control": by_control,
         }
-    });
-
-    println!("{}", serde_json::to_string_pretty(&manifest)?);
-
-    eprintln!("Ways scanned: {}", ways.len());
-    eprintln!("  With provenance: {} ({:.0}%)", with_prov.len(), if ways.is_empty() { 0.0 } else { with_prov.len() as f64 / ways.len() as f64 * 100.0 });
-    eprintln!("  Without provenance: {}", without_prov.len());
-    eprintln!("  Policy sources: {}", by_policy.len());
-    eprintln!("  Control references: {}", by_control.len());
-
-    Ok(())
+    }))
 }
 
 fn scan_provenance(root: &Path) -> Result<(HashMap<String, serde_json::Value>, Vec<String>, Vec<String>)> {
