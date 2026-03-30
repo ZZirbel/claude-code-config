@@ -105,6 +105,54 @@ enum Commands {
         #[arg(long, default_value = "2")]
         min_freq: u32,
     },
+    /// Scan ways and output matched content (replaces hook scan loops)
+    Scan {
+        #[command(subcommand)]
+        mode: ScanCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum ScanCommand {
+    /// Scan ways against a user prompt (keyword + semantic matching)
+    Prompt {
+        /// User prompt text (lowercase)
+        #[arg(long)]
+        query: String,
+        /// Session ID
+        #[arg(long)]
+        session: String,
+        /// Project directory
+        #[arg(long)]
+        project: Option<String>,
+    },
+    /// Scan ways against a bash command
+    Command {
+        /// Command string
+        #[arg(long)]
+        command: String,
+        /// Tool description
+        #[arg(long)]
+        description: Option<String>,
+        /// Session ID
+        #[arg(long)]
+        session: String,
+        /// Project directory
+        #[arg(long)]
+        project: Option<String>,
+    },
+    /// Scan ways against a file path
+    File {
+        /// File path being edited
+        #[arg(long)]
+        path: String,
+        /// Session ID
+        #[arg(long)]
+        session: String,
+        /// Project directory
+        #[arg(long)]
+        project: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -156,6 +204,17 @@ fn main() -> Result<()> {
         Commands::Graph { ways_dir, output } => cmd::graph::run(ways_dir, output),
         Commands::Tree { path, jaccard } => cmd::tree::run(path, jaccard),
         Commands::Provenance { ways_dir } => cmd::provenance::run(ways_dir),
+        Commands::Scan { mode } => match mode {
+            ScanCommand::Prompt { query, session, project } => {
+                cmd::scan::prompt(&query, &session, project.as_deref())
+            }
+            ScanCommand::Command { command, description, session, project } => {
+                cmd::scan::command(&command, description.as_deref(), &session, project.as_deref())
+            }
+            ScanCommand::File { path, session, project } => {
+                cmd::scan::file(&path, &session, project.as_deref())
+            }
+        },
         Commands::Show { what } => match what {
             ShowCommand::Way { id, session, trigger } => {
                 cmd::show::way(&id, &session, &trigger)
