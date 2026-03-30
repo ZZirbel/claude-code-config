@@ -44,19 +44,41 @@ pub fn run(id: String, threshold: f64, corpus: Option<String>, _model: Option<St
         if scores.is_empty() {
             eprintln!("no siblings above threshold {threshold}");
         } else {
+            // Partition: global ways vs project-local ways
+            let (global, project): (Vec<_>, Vec<_>) = scores
+                .iter()
+                .partition(|(id, _)| !id.starts_with('-'));
+
             println!();
-            let mut t = Table::new(&["Way A", "Way B", "Cosine"]);
-            t.max_width(0, 36);
-            t.max_width(1, 36);
-            t.align(2, Align::Right);
-            for (other_id, score) in &scores {
-                t.add_owned(vec![
-                    target_id.clone(),
-                    other_id.to_string(),
-                    format!("{score:.4}"),
-                ]);
+
+            if !global.is_empty() {
+                println!("\x1b[1mGlobal ways\x1b[0m");
+                println!();
+                let mut t = Table::new(&["Sibling", "Cosine"]);
+                t.max_width(0, 50);
+                t.align(1, Align::Right);
+                for (other_id, score) in &global {
+                    t.add_owned(vec![other_id.to_string(), format!("{score:.4}")]);
+                }
+                t.print();
             }
-            t.print();
+
+            if !project.is_empty() {
+                if !global.is_empty() {
+                    println!();
+                }
+                println!("\x1b[1mProject-local ways\x1b[0m");
+                println!();
+                let mut t = Table::new(&["Sibling", "Cosine"]);
+                t.max_width(0, 50);
+                t.align(1, Align::Right);
+                for (other_id, score) in &project {
+                    let display = format_project_way(other_id);
+                    t.add_owned(vec![display, format!("{score:.4}")]);
+                }
+                t.print();
+            }
+
             println!();
         }
     }
@@ -86,6 +108,30 @@ fn print_matrix(entries: &[CorpusEntry], threshold: f64) {
     println!();
     t.print();
     println!();
+}
+
+/// Format a project-local way ID for display.
+/// "-home-aaron-Projects-app-github-manager/ops/safety" → "[github-manager] ops/safety"
+fn format_project_way(id: &str) -> String {
+    // Split at first / to get project slug and way path
+    if let Some(slash) = id.find('/') {
+        let slug = &id[..slash];
+        let way = &id[slash + 1..];
+        // Extract a reasonable project name from the slug
+        // Slug is like -home-aaron-Projects-app-github-manager
+        // Take the last meaningful segment
+        let name = slug
+            .rsplit('-')
+            .take(2)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect::<Vec<_>>()
+            .join("-");
+        format!("[{name}] {way}")
+    } else {
+        id.to_string()
+    }
 }
 
 fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
