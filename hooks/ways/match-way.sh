@@ -10,11 +10,11 @@
 WAYS_DIR="${WAYS_DIR:-${HOME}/.claude/hooks/ways}"
 
 # Find way files in a directory. A way file is any .md file with YAML frontmatter
-# (starts with ---) in a way directory. Excludes check.md files.
+# (starts with ---) in a way directory. Excludes *.check.md files.
 # Outputs null-terminated paths suitable for while read -d ''.
 find_way_files() {
   local dir="$1"
-  find -L "$dir" -name "*.md" ! -name "check.md" -print0 2>/dev/null | while IFS= read -r -d '' f; do
+  find -L "$dir" -name "*.md" ! -name "*.check.md" -print0 2>/dev/null | while IFS= read -r -d '' f; do
     head -1 "$f" 2>/dev/null | grep -q '^---$' && printf '%s\0' "$f"
   done
 }

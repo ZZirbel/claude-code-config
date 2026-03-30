@@ -203,8 +203,8 @@ def scan_ways(ways_dir):
     ways = {}
     ways_dir = Path(ways_dir)
 
-    for way_file in sorted(p for p in ways_dir.rglob('*.md') if p.name != 'check.md'):
-        # Extract way key from path: everything between ways_dir and way.md
+    for way_file in sorted(p for p in ways_dir.rglob('*.md') if not p.name.endswith('.check.md')):
+        # Extract way key from path: everything between ways_dir and the way file
         rel = way_file.relative_to(ways_dir)
         parts = rel.parts
         if len(parts) < 2:  # need at least domain/way.md

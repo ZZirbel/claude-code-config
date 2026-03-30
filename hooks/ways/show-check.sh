@@ -45,17 +45,25 @@ fi
 # Sanitize way path for marker filenames
 WAY_MARKER_NAME=$(echo "$WAY" | tr '/' '-')
 
-# Find check.md — project-local takes precedence
+# Find *.check.md — project-local takes precedence
+_find_check_file() {
+  local dir="$1"
+  for f in "$dir"/*.check.md; do
+    [[ -f "$f" ]] && echo "$f" && return 0
+  done
+  return 1
+}
+
 CHECK_FILE=""
 WAY_DIR=""
 IS_PROJECT_LOCAL=false
-if [[ -f "$PROJECT_DIR/.claude/ways/${WAY}/check.md" ]]; then
-  CHECK_FILE="$PROJECT_DIR/.claude/ways/${WAY}/check.md"
-  WAY_DIR="$PROJECT_DIR/.claude/ways/${WAY}"
-  IS_PROJECT_LOCAL=true
-elif [[ -f "${WAYS_DIR}/${WAY}/check.md" ]]; then
-  CHECK_FILE="${WAYS_DIR}/${WAY}/check.md"
-  WAY_DIR="${WAYS_DIR}/${WAY}"
+if [[ -d "$PROJECT_DIR/.claude/ways/${WAY}" ]]; then
+  CHECK_FILE=$(_find_check_file "$PROJECT_DIR/.claude/ways/${WAY}" 2>/dev/null || true)
+  [[ -n "$CHECK_FILE" ]] && { WAY_DIR="$PROJECT_DIR/.claude/ways/${WAY}"; IS_PROJECT_LOCAL=true; }
+fi
+if [[ -z "$CHECK_FILE" && -d "${WAYS_DIR}/${WAY}" ]]; then
+  CHECK_FILE=$(_find_check_file "${WAYS_DIR}/${WAY}" 2>/dev/null || true)
+  [[ -n "$CHECK_FILE" ]] && WAY_DIR="${WAYS_DIR}/${WAY}"
 fi
 
 [[ -z "$CHECK_FILE" ]] && exit 0

@@ -13,7 +13,34 @@ set -euo pipefail
 WAYS_ROOT="${HOME}/.claude/hooks/ways"
 WAY_MATCH="${HOME}/.claude/bin/way-match"
 
-# Extract a frontmatter field from a way.md file
+# Find the way file in a directory (any .md with frontmatter, excluding *.check.md)
+find_way_in_dir() {
+  local dir="$1"
+  for f in "$dir"/*.md; do
+    [[ -f "$f" ]] || continue
+    [[ "$f" == *.check.md ]] && continue
+    head -1 "$f" 2>/dev/null | grep -q '^---$' && echo "$f" && return 0
+  done
+  return 1
+}
+
+# Find all way files recursively (*.md with frontmatter, excluding *.check.md)
+find_all_way_files() {
+  local dir="$1"
+  find -L "$dir" -name "*.md" ! -name "*.check.md" -type f 2>/dev/null | while IFS= read -r f; do
+    head -1 "$f" 2>/dev/null | grep -q '^---$' && echo "$f"
+  done | sort
+}
+
+# Find all way and check files recursively
+find_all_way_and_check_files() {
+  local dir="$1"
+  find -L "$dir" -name "*.md" -type f 2>/dev/null | while IFS= read -r f; do
+    head -1 "$f" 2>/dev/null | grep -q '^---$' && echo "$f"
+  done | sort
+}
+
+# Extract a frontmatter field from a way file
 extract_field() {
   local file="$1" field="$2"
   awk -v f="$field" '
@@ -119,7 +146,7 @@ cmd_tree() {
     vocab=$(extract_field "$wayfile" "vocabulary")
     description=$(extract_field "$wayfile" "description")
 
-    if [[ "$(basename "$wayfile")" == "check.md" ]]; then
+    if [[ "$wayfile" == *.check.md ]]; then
       type="check"
     else
       type="way"
@@ -130,7 +157,7 @@ cmd_tree() {
     tokens=$(estimate_tokens "$wayfile")
     vocabcount=$(echo "$vocab" | wc -w)
     echo "NODE	${depth}	${rel}	${threshold:-none}	${type}	${vocabcount}	${tokens}"
-  done < <(find -L "$tree_path" -name 'way.md' -o -name 'check.md' | sort)
+  done < <(find_all_way_and_check_files "$tree_path")
 }
 
 # === budget command ===
@@ -146,18 +173,20 @@ cmd_budget() {
     rel=$(relpath "$wayfile")
     tokens=$(estimate_tokens "$wayfile")
     echo "WAY	${rel}	${tokens}"
-  done < <(find -L "$tree_path" -name 'way.md' -o -name 'check.md' | sort)
+  done < <(find_all_way_and_check_files "$tree_path")
 
   # Path costs (root to each leaf)
   local root_tokens=0
-  local root_way="${tree_path}/way.md"
-  if [[ -f "$root_way" ]]; then
+  local root_way
+  root_way=$(find_way_in_dir "$tree_path" 2>/dev/null || true)
+  if [[ -n "$root_way" ]]; then
     root_tokens=$(estimate_tokens "$root_way")
   fi
 
-  # Find leaf directories (dirs with way.md but no subdirectory way.md)
+  # Find leaf directories (dirs with a way file but no subdirectory way files)
   while IFS= read -r wayfile; do
-    local dir="${wayfile%/way.md}"
+    local dir
+    dir=$(dirname "$wayfile")
     [[ "$dir" == "$tree_path" ]] && continue
 
     # Build path from root to this way
@@ -170,8 +199,9 @@ cmd_budget() {
     IFS='/' read -ra parts <<< "$segments"
     for part in "${parts[@]}"; do
       accumulated="${accumulated:+${accumulated}/}${part}"
-      local mid_way="${tree_path}/${accumulated}/way.md"
-      if [[ -f "$mid_way" ]]; then
+      local mid_way
+      mid_way=$(find_way_in_dir "${tree_path}/${accumulated}" 2>/dev/null || true)
+      if [[ -n "$mid_way" ]]; then
         local mid_tokens
         mid_tokens=$(estimate_tokens "$mid_way")
         path_tokens=$((path_tokens + mid_tokens))
@@ -179,7 +209,7 @@ cmd_budget() {
     done
 
     echo "PATH	$(relpath "$dir")	${path_tokens}"
-  done < <(find -L "$tree_path" -name 'way.md' | sort)
+  done < <(find_all_way_files "$tree_path")
 }
 
 # === jaccard command ===
@@ -189,14 +219,14 @@ cmd_jaccard() {
 
   echo "JACCARD_ROOT	$(relpath "$tree_path")"
 
-  # Find directories containing way.md, group by parent
+  # Find directories containing way files, group by parent
   declare -A parent_children
   while IFS= read -r wayfile; do
     local dir parent
     dir=$(dirname "$wayfile")
     parent=$(dirname "$dir")
     parent_children["$parent"]+="${wayfile}"$'\n'
-  done < <(find -L "$tree_path" -name 'way.md' | sort)
+  done < <(find_all_way_files "$tree_path")
 
   # For each parent, compute pairwise Jaccard of children's vocabularies
   for parent in "${!parent_children[@]}"; do

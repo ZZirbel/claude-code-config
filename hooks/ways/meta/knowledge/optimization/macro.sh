@@ -14,9 +14,9 @@ echo ""
 printf "%-35s %6s %6s %6s %s\n" "Way" "Gaps" "Cover" "Unused" "Match"
 printf "%-35s %6s %6s %6s %s\n" "---" "----" "-----" "------" "-----"
 
-for wayfile in $(find -L "${HOME}/.claude/hooks/ways" -name "way.md" -print 2>/dev/null | sort); do
+for wayfile in $(find -L "${HOME}/.claude/hooks/ways" -name "*.md" ! -name "*.check.md" -print 2>/dev/null | while IFS= read -r f; do head -1 "$f" 2>/dev/null | grep -q '^---$' && echo "$f"; done | sort); do
   relpath="${wayfile#${HOME}/.claude/hooks/ways/}"
-  relpath="${relpath%/way.md}"
+  relpath="${relpath%/*}"
 
   # Check if this way has vocabulary (semantic matching)
   has_vocab=$(awk 'NR==1 && /^---$/{p=1;next} p&&/^---$/{exit} p && /^vocabulary:/{print "yes";exit}' "$wayfile")
@@ -48,9 +48,9 @@ PROJECT_DIR="${CLAUDE_PROJECT_DIR:-}"
 if [[ -n "$PROJECT_DIR" && -d "$PROJECT_DIR/.claude/ways" ]]; then
   echo ""
   echo "### Project-local ways"
-  for wayfile in $(find -L "$PROJECT_DIR/.claude/ways" -name "way.md" -print 2>/dev/null | sort); do
+  for wayfile in $(find -L "$PROJECT_DIR/.claude/ways" -name "*.md" ! -name "*.check.md" -print 2>/dev/null | while IFS= read -r f; do head -1 "$f" 2>/dev/null | grep -q '^---$' && echo "$f"; done | sort); do
     relpath="${wayfile#$PROJECT_DIR/.claude/ways/}"
-    relpath="${relpath%/way.md}"
+    relpath="${relpath%/*}"
     printf "%-35s %s\n" "$relpath" "(project-local)"
   done
 fi

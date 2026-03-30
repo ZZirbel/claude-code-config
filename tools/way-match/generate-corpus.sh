@@ -91,7 +91,7 @@ scan_ways_dir() {
 
     count=$((count + 1))
 
-  done < <(find -L "$scan_dir" -name "*.md" ! -name "check.md" -type f | sort)
+  done < <(find -L "$scan_dir" -name "*.md" ! -name "*.check.md" -type f | sort)
 
   # Note: locale-specific files ({name}-{lang}.md) are also caught by the
   # *.md find above. Their id will include the parent dir like any other way.
@@ -115,7 +115,7 @@ check_ways_embed_marker() {
     if echo "$fm" | grep -q '^description:' && echo "$fm" | grep -q '^vocabulary:'; then
       semantic_count=$((semantic_count + 1))
     fi
-  done < <(find -L "$ways_dir" -name "*.md" ! -name "check.md" -type f 2>/dev/null)
+  done < <(find -L "$ways_dir" -name "*.md" ! -name "*.check.md" -type f 2>/dev/null)
 
   if [[ -f "$marker" ]]; then
     local state

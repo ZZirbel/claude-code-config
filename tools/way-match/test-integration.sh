@@ -40,7 +40,7 @@ echo "Scanning for semantic ways..."
 echo ""
 
 while IFS= read -r wayfile; do
-  rel=$(echo "$wayfile" | sed "s|$WAYS_DIR/||;s|/way\.md$||")
+  rel=$(dirname "${wayfile#$WAYS_DIR/}")
   way_id=$(echo "$rel" | tr '/' '-')
 
   frontmatter=$(sed -n '2,/^---$/{ /^---$/d; p; }' "$wayfile")
@@ -57,7 +57,7 @@ while IFS= read -r wayfile; do
   WAY_PATHS+=("$wayfile")
 
   printf "  %-30s thresh=%-5s  %s\n" "$way_id" "${thresh:-2.0}" "$(echo "$desc" | cut -c1-60)"
-done < <(find -L "$WAYS_DIR" -name "way.md" -type f | sort)
+done < <(find -L "$WAYS_DIR" -name "*.md" ! -name "*.check.md" -type f 2>/dev/null | while IFS= read -r f; do head -1 "$f" 2>/dev/null | grep -q '^---$' && echo "$f"; done | sort)
 
 echo ""
 echo "Found ${#WAY_IDS[@]} semantic ways"
