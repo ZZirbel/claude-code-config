@@ -6,7 +6,7 @@
 # Update:        make update   (pull + setup)
 
 .DEFAULT_GOAL := help
-.PHONY: setup install update test test-all corpus clean help
+.PHONY: setup install update test test-all corpus clean help ways
 
 # --- Primary targets ---
 
@@ -18,6 +18,7 @@ help:
 	@echo "  make update     Pull latest changes and re-run setup"
 	@echo "  make test       Run embedding smoke tests"
 	@echo "  make test-all   Run all tests (embedding + BM25 + integration)"
+	@echo "  make ways       Build the unified ways CLI (Rust)"
 	@echo "  make clean      Remove build artifacts"
 	@echo ""
 
@@ -70,8 +71,17 @@ test-all: test test-bm25 test-integration
 corpus:
 	@bash tools/way-match/generate-corpus.sh --quiet
 
+# --- Ways CLI ---
+
+ways:
+	cargo build --release --manifest-path tools/ways-cli/Cargo.toml
+	@mkdir -p bin
+	@cp tools/ways-cli/target/release/ways bin/ways
+	@echo "Built: bin/ways"
+
 # --- Clean ---
 
 clean:
 	$(MAKE) -C tools/way-embed clean
 	$(MAKE) -C tools/way-match clean
+	cargo clean --manifest-path tools/ways-cli/Cargo.toml 2>/dev/null || true

@@ -122,6 +122,8 @@ hooks/ways/.obsidian/
 !tools/way-embed/llama.cpp
 !tools/mmaid/
 !tools/mmaid/*
+!tools/ways-cli/
+!tools/ways-cli/**
 
 # Standalone tools (user-facing CLI utilities)
 !tools/
@@ -134,6 +136,7 @@ hooks/ways/.obsidian/
 # Built binaries (way-match checked in, way-embed via GitHub Releases)
 !bin/
 !bin/way-match
+!bin/ways
 bin/way-embed-*
 
 # Tests
