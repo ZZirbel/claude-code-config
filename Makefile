@@ -6,7 +6,7 @@
 # Update:        make update
 
 .DEFAULT_GOAL := help
-.PHONY: setup install uninstall update clean help ways test test-sim release
+.PHONY: setup install uninstall update clean help ways ways-rebuild test test-sim release
 
 WAYS_BIN = bin/ways
 XDG_BIN = $(or $(XDG_BIN_HOME),$(HOME)/.local/bin)
@@ -16,15 +16,16 @@ XDG_BIN = $(or $(XDG_BIN_HOME),$(HOME)/.local/bin)
 help:
 	@echo "claude-code-config"
 	@echo ""
-	@echo "  make setup      Build ways CLI + fetch embedding model"
-	@echo "  make install    Full first-time setup (hooks + tools)"
-	@echo "  make update     Pull latest changes and re-run setup"
-	@echo "  make ways       Build the ways CLI binary (Rust)"
-	@echo "  make test       Smoke test the ways binary"
-	@echo "  make test-sim   Run session simulator (8 scenarios)"
-	@echo "  make release    Build release tarball for current platform"
-	@echo "  make uninstall   Remove ways from PATH"
-	@echo "  make clean      Remove build artifacts"
+	@echo "  make setup        Build ways CLI + fetch embedding model + corpus"
+	@echo "  make install      Full first-time setup (hooks + tools + PATH)"
+	@echo "  make update       Pull latest changes and re-run install"
+	@echo "  make ways         Get ways binary (download or build from source)"
+	@echo "  make ways-rebuild Force rebuild ways from source"
+	@echo "  make test         Smoke test the ways binary"
+	@echo "  make test-sim     Run session simulator (8 scenarios)"
+	@echo "  make release      Build release binary for current platform"
+	@echo "  make uninstall    Remove ways from PATH"
+	@echo "  make clean        Remove build artifacts"
 	@echo ""
 
 # Build ways CLI + set up embedding engine + generate initial corpus.
@@ -59,13 +60,34 @@ update:
 
 # --- Build ---
 
+# Get the ways binary: try existing → download → build from source.
 ways:
-	@if [ ! -x $(WAYS_BIN) ] || [ tools/ways-cli/src/main.rs -nt $(WAYS_BIN) ]; then \
+	@if [ -x $(WAYS_BIN) ] && $(WAYS_BIN) --version >/dev/null 2>&1; then \
+		echo "ways already installed: $$($(WAYS_BIN) --version)"; \
+	elif bash tools/ways-cli/download-ways.sh 2>/dev/null; then \
+		echo "Pre-built binary installed."; \
+	elif command -v cargo >/dev/null 2>&1; then \
+		echo "No pre-built binary, building from source..."; \
 		cargo build --release --manifest-path tools/ways-cli/Cargo.toml; \
 		mkdir -p bin; \
 		cp tools/ways-cli/target/release/ways $(WAYS_BIN); \
-		echo "Built: $(WAYS_BIN)"; \
+		echo "Built: $(WAYS_BIN) ($$(ls -lh $(WAYS_BIN) | awk '{print $$5}'))"; \
+	else \
+		echo "error: No pre-built binary and cargo not found."; \
+		echo "Install Rust: https://rustup.rs/"; \
+		exit 1; \
 	fi
+
+# Force rebuild from source (ignores existing binary and download).
+ways-rebuild:
+	@if ! command -v cargo >/dev/null 2>&1; then \
+		echo "error: cargo not found. Install Rust: https://rustup.rs/"; \
+		exit 1; \
+	fi
+	cargo build --release --manifest-path tools/ways-cli/Cargo.toml
+	@mkdir -p bin
+	@cp tools/ways-cli/target/release/ways $(WAYS_BIN)
+	@echo "Built: $(WAYS_BIN) ($$(ls -lh $(WAYS_BIN) | awk '{print $$5}'))"
 
 # --- Test ---
 
@@ -82,20 +104,24 @@ test-sim: ways
 	@cargo test --manifest-path tools/ways-cli/Cargo.toml --test session_sim -- --test-threads=1
 	@echo "All simulation scenarios passed."
 
-# --- Supporting ---
+# --- Release ---
 
-hooks-executable:
-	@find hooks -name '*.sh' -exec chmod +x {} + 2>/dev/null || true
-	@echo "Hooks marked executable."
-
-release: ways
-	@echo "Building release tarball..."
+# Build release binary for current platform with checksum.
+# To publish: git tag ways-vX.Y.Z && git push --tags
+# CI builds all 4 platforms and creates a GitHub Release.
+release: ways-rebuild
 	@mkdir -p dist
 	@PLATFORM=$$(uname -s | tr '[:upper:]' '[:lower:]')-$$(uname -m | sed 's/arm64/aarch64/'); \
 		cp $(WAYS_BIN) dist/ways-$$PLATFORM; \
 		cd dist && sha256sum ways-$$PLATFORM > ways-$$PLATFORM.sha256; \
 		echo "dist/ways-$$PLATFORM ($$(ls -lh ways-$$PLATFORM | awk '{print $$5}'))"; \
 		cat ways-$$PLATFORM.sha256
+
+# --- Supporting ---
+
+hooks-executable:
+	@find hooks -name '*.sh' -exec chmod +x {} + 2>/dev/null || true
+	@echo "Hooks marked executable."
 
 clean:
 	$(MAKE) -C tools/way-embed clean
