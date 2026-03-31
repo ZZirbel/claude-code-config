@@ -158,6 +158,21 @@ enum Commands {
         #[arg(long)]
         json: bool,
     },
+    /// Replay a session's way-firing history as an interactive animation
+    Rethink {
+        /// Session ID to replay directly (skip picker)
+        #[arg(long)]
+        session: Option<String>,
+        /// Filter to sessions from this project path
+        #[arg(long)]
+        project: Option<String>,
+        /// Initial frame speed in milliseconds (default: 1000)
+        #[arg(long)]
+        speed: Option<u64>,
+        /// List sessions (non-interactive)
+        #[arg(long)]
+        list: bool,
+    },
     /// Engine health dashboard — binary, model, corpus, project status
     Status {
         /// Machine-readable JSON output
@@ -359,6 +374,9 @@ fn main() -> Result<()> {
             cmd::stats::run(days, project.as_deref(), json, global)
         }
         Commands::List { session, sort, json } => cmd::list::run(session.as_deref(), &sort, json),
+        Commands::Rethink { session, project, speed, list } => {
+            cmd::rethink::run(session.as_deref(), project.as_deref(), speed, list)
+        }
         Commands::Status { json } => cmd::status::run(json),
         Commands::Scan { mode } => match mode {
             ScanCommand::Prompt { query, session, project } => {
