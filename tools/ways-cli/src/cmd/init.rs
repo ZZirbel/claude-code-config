@@ -2,7 +2,7 @@
 //! Replaces init-project-ways.sh (81 lines).
 
 use anyhow::Result;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 const GITIGNORE_CONTENT: &str = "\
 # Developer-local files (not committed)

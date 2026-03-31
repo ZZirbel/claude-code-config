@@ -22,7 +22,7 @@ WAYS_DIR="${HOME}/.claude/hooks/ways"
 # Ways binary for matching
 WAYS_BIN="${HOME}/.claude/bin/ways"
 
-# File discovery (inline, replaces match-way.sh dependency)
+# File discovery (inline)
 find_way_files() {
   local dir="$1"
   find -L "$dir" -name "*.md" ! -name "*.check.md" -print0 2>/dev/null | while IFS= read -r -d '' f; do

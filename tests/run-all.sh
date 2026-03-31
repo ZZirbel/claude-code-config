@@ -50,14 +50,8 @@ fi
 # Doc-graph link integrity
 run_suite "Doc-Graph Link Integrity" bash "$REPO_ROOT/scripts/doc-graph.sh" --stats
 
-# Governance provenance verification
-if command -v python3 &>/dev/null; then
-  run_suite "Governance Provenance Verification" bash "$REPO_ROOT/governance/provenance-verify.sh"
-else
-  echo ""
-  echo "=== Governance Provenance Verification ==="
-  echo "SKIP: python3 not found"
-fi
+# Governance provenance lint
+run_suite "Governance Provenance Lint" ways governance lint
 
 echo ""
 echo "=== Summary ==="

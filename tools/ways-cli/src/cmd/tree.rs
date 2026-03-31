@@ -30,6 +30,7 @@ pub fn run(path: String, jaccard: bool) -> Result<()> {
 }
 
 struct WayInfo {
+    #[allow(dead_code)]
     path: PathBuf,
     is_check: bool,
     depth: usize,

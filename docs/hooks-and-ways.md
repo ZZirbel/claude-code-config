@@ -8,10 +8,10 @@ Claude Code hook events drive the system. Each fires shell scripts that scan for
 
 | Event | When | Scripts |
 |-------|------|---------|
-| **SessionStart** (startup) | Fresh session | `clear-markers.sh`, `show-core.sh`, `init-project-ways.sh`, `check-config-updates.sh` |
-| **SessionStart** (compact) | After compaction | `clear-markers.sh`, `show-core.sh`, `irc-session.sh` |
-| **SessionStart** (resume) | Session resume | `irc-session.sh` |
-| **UserPromptSubmit** | Every user message | `check-prompt.sh`, `check-state.sh`, `irc-check.sh` |
+| **SessionStart** (startup) | Fresh session | `clear-markers.sh`, `check-config-updates.sh`, `check-state.sh`, `ways init`, `ways corpus` |
+| **SessionStart** (compact) | After compaction | `clear-markers.sh`, `check-state.sh` |
+| **SessionStart** (resume) | Session resume | `check-state.sh` |
+| **UserPromptSubmit** | Every user message | `check-prompt.sh`, `check-state.sh` |
 | **PreToolUse** (Edit\|Write) | Before file edit | `check-file-pre.sh` |
 | **PreToolUse** (Bash) | Before command | `check-bash-pre.sh` |
 | **PreToolUse** (Task) | Before subagent spawn | `check-task-pre.sh` |
@@ -23,16 +23,16 @@ Claude Code hook events drive the system. Each fires shell scripts that scan for
 
 ### Session Lifecycle
 
-- **`clear-markers.sh`** - Removes all `/tmp/.claude-way-*`, `/tmp/.claude-tasks-active-*` markers, and `/tmp/.claude-subagent-stash-*` dirs. Resets session state so ways can fire fresh.
-- **`show-core.sh`** - Runs `macro.sh` to generate the Available Ways table, then outputs `core.md` (collaboration style, communication norms). This is the initial context Claude sees.
-- **`init-project-ways.sh`** - Creates `$PROJECT/.claude/ways/_template.md` if the project has a `.claude/` or `.git/` dir but no ways directory yet.
+- **`clear-markers.sh`** - Clears session markers from `/tmp/.claude-sessions/{session_id}/`. Resets session state so ways can fire fresh. Scoped to the current session only.
+- **`ways init`** - Creates `$PROJECT/.claude/ways/_template.md` if the project has a `.claude/` or `.git/` dir but no ways directory yet.
+- **`ways corpus --if-stale --quiet`** - Regenerates the BM25/embedding corpus if way files have changed since last build.
 - **`check-config-updates.sh`** - Checks if the config is behind upstream. Detects four install scenarios: direct clones, GitHub forks, renamed clones (via `.claude-upstream` marker file), and plugin installs. Network calls (`git fetch`, `gh api`, `git ls-remote`) are rate-limited to once per hour; update notices fire every session when behind. See the [Updating](#updating) section of the README for scenario details and how to control this behavior.
 
 ### Trigger Evaluation
 
 These scripts fire on **PreToolUse** — before the tool executes, not after. This is a critical design choice: guidance must arrive while Claude can still act on it. A commit format reminder after the commit is too late. Security guidance after the file edit is too late. The "Pre" in PreToolUse means Claude sees the way content and can adjust its behavior before the action happens.
 
-- **`check-prompt.sh`** - Scans all ways for `pattern:` (regex) and `description:`+`vocabulary:` (BM25 semantic) fields. Sources `match-way.sh` for shared matching logic. Matching is additive — either channel firing activates the way. Fires matching ways via `show-way.sh`.
+- **`check-prompt.sh`** - Thin dispatcher to `ways scan prompt`. Passes the user prompt (plus response topics from the previous turn) and session ID. The `ways` binary handles all matching: file walking, frontmatter extraction, pattern + semantic matching, scope/precondition gating, parent threshold lowering, session markers, macro dispatch, and content output.
 - **`check-bash-pre.sh`** - Scans ways for `commands:` patterns. Tests the command about to run. Also checks `pattern:` against the command description.
 - **`check-file-pre.sh`** - Scans ways for `files:` patterns. Tests the file path about to be edited.
 - **`check-state.sh`** - Evaluates `trigger:` fields (context-threshold, file-exists, session-start). See [State Triggers](#state-triggers).
@@ -41,9 +41,8 @@ All trigger evaluation scripts respect the `scope:` frontmatter field - ways wit
 
 ### Subagent Injection
 
-- **`check-task-pre.sh`** - PreToolUse:Task hook (Phase 1). Reads the Task tool's `prompt` parameter, scans ways with `scope: subagent`, matches using `match-way.sh` (same additive logic as `check-prompt.sh`). Writes matched way paths to `/tmp/.claude-subagent-stash-{session_id}/`. Never blocks Task creation.
+- **`check-task-pre.sh`** - PreToolUse:Task hook (Phase 1). Reads the Task tool's `prompt` parameter, runs inline file-trigger matching for `scope: subagent` ways. Writes matched way paths to `/tmp/.claude-subagent-stash-{session_id}/`. Never blocks Task creation.
 - **`inject-subagent.sh`** - SubagentStart hook (Phase 2). Reads the oldest stash file, claims it atomically, emits way content as JSON `hookSpecificOutput.additionalContext`. Bypasses markers entirely - subagents get fresh context regardless of what the parent triggered.
-- **`match-way.sh`** - Shared matching function sourced by `check-prompt.sh` and `check-task-pre.sh`. Provides `detect_semantic_engine()` and `match_way_prompt()` (additive pattern OR semantic). Two-tier semantic engine: embedding (all-MiniLM-L6-v2) → BM25. See [Semantic Matching](#semantic-matching).
 
 ### IRC Communication
 
@@ -57,8 +56,7 @@ All trigger evaluation scripts respect the `scope:` frontmatter field - ways wit
 
 ### Way Display
 
-- **`show-way.sh`** - The central display function. Given a way path and session ID: checks domain disable list, checks marker, runs macro if configured, outputs content (stripping frontmatter), creates marker.
-- **`macro.sh`** - Generates the dynamic Available Ways table by scanning all way files and extracting their trigger patterns.
+The `ways` binary (`ways scan` / `ways show`) handles all way display: domain disable list, session markers, macro dispatch, content output (stripping frontmatter), and marker creation. Per-way `macro.sh` scripts still run as shell commands, but orchestration is in Rust.
 
 ## Session Lifecycle
 
@@ -66,29 +64,29 @@ All trigger evaluation scripts respect the `scope:` frontmatter field - ways wit
 sequenceDiagram
     participant CC as Claude Code
     participant CM as clear-markers.sh
-    participant SC as show-core.sh
-    participant IP as init-project-ways.sh
+    participant CS as check-state.sh
+    participant WI as ways init
+    participant WC as ways corpus
     participant Ctx as Claude Context
 
     rect rgba(66, 165, 245, 0.15)
         Note over CC,Ctx: Session Start (startup)
         CC->>CM: SessionStart:startup
-        CM->>CM: rm /tmp/.claude-way-*
-        CM->>CM: rm /tmp/.claude-tasks-active-*
-        CC->>SC: SessionStart:startup
-        SC->>SC: macro.sh → Available Ways table
-        SC->>Ctx: core.md (collaboration norms)
-        CC->>IP: SessionStart:startup
-        IP->>IP: create $PROJECT/.claude/ways/_template.md
+        CM->>CM: rm /tmp/.claude-sessions/{session_id}/*
+        CC->>CS: SessionStart:startup
+        CS->>Ctx: core guidance + state-triggered ways
+        CC->>WI: SessionStart:startup
+        WI->>WI: create $PROJECT/.claude/ways/_template.md
+        CC->>WC: SessionStart:startup
+        WC->>WC: regenerate corpus if stale
     end
 
     rect rgba(255, 152, 0, 0.15)
         Note over CC,Ctx: After Compaction
         CC->>CM: SessionStart:compact
-        CM->>CM: rm /tmp/.claude-way-*
-        CM->>CM: rm /tmp/.claude-tasks-active-*
-        CC->>SC: SessionStart:compact
-        SC->>Ctx: core.md (fresh guidance)
+        CM->>CM: rm /tmp/.claude-sessions/{session_id}/*
+        CC->>CS: SessionStart:compact
+        CS->>Ctx: core guidance (fresh)
     end
 ```
 
@@ -184,40 +182,31 @@ threshold: 2.0        # BM25 threshold
 embed_threshold: 0.35 # cosine similarity threshold
 ```
 
-Three-tier engine, auto-detected at runtime:
+Two-tier engine, built into the `ways` binary:
 
-| Tier | Engine | Binary | How it works |
-|------|--------|--------|-------------|
-| 1 | **Embedding** | `bin/way-embed` + GGUF model | all-MiniLM-L6-v2 sentence embeddings. Pre-computed 384-dim vectors in corpus. One spawn per prompt (~20ms), cosine similarity against all ways. |
-| 2 | **BM25** | `bin/way-match` | Okapi BM25 with Porter2 stemming. Scores description+vocabulary per-way. |
+| Tier | Engine | How it works |
+|------|--------|-------------|
+| 1 | **Embedding** | all-MiniLM-L6-v2 sentence embeddings via `way-embed` binary + GGUF model. Pre-computed 384-dim vectors in corpus. Cosine similarity against all ways (~20ms). |
+| 2 | **BM25** | Okapi BM25 with Porter2 stemming (built into `ways`). Scores description+vocabulary per-way. Fallback when embedding is unavailable. |
 
-The scanner calls `detect_semantic_engine()` which checks for each tier's prerequisites (binary exists, model file present, corpus has embeddings). First available tier wins. If neither is available, semantic matching is skipped and pattern matching still works.
+When embedding is available, it is the sole semantic authority — BM25 acts as fallback only. The `ways scan` command auto-detects available tiers and uses the best one.
 
-**Embedding engine** (ADR-108): Solves BM25's stem-collision problem — "SSH agent" and "AI agent" share the same BM25 stem but have distant embedding vectors. The first `match_way_prompt()` call per prompt runs `way-embed match` once (scoring all 58 ways), caches results at `${XDG_CACHE_HOME}/claude-ways/projects/<encoded-path>/embed-results.tsv`, and subsequent calls grep the cache. Cache is cleaned up on scanner exit.
+**Embedding engine** (ADR-108): Solves BM25's stem-collision problem — "SSH agent" and "AI agent" share the same BM25 stem but have distant embedding vectors.
 
-#### Cold Start — Setting Up Embeddings
+#### Setup
 
 ```bash
-# 1. Build the binary (requires cmake, C++ compiler)
-cd tools/way-embed
-git submodule update --init --depth 1 llama.cpp   # if not initialized
-make
+# Install the ways binary and set up corpus + embedding model
+make install    # builds ways, downloads model, generates corpus
+make test       # smoke tests (lint, match, graph)
+make test-sim   # 8 integration scenarios
 
-# 2. Download the model (Q5_K_M, 21MB)
-make model                  # from GitHub Release
-make model-upstream         # or directly from HuggingFace
-
-# 3. Regenerate corpus with embeddings
-bash tools/way-match/generate-corpus.sh
-# Auto-detects way-embed + model, adds embedding vectors to ways-corpus.jsonl
-
-# 4. Verify
-bash tools/way-embed/test-embedding.sh   # 15 tests
-bash tools/way-embed/compare-engines.sh  # head-to-head vs BM25
+# Check engine status
+ways status
 ```
 
 Model location: `${XDG_CACHE_HOME:-~/.cache}/claude-ways/user/minilm-l6-v2.gguf`
-Corpus: `${XDG_CACHE_HOME:-~/.cache}/claude-ways/user/ways-corpus.jsonl` (BM25 + embedding fields, generated by `make setup`)
+Corpus: `${XDG_CACHE_HOME:-~/.cache}/claude-ways/user/ways-corpus.jsonl`
 
 Both user-scope (`~/.claude/hooks/ways/`) and project-scope (`.claude/ways/`) corpora are scanned. They share the same model file.
 
@@ -269,7 +258,7 @@ stateDiagram-v2
     state "not_shown (no marker)" as NotShown:::notShown
     state "shown (marker exists)" as Shown:::shown
 
-    note right of NotShown : /tmp/.claude-way-{domain}-{way}-{session}
+    note right of NotShown : /tmp/.claude-sessions/{session_id}/{way_id}
     note right of Shown : Cleared on SessionStart (startup & compact)
 ```
 
@@ -337,7 +326,6 @@ sequenceDiagram
     participant CC as Claude Code
     participant CP as check-prompt.sh
     participant CS as check-state.sh
-    participant SW as show-way.sh
     participant CB as check-bash-pre.sh
     participant CF as check-file-pre.sh
     participant CT as check-task-pre.sh
@@ -351,10 +339,8 @@ sequenceDiagram
         U->>CC: prompt
         par Prompt Triggers
             CC->>CP: UserPromptSubmit
-            CP->>CP: scan ways (regex/semantic/model, scope: agent)
-            CP->>SW: matched ways
-            SW->>SW: check marker → check domain → run macro
-            SW->>Ctx: way content (if not shown)
+            CP->>CP: ways scan prompt (regex/semantic, scope: agent)
+            CP->>Ctx: way content (if not already shown)
         and State Triggers
             CC->>CS: UserPromptSubmit
             CS->>CS: evaluate triggers (scope: agent)
@@ -448,7 +434,7 @@ flowchart TD
 }
 ```
 
-Checked by `show-way.sh` before outputting any way.
+Checked by `ways scan` before outputting any way.
 
 ## Testing
 
@@ -456,10 +442,8 @@ Three test layers verify the matching and injection pipeline. See [tests/README.
 
 | Layer | Command | What it tests |
 |-------|---------|---------------|
-| **Embedding** | `bash tools/way-embed/test-embedding.sh` | ADR-108 claims: stem disambiguation, FP reduction, timing (15 tests) |
-| **Comparison** | `bash tools/way-embed/compare-engines.sh` | Head-to-head BM25 vs embedding on 64 fixtures |
-| **Fixture** | `bash tools/way-match/test-harness.sh` | BM25 scorer accuracy (32 prompts, fixed corpus) |
-| **Integration** | `bash tools/way-match/test-integration.sh` | Real way files, frontmatter extraction, multi-way discrimination |
+| **Smoke** | `make test` | Lint (0 errors), match (sample queries), graph (node/edge count) |
+| **Simulation** | `make test-sim` | 8 integration scenarios: matching, idempotency, commands, files, checks, disclosure, scope, epochs |
 | **Activation** | `read and run the activation test at tests/way-activation-test.md` | Live hook pipeline: regex, BM25, negative control, subagent injection |
 
 The `/ways-tests` skill provides ad-hoc scoring for vocabulary tuning:

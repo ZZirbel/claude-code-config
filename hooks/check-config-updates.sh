@@ -10,7 +10,7 @@
 #   5. Is CLAUDE_PLUGIN_ROOT set? → plugin install
 #
 # Network calls (git fetch, gh api) are rate-limited to once per hour.
-# Writes state to cache file; display is handled by show-core.sh.
+# Writes state to cache file; display is handled by `ways show core`.
 
 CLAUDE_DIR="${HOME}/.claude"
 UPSTREAM_REPO="aaronsb/claude-code-config"

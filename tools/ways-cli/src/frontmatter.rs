@@ -12,6 +12,7 @@ pub struct Frontmatter {
     #[serde(default)]
     pub threshold: Option<f64>,
     #[serde(default)]
+    #[allow(dead_code)] // parsed for serde compat, accessed via scan's own scope field
     pub scope: Option<String>,
     #[serde(default)]
     pub embed_threshold: Option<f64>,

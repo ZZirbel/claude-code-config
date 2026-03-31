@@ -24,7 +24,7 @@ provenance:
 ---
 ```
 
-Then verify it's picked up: `bash governance/governance.sh --trace softwaredev/commits`
+Then verify it's picked up: `ways governance trace softwaredev/commits`
 
 ## The Full Chain
 
@@ -112,14 +112,14 @@ The manifest aggregates provenance across all ways into a single JSON artifact w
 ## Running the Coverage Report
 
 ```bash
-# Basic report
-bash ~/.claude/governance/provenance-verify.sh
+# Coverage report
+ways governance report
 
-# With cross-repo audit ledger
-bash ~/.claude/governance/provenance-verify.sh --ledger /path/to/audit-ledger.json
+# Full governance lint
+ways governance lint
 
 # Machine-readable
-bash ~/.claude/governance/provenance-verify.sh --json
+ways governance report --json
 ```
 
 The report shows which ways have provenance, which policy documents are referenced, which controls are covered, and where gaps exist.

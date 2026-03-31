@@ -55,7 +55,7 @@ Uses the `scan_exclude:` frontmatter field to skip files that are legitimately l
 
 `macro.sh` at the ways root (`~/.claude/hooks/ways/macro.sh`) generates the Available Ways table shown at session start. It scans all way files, extracts their trigger patterns from frontmatter, and formats them as a markdown table grouped by domain.
 
-This is invoked by `show-core.sh` during SessionStart and referenced by `core.md` via `macro: prepend`.
+This is invoked by `ways show core` during SessionStart and referenced by `core.md` via `macro: prepend`.
 
 ## Security Model
 

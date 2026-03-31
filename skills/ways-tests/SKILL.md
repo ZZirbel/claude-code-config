@@ -617,7 +617,7 @@ Present the comparison as a table, then an assessment noting which tree is more 
 
 ## Metrics Mode
 
-Show tree disclosure metrics from the current session. The metrics file is written by `show-way.sh` at `/tmp/.claude-way-metrics-{session_id}.jsonl`.
+Show tree disclosure metrics from the current session. The metrics file is written by `ways show` at `/tmp/.claude-sessions/{session_id}/metrics.jsonl`.
 
 ### How to Read Metrics
 

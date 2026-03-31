@@ -182,7 +182,7 @@ bash tools/way-match/test-integration.sh
 
 The embedding engine achieves 98.4% accuracy (63/64) vs BM25's 90.6% (58/64) with 0 false negatives. See `tools/way-embed/compare-engines.sh` for the full comparison.
 
-Other test tools: `scripts/doc-graph.sh --stats` checks documentation link integrity; `governance/provenance-verify.sh` validates provenance metadata. Full test guide: [tests/README.md](tests/README.md).
+Other test tools: `scripts/doc-graph.sh --stats` checks documentation link integrity; `ways governance lint` validates provenance metadata. Full test guide: [tests/README.md](tests/README.md).
 
 ## What's Included
 

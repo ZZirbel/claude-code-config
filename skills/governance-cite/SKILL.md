@@ -23,31 +23,31 @@ Don't force citations into every response. Use them when they add authority or c
 ### By topic
 
 ```bash
-bash ~/.claude/governance/governance.sh --control PATTERN
+ways governance control PATTERN
 ```
 
 Examples:
-- `--control NIST` — all NIST controls
-- `--control OWASP` — injection prevention
-- `--control ISO` — all ISO standards
-- `--control SOC` — SOC 2 controls
-- `--control CIS` — CIS controls
-- `--control change` — change management controls
+- `control NIST` — all NIST controls
+- `control OWASP` — injection prevention
+- `control ISO` — all ISO standards
+- `control SOC` — SOC 2 controls
+- `control CIS` — CIS controls
+- `control change` — change management controls
 
 ### By way (full trace)
 
 ```bash
-bash ~/.claude/governance/governance.sh --trace softwaredev/commits
-bash ~/.claude/governance/governance.sh --trace softwaredev/security
-bash ~/.claude/governance/governance.sh --trace softwaredev/quality
-bash ~/.claude/governance/governance.sh --trace meta/knowledge
+ways governance trace softwaredev/commits
+ways governance trace softwaredev/security
+ways governance trace softwaredev/quality
+ways governance trace meta/knowledge
 ```
 
 ### Machine-readable (for structured extraction)
 
 ```bash
-bash ~/.claude/governance/governance.sh --control PATTERN --json
-bash ~/.claude/governance/governance.sh --trace WAY --json
+ways governance control PATTERN --json
+ways governance trace WAY --json
 ```
 
 ## Citation Format
@@ -77,7 +77,7 @@ The system currently tracks 13 controls across 4 governed ways:
 | **softwaredev/quality** | ISO 25010, NIST SA-15, IEEE 730 |
 | **meta/knowledge** | ISO 9001 7.5, ISO 27001 5.2, NIST PL-2 |
 
-Run `bash ~/.claude/governance/governance.sh --matrix --json` for the complete traceability matrix.
+Run `ways governance matrix --json` for the complete traceability matrix.
 
 ## Principles
 

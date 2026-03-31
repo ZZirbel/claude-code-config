@@ -131,7 +131,7 @@ check:
 
 # Provenance sidecar schema (ADR-110)
 # Lives in provenance.yaml alongside the way file, not in frontmatter.
-# Consumed by governance.sh and provenance-scan.py only.
+# Consumed by `ways governance` and `ways provenance`.
 provenance_sidecar:
   policy:
     type: array

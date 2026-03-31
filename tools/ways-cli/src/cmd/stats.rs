@@ -43,7 +43,9 @@ struct Event {
     way: String,
     trigger: String,
     scope: String,
+    #[allow(dead_code)]
     project: String,
+    #[allow(dead_code)]
     team: String,
     check: String,
     distance: f64,

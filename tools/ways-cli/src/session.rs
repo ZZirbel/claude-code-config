@@ -25,14 +25,6 @@ fn ensure_parent(path: &Path) {
     }
 }
 
-// ── Marker names (legacy compat) ───────────────────────────────
-
-/// Sanitize a way ID for use in flat marker filenames (replace / with -).
-/// Only needed for legacy code paths; new code uses directory paths.
-pub fn marker_name(way_id: &str) -> String {
-    way_id.replace('/', "-")
-}
-
 // ── Way markers ─────────────────────────────────────────────────
 
 /// Check if a way has been shown this session.
@@ -93,7 +85,7 @@ pub fn epoch_distance(way_id: &str, session_id: &str) -> u64 {
 // ── Token position (ADR-104 re-disclosure) ──────────────────────
 
 /// Read the token position from the most recent transcript.
-pub fn get_token_position(session_id: &str) -> u64 {
+pub fn get_token_position(_session_id: &str) -> u64 {
     let project_dir = std::env::var("CLAUDE_PROJECT_DIR")
         .unwrap_or_else(|_| std::env::var("PWD").unwrap_or_else(|_| ".".to_string()));
     let project_slug = project_dir.replace(['/', '.'], "-");

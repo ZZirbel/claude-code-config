@@ -1,11 +1,9 @@
 #!/bin/bash
 # Macro: prepend way vocabulary health summary when optimization way fires
-# Runs way-match suggest on all semantic ways and outputs a compact summary
+# Runs ways suggest on all semantic ways and outputs a compact summary
 
-WAY_MATCH="${HOME}/.claude/bin/way-match"
-
-if [[ ! -x "$WAY_MATCH" ]]; then
-  echo "**way-match binary not found** — build with: \`make -f tools/way-match/Makefile local\`"
+if ! command -v ways &>/dev/null; then
+  echo "**ways binary not found** — build with: \`make install\`"
   exit 0
 fi
 
@@ -33,7 +31,7 @@ for wayfile in $(find -L "${HOME}/.claude/hooks/ways" -name "*.md" ! -name "*.ch
   fi
 
   if [[ "$match_type" == "BM25" ]]; then
-    stderr=$("$WAY_MATCH" suggest --file "$wayfile" 2>&1 >/dev/null)
+    stderr=$(ways suggest "$wayfile" 2>&1 >/dev/null)
     gaps=$(echo "$stderr" | sed -n 's/suggest: \([0-9]*\) gaps.*/\1/p')
     covered=$(echo "$stderr" | sed -n 's/.*, \([0-9]*\) covered.*/\1/p')
     unused=$(echo "$stderr" | sed -n 's/.*, \([0-9]*\) unused/\1/p')

@@ -58,7 +58,7 @@ Detect the version file (package.json, Cargo.toml, pyproject.toml, version.txt) 
 | AUR | Update PKGBUILD, `makepkg --printsrcinfo > .SRCINFO`, push to AUR |
 | Container registry | `docker build -t repo:vX.Y.Z . && docker push` |
 
-For multi-platform binaries (like way-embed, mmaid), build per-platform, attach all to a single GitHub Release with checksums.
+For multi-platform binaries (like ways, mmaid), build per-platform, attach all to a single GitHub Release with checksums.
 
 ## This Project
 

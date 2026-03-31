@@ -95,9 +95,9 @@ bash scripts/doc-graph.sh --all       # all outputs
 Validates that provenance metadata in way frontmatter is structurally sound: policy URIs point to real files, verified dates aren't stale, controls have justifications.
 
 ```bash
-bash governance/provenance-verify.sh         # human-readable report
-bash governance/provenance-verify.sh --json  # machine-readable
-bash governance/governance.sh --lint         # full governance lint
+ways governance lint              # human-readable report
+ways governance lint --json       # machine-readable
+ways governance report            # full coverage report
 ```
 
 **What it covers**: Provenance chain integrity — every `policy.uri` in way frontmatter resolves, every control has justifications, verified dates are within staleness window.
@@ -108,7 +108,7 @@ bash governance/governance.sh --lint         # full governance lint
 |----------|------|
 | Changed `way-match.c` or rebuilt binary | Fixture tests + integration tests |
 | Changed a way's vocabulary or threshold | Integration tests + `/ways-tests` |
-| Changed hook scripts (check-*.sh, inject-*.sh, match-way.sh) | Activation test |
+| Changed hook scripts (check-*.sh, inject-*.sh) or ways binary | Activation test |
 | Added a new way | Integration tests + `/ways-tests` + activation test |
 | Restructured way directories | All three test layers + symlink/path verification |
 | Added semantic matching to a way | Fixture tests + integration tests + activation test (step 4) |

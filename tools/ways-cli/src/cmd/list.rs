@@ -323,6 +323,20 @@ fn print_token_timeline(
         }
     }
 
+    // Forecast bar: zoomed view from current position to furthest re-disclosure
+    let future_points: Vec<&RdPoint> = points.iter().filter(|p| !p.past).collect();
+
+    // Pre-compute zoom range (needed for usage bar overlay)
+    let (zoom_start, zoom_end, zoom_span) = if !future_points.is_empty() {
+        let min_rd = future_points.iter().map(|p| p.at_k).min().unwrap_or(current_tokens_k);
+        let max_rd = future_points.iter().map(|p| p.at_k).max().unwrap_or(context_window_k);
+        let zs = current_tokens_k;
+        let ze = (max_rd + (max_rd - min_rd) / 4).min(context_window_k);
+        (zs, ze, ze.saturating_sub(zs).max(1))
+    } else {
+        (0, 0, 0)
+    };
+
     // Usage bar (compact, full window)
     let bar_color = if pct < 50 {
         "\x1b[0;32m"
@@ -331,6 +345,19 @@ fn print_token_timeline(
     } else {
         "\x1b[0;31m"
     };
+
+    // Compute forecast zoom positions on the full bar
+    let zoom_bar_start = if context_window_k > 0 && zoom_span > 0 {
+        ((zoom_start * bar_width as u64) / context_window_k) as usize
+    } else {
+        0
+    };
+    let zoom_bar_end = if context_window_k > 0 && zoom_span > 0 {
+        ((zoom_end * bar_width as u64) / context_window_k) as usize
+    } else {
+        0
+    }
+    .min(bar_width.saturating_sub(1));
 
     let mut bar = String::new();
     for i in 0..bar_width {
@@ -344,17 +371,20 @@ fn print_token_timeline(
         "  {bar_color}{bar}\x1b[0m {pct}% ({current_tokens_k}K / {context_window_k}K)"
     );
 
-    // Forecast bar: zoomed view from current position to furthest re-disclosure
-    let future_points: Vec<&RdPoint> = points.iter().filter(|p| !p.past).collect();
+    // Arrow line below bar marking forecast zoom boundaries
+    if zoom_span > 0 {
+        let mut arrow_line = String::from("  ");
+        for i in 0..bar_width {
+            if i == zoom_bar_start || i == zoom_bar_end {
+                arrow_line.push('^');
+            } else {
+                arrow_line.push(' ');
+            }
+        }
+        println!("\x1b[2m{arrow_line}\x1b[0m");
+    }
 
     if !future_points.is_empty() {
-        let min_rd = future_points.iter().map(|p| p.at_k).min().unwrap_or(current_tokens_k);
-        let max_rd = future_points.iter().map(|p| p.at_k).max().unwrap_or(context_window_k);
-
-        // Zoom range: from current position to max re-disclosure + some padding
-        let zoom_start = current_tokens_k;
-        let zoom_end = (max_rd + (max_rd - min_rd) / 4).min(context_window_k); // pad 25%
-        let zoom_span = zoom_end.saturating_sub(zoom_start).max(1);
 
         // Build zoomed marker line
         let mut zoom_markers: Vec<Option<usize>> = vec![None; bar_width];

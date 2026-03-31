@@ -18,11 +18,7 @@ Resolution order — use the first one found:
 3. **Not found**: suggest installation
 
 ```bash
-# Check if available (uses resolve_tool from embed-lib.sh)
-source ~/.claude/hooks/ways/embed-lib.sh
-MMAID=$(resolve_tool mmaid)
-
-# Or just check directly
+# Check if available
 command -v mmaid || ~/.cache/claude-ways/user/mmaid --version
 ```
 

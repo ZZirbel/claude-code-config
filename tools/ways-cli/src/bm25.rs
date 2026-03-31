@@ -79,6 +79,7 @@ impl TermFreq {
 pub struct Document {
     pub id: String,
     pub description: String,
+    #[allow(dead_code)] // stored for debug/diagnostics, not actively read
     pub vocabulary: String,
     pub threshold: f64,
     pub tf: TermFreq,
