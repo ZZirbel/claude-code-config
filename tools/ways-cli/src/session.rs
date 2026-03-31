@@ -175,7 +175,7 @@ pub fn token_distance_exceeded(way_id: &str, session_id: &str) -> Option<u64> {
     }
 }
 
-/// Detect context window size from the model in use.
+/// Detect context window size from the model in use (current session).
 pub fn detect_context_window(_session_id: &str) -> u64 {
     let project_dir = std::env::var("CLAUDE_PROJECT_DIR")
         .unwrap_or_else(|_| std::env::var("PWD").unwrap_or_else(|_| ".".to_string()));
@@ -187,7 +187,20 @@ pub fn detect_context_window(_session_id: &str) -> u64 {
         None => return 200_000,
     };
 
-    let content = match std::fs::read_to_string(&transcript) {
+    context_window_from_transcript(&transcript)
+}
+
+/// Detect context window for a specific session by project path and session ID.
+pub fn detect_context_window_for(project: &str, session_id: &str) -> u64 {
+    let project_slug = project.replace(['/', '.'], "-");
+    let transcript = home_dir()
+        .join(format!(".claude/projects/{project_slug}/{session_id}.jsonl"));
+    context_window_from_transcript(&transcript)
+}
+
+/// Scan a transcript to detect model and return context window size in tokens.
+fn context_window_from_transcript(transcript: &std::path::Path) -> u64 {
+    let content = match std::fs::read_to_string(transcript) {
         Ok(c) => c,
         Err(_) => return 200_000,
     };

@@ -7,6 +7,7 @@ use serde_json::json;
 use std::collections::HashMap;
 
 use crate::cmd::context;
+use crate::cmd::render::{self, WayRow};
 use crate::session;
 
 /// A fired way with all its session state.
@@ -18,6 +19,15 @@ struct FiredWay {
     depth: u64,
     check_fires: u64,
     parent: String,
+}
+
+impl WayRow for FiredWay {
+    fn id(&self) -> &str { &self.id }
+    fn epoch_fired(&self) -> u64 { self.epoch_at_fire }
+    fn token_pos(&self) -> u64 { self.token_pos }
+    fn trigger(&self) -> &str { &self.trigger }
+    fn check_fires(&self) -> u64 { self.check_fires }
+    fn depth(&self) -> u64 { self.depth }
 }
 
 pub fn run(session: Option<&str>, sort: &str, json_out: bool) -> Result<()> {
@@ -73,395 +83,49 @@ pub fn run(session: Option<&str>, sort: &str, json_out: bool) -> Result<()> {
         return Ok(());
     }
 
+    // Render to buffer then print
+    let mut out = String::new();
+    use std::fmt::Write;
+
     // Header
     let short_id = &session_id[..session_id.len().min(12)];
-    println!();
-    println!(
+    let _ = writeln!(out);
+    let _ = writeln!(
+        out,
         "\x1b[1mSession\x1b[0m {short_id}...  \x1b[2mepoch {current_epoch} · {context_window_k}K ctx · {} ways fired\x1b[0m",
         ways.len()
     );
-    println!();
+    let _ = writeln!(out);
 
-    // Assign pin symbols to re-disclosure clusters
-    // Group ways by their bar position (re-disclosure point mapped to bar)
-    let bar_width: usize = 60;
-    let pin_symbols = ['●', '◆', '■', '▲', '◉', '▶', '★', '◈', '♦', '▪'];
-    let pin_colors = [
-        "\x1b[38;2;99;179;237m",  // blue
-        "\x1b[38;2;78;205;196m",  // teal
-        "\x1b[38;2;126;211;33m",  // green
-        "\x1b[38;2;255;234;167m", // yellow
-        "\x1b[38;2;253;203;110m", // orange
-        "\x1b[38;2;255;118;117m", // red
-        "\x1b[38;2;162;155;254m", // purple
-        "\x1b[38;2;253;121;168m", // magenta
-        "\x1b[38;2;116;185;255m", // sky
-        "\x1b[38;2;85;239;196m",  // mint
-    ];
+    let bar_positions = render::compute_bar_positions(&ways, context_window_k, redisclose_threshold_k);
+    let unique_pos = render::unique_positions(&bar_positions);
 
-    // Map each way to its bar position
-    let way_bar_positions: Vec<Option<usize>> = ways
-        .iter()
-        .map(|w| {
-            if context_window_k == 0 {
-                return None;
-            }
-            let fire_pos_k = w.token_pos / 1000;
-            let redisclose_at_k = fire_pos_k + redisclose_threshold_k;
-            let bar_pos = ((redisclose_at_k * bar_width as u64) / context_window_k) as usize;
-            Some(bar_pos.min(bar_width - 1))
-        })
-        .collect();
-
-    // Assign a cluster index to each unique bar position
-    let mut unique_positions: Vec<usize> = way_bar_positions
-        .iter()
-        .filter_map(|p| *p)
-        .collect();
-    unique_positions.sort();
-    unique_positions.dedup();
-
-    let cluster_of = |bar_pos: usize| -> usize {
-        unique_positions.iter().position(|&p| p == bar_pos).unwrap_or(0) % pin_symbols.len()
-    };
-
-    // Column headers
-    println!(
-        "  \x1b[1m{:<34} {:>5} {:>5} {:<11} {} {}\x1b[0m",
-        "Way", "Epoch", "Dist", "Trigger", "⌖", "Re-disclosure"
-    );
-    println!(
-        "  \x1b[2m{}\x1b[0m",
-        "─".repeat(85)
-    );
+    render::write_table_header(&mut out);
 
     for (i, w) in ways.iter().enumerate() {
-        let distance = current_epoch.saturating_sub(w.epoch_at_fire);
-        let next = predict_next(&w, current_epoch, current_tokens_k, redisclose_threshold_k);
-
-        // Indent children
-        let prefix = if w.depth > 0 {
-            format!("{}{}", "  ".repeat(w.depth as usize), "└ ")
-        } else {
-            String::new()
-        };
-
-        let display_id = format!("{prefix}{}", w.id);
-        let trigger_display = format_trigger(&w.trigger);
-
-        // Color distance
-        let dist_color = if distance == 0 {
-            "\x1b[0;32m"
-        } else if distance < current_epoch / 3 {
-            "\x1b[0;32m"
-        } else if distance < current_epoch * 2 / 3 {
-            "\x1b[1;33m"
-        } else {
-            "\x1b[0;31m"
-        };
-
-        // Pin symbol for this way's re-disclosure cluster
-        let pin = if let Some(bar_pos) = way_bar_positions[i] {
-            let ci = cluster_of(bar_pos);
-            format!("{}{}\x1b[0m", pin_colors[ci], pin_symbols[ci])
-        } else {
-            " ".to_string()
-        };
-
-        println!(
-            "  {:<34} {:>5} {}{:>5}\x1b[0m {:<11} {} {}",
-            truncate(&display_id, 34),
-            w.epoch_at_fire,
-            dist_color,
-            distance,
-            trigger_display,
-            pin,
-            next,
+        render::write_way_row(
+            &mut out, w, current_epoch, current_tokens_k,
+            redisclose_threshold_k, &bar_positions, &unique_pos, i, "", "",
         );
-
-        // Show check fires if any
-        if w.check_fires > 0 {
-            let decay = 1.0 / (w.check_fires as f64 + 1.0);
-            println!(
-                "  \x1b[2m  ✓ check ({} fires, decay={:.2})\x1b[0m",
-                w.check_fires, decay
-            );
-        }
     }
 
     // Token timeline with re-disclosure markers
     if current_tokens_k > 0 {
-        println!();
-        print_token_timeline(
-            &ways,
-            &way_bar_positions,
-            &unique_positions,
-            &pin_symbols,
-            &pin_colors,
-            current_tokens_k,
-            context_window_k,
-            redisclose_threshold_k,
+        let _ = writeln!(out);
+        render::write_token_timeline(
+            &mut out, &ways, &unique_pos,
+            current_tokens_k, context_window_k, redisclose_threshold_k,
         );
     }
 
-    println!();
+    let _ = writeln!(out);
+    print!("{out}");
     Ok(())
-}
-
-// ── Prediction ─────────────────────────────────────────────────
-
-fn predict_next(w: &FiredWay, current_epoch: u64, current_tokens_k: u64, redisclose_threshold_k: u64) -> String {
-    // Token-based re-disclosure: will this way re-fire due to context drift?
-    let token_pos_k = w.token_pos / 1000;
-    let token_distance_k = current_tokens_k.saturating_sub(token_pos_k);
-    let token_pct = if redisclose_threshold_k > 0 {
-        token_distance_k * 100 / redisclose_threshold_k
-    } else {
-        0
-    };
-
-    if token_pct >= 100 {
-        return "\x1b[0;32m● now\x1b[0m".to_string();
-    }
-    if token_pct >= 75 {
-        return format!("\x1b[1;33m◐ {token_pct}%\x1b[0m");
-    }
-    if token_pct >= 50 {
-        return format!("\x1b[2m◔ {token_pct}%\x1b[0m");
-    }
-
-    // Epoch-based: when would a check become relevant again?
-    // check effective_score needs distance_factor × decay_factor to exceed threshold ~2.0
-    // distance_factor = ln(distance + 1) + 1, so distance=6 → factor=2.95
-    let epoch_distance = current_epoch.saturating_sub(w.epoch_at_fire);
-    if w.check_fires > 0 {
-        let decay = 1.0 / (w.check_fires as f64 + 1.0);
-        // To fire at match_score=3: need 3 × distance_factor × decay ≥ 2.0
-        // distance_factor ≥ 2/(3×decay) → ln(d+1)+1 ≥ that → solve for d
-        let needed_factor = 2.0 / (3.0 * decay);
-        let needed_distance = ((needed_factor - 1.0).exp() - 1.0).max(0.0) as u64;
-        let next_epoch = w.epoch_at_fire + needed_distance;
-        if epoch_distance < needed_distance {
-            if needed_distance > 500 {
-                return format!(
-                    "\x1b[2mcheck ~{} (suppressed)\x1b[0m",
-                    fmt_epoch(next_epoch)
-                );
-            }
-            return format!("\x1b[2mcheck at epoch ~{next_epoch}\x1b[0m");
-        }
-    }
-
-    "\x1b[2m─\x1b[0m".to_string()
-}
-
-// ── Token timeline ─────────────────────────────────────────────
-
-fn print_token_timeline(
-    ways: &[FiredWay],
-    _way_bar_positions: &[Option<usize>],
-    unique_positions: &[usize],
-    pin_symbols: &[char],
-    pin_colors: &[&str],
-    current_tokens_k: u64,
-    context_window_k: u64,
-    redisclose_threshold_k: u64,
-) {
-    let bar_width: usize = 60;
-    let pct = if context_window_k > 0 {
-        (current_tokens_k * 100 / context_window_k).min(100)
-    } else {
-        0
-    };
-    let filled = (pct as usize * bar_width / 100).min(bar_width);
-
-    // Collect re-disclosure points
-    struct RdPoint {
-        at_k: u64,
-        cluster: usize,
-        past: bool,
-    }
-    let mut points: Vec<RdPoint> = Vec::new();
-    let mut zone_past = 0u32;
-    let mut zone_soon = 0u32;
-    let mut zone_later = 0u32;
-
-    for w in ways {
-        let fire_pos_k = w.token_pos / 1000;
-        let redisclose_at_k = fire_pos_k + redisclose_threshold_k;
-        let past = current_tokens_k >= redisclose_at_k;
-
-        // Determine cluster index from the full-bar position (same as table pins)
-        let full_bar_pos = if context_window_k > 0 {
-            ((redisclose_at_k * bar_width as u64) / context_window_k) as usize
-        } else {
-            0
-        }
-        .min(bar_width - 1);
-
-        let ci = unique_positions
-            .iter()
-            .position(|&p| p == full_bar_pos)
-            .unwrap_or(0)
-            % pin_symbols.len();
-
-        points.push(RdPoint {
-            at_k: redisclose_at_k,
-            cluster: ci,
-            past,
-        });
-
-        if past {
-            zone_past += 1;
-        } else {
-            let dist = redisclose_at_k.saturating_sub(current_tokens_k);
-            if dist <= redisclose_threshold_k / 4 {
-                zone_soon += 1;
-            } else {
-                zone_later += 1;
-            }
-        }
-    }
-
-    // Forecast bar: zoomed view from current position to furthest re-disclosure
-    let future_points: Vec<&RdPoint> = points.iter().filter(|p| !p.past).collect();
-
-    // Pre-compute zoom range (needed for usage bar overlay)
-    let (zoom_start, zoom_end, zoom_span) = if !future_points.is_empty() {
-        let min_rd = future_points.iter().map(|p| p.at_k).min().unwrap_or(current_tokens_k);
-        let max_rd = future_points.iter().map(|p| p.at_k).max().unwrap_or(context_window_k);
-        let zs = current_tokens_k;
-        let ze = (max_rd + (max_rd - min_rd) / 4).min(context_window_k);
-        (zs, ze, ze.saturating_sub(zs).max(1))
-    } else {
-        (0, 0, 0)
-    };
-
-    // Usage bar (compact, full window)
-    let bar_color = if pct < 50 {
-        "\x1b[0;32m"
-    } else if pct < 75 {
-        "\x1b[1;33m"
-    } else {
-        "\x1b[0;31m"
-    };
-
-    // Compute forecast zoom positions on the full bar
-    let zoom_bar_start = if context_window_k > 0 && zoom_span > 0 {
-        ((zoom_start * bar_width as u64) / context_window_k) as usize
-    } else {
-        0
-    };
-    let zoom_bar_end = if context_window_k > 0 && zoom_span > 0 {
-        ((zoom_end * bar_width as u64) / context_window_k) as usize
-    } else {
-        0
-    }
-    .min(bar_width.saturating_sub(1));
-
-    let mut bar = String::new();
-    for i in 0..bar_width {
-        if i < filled {
-            bar.push('█');
-        } else {
-            bar.push('░');
-        }
-    }
-    println!(
-        "  {bar_color}{bar}\x1b[0m {pct}% ({current_tokens_k}K / {context_window_k}K)"
-    );
-
-    // Arrow line below bar marking forecast zoom boundaries
-    if zoom_span > 0 {
-        let mut arrow_line = String::from("  ");
-        for i in 0..bar_width {
-            if i == zoom_bar_start || i == zoom_bar_end {
-                arrow_line.push('^');
-            } else {
-                arrow_line.push(' ');
-            }
-        }
-        println!("\x1b[2m{arrow_line}\x1b[0m");
-    }
-
-    if !future_points.is_empty() {
-
-        // Build zoomed marker line
-        let mut zoom_markers: Vec<Option<usize>> = vec![None; bar_width];
-        for p in &future_points {
-            let offset = p.at_k.saturating_sub(zoom_start);
-            let pos = ((offset * bar_width as u64) / zoom_span) as usize;
-            let pos = pos.min(bar_width - 1);
-            // Keep highest-priority cluster (lowest index wins for visibility)
-            if zoom_markers[pos].is_none() {
-                zoom_markers[pos] = Some(p.cluster);
-            }
-        }
-
-        // Render zoomed forecast
-        println!();
-        println!(
-            "  \x1b[1mForecast\x1b[0m \x1b[2m({zoom_start}K → {zoom_end}K)\x1b[0m"
-        );
-
-        // Marker line
-        let mut marker_str = String::from("  ");
-        for i in 0..bar_width {
-            match zoom_markers[i] {
-                Some(ci) => {
-                    marker_str.push_str(&format!(
-                        "{}{}\x1b[0m",
-                        pin_colors[ci], pin_symbols[ci]
-                    ));
-                }
-                None => marker_str.push('·'),
-            }
-        }
-        println!("{marker_str}");
-
-        // Scale labels
-        let mid_k = zoom_start + zoom_span / 2;
-        let mid_pos = bar_width / 2;
-        let end_label = format!("{zoom_end}K");
-        let end_pos = bar_width - end_label.len();
-        let mut label_line = String::from("  ");
-        let start_label = format!("{zoom_start}K");
-        label_line.push_str(&format!("\x1b[2m{start_label}"));
-        let pad1 = mid_pos.saturating_sub(start_label.len());
-        label_line.push_str(&" ".repeat(pad1));
-        let mid_label = format!("{mid_k}K");
-        label_line.push_str(&mid_label);
-        let pad2 = end_pos.saturating_sub(mid_pos + mid_label.len());
-        label_line.push_str(&" ".repeat(pad2));
-        label_line.push_str(&end_label);
-        label_line.push_str("\x1b[0m");
-        println!("{label_line}");
-    }
-
-    // Zone summary
-    let mut zones = Vec::new();
-    if zone_past > 0 {
-        zones.push(format!("\x1b[0;32m● {zone_past} re-disclose now\x1b[0m"));
-    }
-    if zone_soon > 0 {
-        zones.push(format!("\x1b[1;33m◐ {zone_soon} approaching\x1b[0m"));
-    }
-    if zone_later > 0 {
-        zones.push(format!("\x1b[2m○ {zone_later} distant\x1b[0m"));
-    }
-
-    if !zones.is_empty() {
-        println!(
-            "  {}  \x1b[2m│ {redisclose_threshold_k}K interval\x1b[0m",
-            zones.join("  ")
-        );
-    }
 }
 
 // ── Data collection ────────────────────────────────────────────
 
 fn collect_fired_ways(session_id: &str, metrics: &HashMap<String, MetricEntry>) -> Vec<FiredWay> {
-    // Way IDs are now real paths in the session directory — no parsing needed
     let way_epochs = session::list_way_epochs(session_id);
 
     way_epochs
@@ -520,14 +184,12 @@ fn load_metrics(session_id: &str) -> HashMap<String, MetricEntry> {
 }
 
 fn detect_session() -> Option<String> {
-    // Best source: most recent session_start event for this project
     let project = std::env::var("CLAUDE_PROJECT_DIR")
         .ok()
         .or_else(detect_project_dir);
 
     if let Some(ref proj) = project {
         if let Some(sid) = latest_session_for_project(proj) {
-            // Verify the session directory exists
             let dir = format!("{}/{sid}", crate::session::sessions_root());
             if std::path::Path::new(&dir).is_dir() {
                 return Some(sid);
@@ -535,7 +197,6 @@ fn detect_session() -> Option<String> {
         }
     }
 
-    // Fallback: newest session directory by mtime
     let sessions = session::list_sessions();
     if sessions.is_empty() {
         return None;
@@ -557,7 +218,6 @@ fn detect_session() -> Option<String> {
     newest.map(|(_, s)| s)
 }
 
-/// Find the most recent session_start event for a project directory.
 fn latest_session_for_project(project: &str) -> Option<String> {
     let home = std::env::var("HOME").ok()?;
     let path = format!("{home}/.claude/stats/events.jsonl");
@@ -584,35 +244,6 @@ fn latest_session_for_project(project: &str) -> Option<String> {
 }
 
 use crate::util::detect_project_dir;
-
-fn fmt_epoch(n: u64) -> String {
-    if n >= 1_000_000 {
-        format!("{:.1e}", n as f64)
-    } else if n >= 10_000 {
-        format!("{}K", n / 1000)
-    } else {
-        format!("e{n}")
-    }
-}
-
-fn format_trigger(trigger: &str) -> String {
-    match trigger {
-        "semantic:bm25" => "bm25".to_string(),
-        "semantic:embedding" => "embed".to_string(),
-        "keyword" => "keyword".to_string(),
-        "check-pull" => "check-pull".to_string(),
-        "bash" | "file" | "state" => trigger.to_string(),
-        _ => trigger.to_string(),
-    }
-}
-
-fn truncate(s: &str, max: usize) -> String {
-    if s.len() <= max {
-        s.to_string()
-    } else {
-        format!("{}…", &s[..max - 1])
-    }
-}
 
 fn print_json(ways: &[FiredWay], current_epoch: u64, current_tokens_k: u64, context_window_k: u64, redisclose_threshold_k: u64) {
     let entries: Vec<serde_json::Value> = ways

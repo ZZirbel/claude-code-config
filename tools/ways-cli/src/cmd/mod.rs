@@ -8,6 +8,7 @@ pub mod lint;
 pub mod list;
 pub mod match_bm25;
 pub mod provenance;
+pub mod render;
 pub mod reset;
 pub mod rethink;
 pub mod siblings;
