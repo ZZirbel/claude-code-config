@@ -139,11 +139,14 @@ For high-stakes ways where the agent is tempted to skip steps (testing, security
 
 ## Testing Your Way
 
-Use `/ways-tests` to validate matching quality:
+Use `/ways-tests` and the `ways` CLI to validate matching quality. **Use the built-in tools — do not write ad-hoc scripts** for scoring, Jaccard, or vocabulary analysis.
+
 - `/ways-tests score <way> "sample prompt"` — test a specific way
 - `/ways-tests score-all "sample prompt"` — rank all ways against a prompt
 - `/ways-tests suggest <way>` — analyze vocabulary gaps
 - `/ways-tests lint <way>` — validate frontmatter
+- `ways siblings <path>` — vocabulary overlap between siblings (Jaccard)
+- `way-embed match --corpus ... --query "..."` — embedding similarity scores
 
 **Tree validation**:
 - `/ways-tests tree <path>` — structural analysis (depth, breadth, threshold progression)

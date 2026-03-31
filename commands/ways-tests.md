@@ -204,9 +204,23 @@ Lint now also validates `*.check.md` files:
 
 Use `--all` to lint all ways AND checks.
 
+## Important: Use the CLI, Not Ad-Hoc Scripts
+
+All testing and analysis operations are built into the `ways` binary. **Do not write ad-hoc python, bash, or awk scripts** to compute scores, Jaccard similarity, vocabulary analysis, or embedding queries. The tools exist:
+
+| Need | Use | NOT |
+|------|-----|-----|
+| Score a way against a prompt | `ways match --query "..."` | hand-rolled BM25 in bash/python |
+| Embedding similarity | `way-embed match --corpus ... --query "..."` | ad-hoc cosine similarity scripts |
+| Sibling vocabulary overlap | `ways siblings <path>` | python Jaccard calculations |
+| Vocabulary gap analysis | `ways suggest --file <way>` | manual term frequency counting |
+| Frontmatter validation | `ways lint <path>` | regex parsing in bash |
+| Corpus regeneration | `ways corpus` | manual JSONL construction |
+
+If the CLI doesn't support what you need, that's a signal to extend the CLI — not to work around it with throwaway scripts.
+
 ## Notes
 
 - BM25 scoring is built into the `ways` binary. If `ways` is missing, run `make setup` in `~/.claude`
 - The UNUSED section in suggest output is informational — unused vocabulary terms are often intentional (they catch user query terms that don't appear in the way body). Don't automatically remove them.
 - When displaying results, use the human-readable format, not the raw machine output from the binary.
-- Check scoring uses `awk` for floating-point math — ensure `awk` is available (standard on all Unix systems).

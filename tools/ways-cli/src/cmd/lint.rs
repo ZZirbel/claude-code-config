@@ -78,6 +78,7 @@ struct Schema {
     valid_scopes: Vec<String>,
     valid_macros: Vec<String>,
     valid_triggers: Vec<String>,
+    excluded_path_segments: Vec<String>,
 }
 
 fn load_schema(path: &Path) -> Result<Schema> {
@@ -91,6 +92,7 @@ fn load_schema(path: &Path) -> Result<Schema> {
     let valid_scopes = extract_enum_values(&doc, "way", "scope");
     let valid_macros = extract_enum_values(&doc, "way", "macro");
     let valid_triggers = extract_enum_values(&doc, "way", "trigger");
+    let excluded_path_segments = extract_string_list(&doc, &["lint", "excluded_path_segments"]);
 
     Ok(Schema {
         way_fields,
@@ -99,6 +101,7 @@ fn load_schema(path: &Path) -> Result<Schema> {
         valid_scopes,
         valid_macros,
         valid_triggers,
+        excluded_path_segments,
     })
 }
 
@@ -186,6 +189,14 @@ fn scan_and_lint(
             Err(_) => continue,
         };
         if first_line != "---" {
+            continue;
+        }
+
+        // Excluded paths — backup/sync tool artifacts that pollute the corpus
+        if crate::util::is_excluded_path(path, &schema.excluded_path_segments) {
+            let relpath = path.strip_prefix(ways_dir).unwrap_or(path);
+            eprintln!("  WARNING: {} — excluded path (backup/sync/tool artifact), skipped", relpath.display());
+            *warnings += 1;
             continue;
         }
 
@@ -588,6 +599,23 @@ fn fix_multiline_yaml(content: &str) -> Option<String> {
         out.push('\n');
     }
     Some(out)
+}
+
+fn extract_string_list(doc: &serde_yaml::Value, keys: &[&str]) -> Vec<String> {
+    let mut val = doc;
+    for key in keys {
+        match val.get(*key) {
+            Some(v) => val = v,
+            None => return Vec::new(),
+        }
+    }
+    val.as_sequence()
+        .map(|seq| {
+            seq.iter()
+                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 use crate::util::{detect_project_dir, home_dir};

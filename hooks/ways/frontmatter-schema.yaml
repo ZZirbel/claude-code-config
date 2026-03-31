@@ -129,6 +129,21 @@ check:
           required: optional
           role: Only fire when this file exists in the project
 
+# Lint configuration
+# Path segments that indicate backup/sync tool artifacts — not real ways.
+# The linter skips any file whose path contains one of these segments.
+lint:
+  excluded_path_segments:
+    - logseq/
+    - /bak/
+    - /.backup/
+    - /backup/
+    - /.obsidian/
+    - /.sync/
+    - /.trash/
+    - /node_modules/
+    - /.git/
+
 # Provenance sidecar schema (ADR-110)
 # Lives in provenance.yaml alongside the way file, not in frontmatter.
 # Consumed by `ways governance` and `ways provenance`.

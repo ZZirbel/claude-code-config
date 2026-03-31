@@ -41,8 +41,10 @@ pub fn run(ways_dir: Option<String>, quiet: bool, if_stale: bool) -> Result<()> 
         }
     };
 
+    let excluded = crate::util::load_excluded_segments();
+
     // Scan global ways
-    let global_count = scan_ways_dir(&global_dir, "", &mut w)?;
+    let global_count = scan_ways_dir(&global_dir, "", &excluded, &mut w)?;
     let global_hash = content_hash(&global_dir);
     log(&format!(
         "Global ways: {global_count} (hash: {}...)",
@@ -94,7 +96,7 @@ pub fn run(ways_dir: Option<String>, quiet: bool, if_stale: bool) -> Result<()> 
             }
 
             let prefix = format!("{encoded}/");
-            let local_count = scan_ways_dir(&ways_path, &prefix, &mut w)?;
+            let local_count = scan_ways_dir(&ways_path, &prefix, &excluded, &mut w)?;
 
             if local_count > 0 {
                 project_total += local_count;
@@ -147,7 +149,7 @@ pub fn run(ways_dir: Option<String>, quiet: bool, if_stale: bool) -> Result<()> 
 
 /// Scan a ways directory for semantic ways (having description + vocabulary).
 /// Writes JSONL to the writer. Returns the number of ways found.
-fn scan_ways_dir(dir: &Path, id_prefix: &str, w: &mut impl Write) -> Result<usize> {
+fn scan_ways_dir(dir: &Path, id_prefix: &str, excluded: &[String], w: &mut impl Write) -> Result<usize> {
     let mut count = 0;
 
     let mut files: Vec<PathBuf> = Vec::new();
@@ -165,6 +167,9 @@ fn scan_ways_dir(dir: &Path, id_prefix: &str, w: &mut impl Write) -> Result<usiz
             .and_then(|n| n.to_str())
             .map_or(false, |n| n.contains(".check."))
         {
+            continue;
+        }
+        if crate::util::is_excluded_path(path, excluded) {
             continue;
         }
         files.push(path.to_path_buf());

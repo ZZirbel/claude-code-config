@@ -1,6 +1,6 @@
 //! Shared utility functions used across multiple modules.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Home directory from $HOME, falling back to /tmp.
 pub fn home_dir() -> PathBuf {
@@ -24,4 +24,48 @@ pub fn detect_project_dir() -> Option<String> {
         }
         dir = dir.parent()?;
     }
+}
+
+/// Load excluded path segments from frontmatter-schema.yaml.
+/// Returns empty vec if schema can't be read (non-fatal).
+pub fn load_excluded_segments() -> Vec<String> {
+    let schema_path = home_dir().join(".claude/hooks/ways/frontmatter-schema.yaml");
+    let content = match std::fs::read_to_string(&schema_path) {
+        Ok(c) => c,
+        Err(_) => return Vec::new(),
+    };
+    let doc: serde_yaml::Value = match serde_yaml::from_str(&content) {
+        Ok(v) => v,
+        Err(_) => return Vec::new(),
+    };
+    doc.get("lint")
+        .and_then(|v| v.get("excluded_path_segments"))
+        .and_then(|v| v.as_sequence())
+        .map(|seq| {
+            seq.iter()
+                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Check if a path should be excluded based on schema-defined segments.
+pub fn is_excluded_path(path: &Path, excluded_segments: &[String]) -> bool {
+    let path_str = match path.to_str() {
+        Some(s) => s,
+        None => return false,
+    };
+    for segment in excluded_segments {
+        if path_str.contains(segment.as_str()) {
+            return true;
+        }
+    }
+    // Timestamp filenames from sync tools (e.g., 2026-03-30T13_13_26.616Z.Desktop.md)
+    if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+        let stem = stem.strip_suffix(".check").unwrap_or(stem);
+        if stem.starts_with("20") && stem.contains('T') && stem.contains('.') {
+            return true;
+        }
+    }
+    false
 }
