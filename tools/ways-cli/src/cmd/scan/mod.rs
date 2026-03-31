@@ -525,18 +525,5 @@ fn strip_frontmatter(content: &str) -> String {
 }
 
 fn capture_show_core(session_id: &str) -> String {
-    let output = std::process::Command::new(
-        std::env::current_exe().unwrap_or_else(|_| PathBuf::from("ways")),
-    )
-    .args(["show", "core", "--session", session_id])
-    .env(
-        "CLAUDE_PROJECT_DIR",
-        std::env::var("CLAUDE_PROJECT_DIR").unwrap_or_default(),
-    )
-    .output();
-
-    match output {
-        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).to_string(),
-        _ => String::new(),
-    }
+    crate::cmd::show::core(session_id).unwrap_or_default()
 }

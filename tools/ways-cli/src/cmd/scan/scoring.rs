@@ -61,42 +61,14 @@ pub(crate) fn batch_embed_score(query: &str) -> Vec<(String, f64)> {
     }
 }
 
-// ── Subprocess capture ─────────────────────────────────────────
+// ── In-process show capture ───────────────────────────────────
 
 pub(crate) fn capture_show_way(id: &str, session_id: &str, trigger: &str) -> String {
-    // Capture stdout from show::way by redirecting
-    let output = std::process::Command::new(std::env::current_exe().unwrap_or_else(|_| PathBuf::from("ways")))
-        .args(["show", "way", id, "--session", session_id, "--trigger", trigger])
-        .env(
-            "CLAUDE_PROJECT_DIR",
-            std::env::var("CLAUDE_PROJECT_DIR").unwrap_or_default(),
-        )
-        .output();
-
-    match output {
-        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).to_string(),
-        _ => String::new(),
-    }
+    crate::cmd::show::way(id, session_id, trigger).unwrap_or_default()
 }
 
 pub(crate) fn capture_show_check(id: &str, session_id: &str, trigger: &str, score: f64) -> String {
-    let output = std::process::Command::new(std::env::current_exe().unwrap_or_else(|_| PathBuf::from("ways")))
-        .args([
-            "show", "check", id,
-            "--session", session_id,
-            "--trigger", trigger,
-            "--score", &format!("{score:.2}"),
-        ])
-        .env(
-            "CLAUDE_PROJECT_DIR",
-            std::env::var("CLAUDE_PROJECT_DIR").unwrap_or_default(),
-        )
-        .output();
-
-    match output {
-        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).to_string(),
-        _ => String::new(),
-    }
+    crate::cmd::show::check(id, session_id, trigger, score).unwrap_or_default()
 }
 
 // ── Path helpers ───────────────────────────────────────────────

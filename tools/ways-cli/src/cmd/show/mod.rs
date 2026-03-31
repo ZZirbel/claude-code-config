@@ -10,33 +10,33 @@ use serde_json::json;
 use std::path::Path;
 
 use crate::session;
-use helpers::{extract_field, home_dir, is_project_trusted, print_body, print_check_sections, run_macro};
-use metrics::{compute_tree_metrics, count_siblings, git_version, print_dirty_status, print_update_status};
+use helpers::{extract_field, home_dir, is_project_trusted, body_text, check_sections_text, run_macro};
+use metrics::{compute_tree_metrics, count_siblings, git_version, dirty_status_text, update_status_text};
 
 // ── ways show way ───────────────────────────────────────────────
 
-pub fn way(id: &str, session_id: &str, trigger: &str) -> Result<()> {
+pub fn way(id: &str, session_id: &str, trigger: &str) -> Result<String> {
     let project_dir = std::env::var("CLAUDE_PROJECT_DIR")
         .unwrap_or_else(|_| std::env::var("PWD").unwrap_or_else(|_| ".".to_string()));
 
     // Domain disable check
     let domain = id.split('/').next().unwrap_or(id);
     if session::domain_disabled(domain) {
-        return Ok(());
+        return Ok(String::new());
     }
 
     // Scope check
     let scope = session::detect_scope(session_id);
     let (way_file, is_project_local) = match session::resolve_way_file(id, &project_dir) {
         Some(r) => r,
-        None => return Ok(()), // way not found
+        None => return Ok(String::new()),
     };
 
     // Read frontmatter for scope field
     let content = std::fs::read_to_string(&way_file)?;
     let scope_field = extract_field(&content, "scope").unwrap_or_default();
     if !session::scope_matches(&scope_field, &scope) {
-        return Ok(());
+        return Ok(String::new());
     }
 
     // Session marker check + token-gated re-disclosure (ADR-104)
@@ -46,7 +46,7 @@ pub fn way(id: &str, session_id: &str, trigger: &str) -> Result<()> {
             Some(_distance) => {
                 is_redisclosure = true;
             }
-            None => return Ok(()), // still warm, no-op
+            None => return Ok(String::new()),
         }
     } else {
         is_redisclosure = false;
@@ -57,7 +57,6 @@ pub fn way(id: &str, session_id: &str, trigger: &str) -> Result<()> {
     let way_dir = way_file.parent().unwrap_or(Path::new("."));
     let macro_file = way_dir.join("macro.sh");
     let macro_out = if macro_pos.is_some() && macro_file.is_file() {
-        // Security: skip project-local macros unless trusted
         if is_project_local && !is_project_trusted(&project_dir) {
             Some(format!(
                 "**Note**: Project-local macro skipped (add {} to ~/.claude/trusted-project-macros to enable)",
@@ -70,19 +69,22 @@ pub fn way(id: &str, session_id: &str, trigger: &str) -> Result<()> {
         None
     };
 
-    // Output content
+    // Build output
+    let mut output = String::new();
+
     if macro_pos.as_deref() == Some("prepend") {
         if let Some(ref out) = macro_out {
-            println!("{out}\n");
+            output.push_str(out);
+            output.push_str("\n\n");
         }
     }
 
-    // Strip frontmatter, output body
-    print_body(&content);
+    output.push_str(&body_text(&content));
 
     if macro_pos.as_deref() == Some("append") {
         if let Some(ref out) = macro_out {
-            println!("\n{out}");
+            output.push('\n');
+            output.push_str(out);
         }
     }
 
@@ -140,19 +142,19 @@ pub fn way(id: &str, session_id: &str, trigger: &str) -> Result<()> {
     let refs: Vec<(&str, &str)> = log_fields.iter().map(|(k, v)| (*k, v.as_str())).collect();
     session::log_event(&refs);
 
-    Ok(())
+    Ok(output)
 }
 
 // ── ways show check ─────────────────────────────────────────────
 
-pub fn check(id: &str, session_id: &str, trigger: &str, match_score: f64) -> Result<()> {
+pub fn check(id: &str, session_id: &str, trigger: &str, match_score: f64) -> Result<String> {
     let project_dir = std::env::var("CLAUDE_PROJECT_DIR")
         .unwrap_or_else(|_| std::env::var("PWD").unwrap_or_else(|_| ".".to_string()));
 
     // Domain disable
     let domain = id.split('/').next().unwrap_or(id);
     if session::domain_disabled(domain) {
-        return Ok(());
+        return Ok(String::new());
     }
 
     // Scope check
@@ -160,28 +162,28 @@ pub fn check(id: &str, session_id: &str, trigger: &str, match_score: f64) -> Res
 
     let (check_file, _is_project_local) = match session::resolve_check_file(id, &project_dir) {
         Some(r) => r,
-        None => return Ok(()),
+        None => return Ok(String::new()),
     };
 
     let check_content = std::fs::read_to_string(&check_file)?;
     let scope_field = extract_field(&check_content, "scope").unwrap_or_default();
     if !scope_field.is_empty() && !session::scope_matches(&scope_field, &scope) {
-        return Ok(());
+        return Ok(String::new());
     }
 
     // Epoch distance
     let epoch = session::get_epoch(session_id);
     let way_has_fired = session::way_is_shown(id, session_id);
     let epoch_distance = if way_has_fired {
-        session::epoch_distance(id, session_id).min(30) // cap
+        session::epoch_distance(id, session_id).min(30)
     } else {
-        30 // way hasn't fired — max distance
+        30
     };
 
     // Fire count
     let fire_count = session::get_check_fires(id, session_id);
 
-    // Scoring curve: effective_score = match_score × distance_factor × decay_factor
+    // Scoring curve
     let distance_factor = ((epoch_distance as f64) + 1.0).ln() + 1.0;
     let decay_factor = 1.0 / (fire_count as f64 + 1.0);
     let effective_score = match_score * distance_factor * decay_factor;
@@ -192,20 +194,23 @@ pub fn check(id: &str, session_id: &str, trigger: &str, match_score: f64) -> Res
         .unwrap_or(2.0);
 
     if effective_score < threshold {
-        return Ok(());
+        return Ok(String::new());
     }
 
-    // Output
+    let mut output = String::new();
+
     // If parent way hasn't fired, pull it in alongside the check
     if !way_has_fired {
-        // Call ourselves recursively for the parent way
-        let _ = way(id, session_id, "check-pull");
-        println!();
+        let parent_out = way(id, session_id, "check-pull")?;
+        if !parent_out.is_empty() {
+            output.push_str(&parent_out);
+            output.push('\n');
+        }
     }
 
     // Include anchor section when epoch distance >= 5
     let include_anchor = epoch_distance >= 5;
-    print_check_sections(&check_content, include_anchor);
+    output.push_str(&check_sections_text(&check_content, include_anchor));
 
     // Bump fire count
     session::bump_check_fires(id, session_id);
@@ -230,19 +235,21 @@ pub fn check(id: &str, session_id: &str, trigger: &str, match_score: f64) -> Res
         ("session", session_id),
     ]);
 
-    Ok(())
+    Ok(output)
 }
 
 // ── ways show core ──────────────────────────────────────────────
 
-pub fn core(session_id: &str) -> Result<()> {
+pub fn core(session_id: &str) -> Result<String> {
     let ways_dir = home_dir().join(".claude/hooks/ways");
+    let mut output = String::new();
 
     // Run the macro for the dynamic ways table
     let macro_file = ways_dir.join("macro.sh");
     if macro_file.is_file() {
         if let Some(out) = run_macro(&macro_file) {
-            println!("{out}");
+            output.push_str(&out);
+            output.push('\n');
         }
     }
 
@@ -250,22 +257,22 @@ pub fn core(session_id: &str) -> Result<()> {
     let core_file = ways_dir.join("core.md");
     if core_file.is_file() {
         let content = std::fs::read_to_string(&core_file)?;
-        print_body(&content);
+        output.push_str(&body_text(&content));
     }
 
     // Version info
     let claude_dir = home_dir().join(".claude");
     let version = git_version(&claude_dir);
-    println!("\n---\n_Ways version: {version}_");
+    output.push_str(&format!("\n---\n_Ways version: {version}_"));
 
     // Update status from cache
-    print_update_status();
+    output.push_str(&update_status_text());
 
     // Dirty file enumeration
-    print_dirty_status(&claude_dir);
+    output.push_str(&dirty_status_text(&claude_dir));
 
     // Stamp core marker
     session::stamp_core(session_id);
 
-    Ok(())
+    Ok(output)
 }

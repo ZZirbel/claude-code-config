@@ -139,6 +139,37 @@ impl Session {
 
         String::from_utf8_lossy(&output.stdout).to_string()
     }
+
+    fn scan_prompt_with_home(&self, query: &str, home: &Path) -> String {
+        let output = Command::new(ways_bin())
+            .args([
+                "scan", "prompt",
+                "--query", query,
+                "--session", &self.id,
+                "--project", "/tmp/nonexistent-project",
+            ])
+            .env("HOME", home)
+            .env("XDG_CACHE_HOME", self.corpus.parent().unwrap().parent().unwrap().parent().unwrap())
+            .output()
+            .expect("Failed to run ways scan prompt");
+
+        String::from_utf8_lossy(&output.stdout).to_string()
+    }
+
+    fn scan_state(&self) -> String {
+        let output = Command::new(ways_bin())
+            .args([
+                "scan", "state",
+                "--session", &self.id,
+                "--project", "/tmp/nonexistent-project",
+            ])
+            .env("HOME", fixture_home())
+            .env("XDG_CACHE_HOME", self.corpus.parent().unwrap().parent().unwrap().parent().unwrap())
+            .output()
+            .expect("Failed to run ways scan state");
+
+        String::from_utf8_lossy(&output.stdout).to_string()
+    }
 }
 
 impl Drop for Session {
@@ -392,4 +423,69 @@ fn scenario_8_epoch_integrity() {
     assert_epoch(&s.id, 5);
 
     // Epoch should be exactly 5 — no drift, no skips
+}
+
+// ── Scenario 9: Domain Disable ────────────────────────────────
+
+#[test]
+fn scenario_9_domain_disable() {
+    let s = Session::new("s9");
+
+    // Create a fixture home with ways.json that disables "testdomain"
+    let home = std::env::temp_dir().join("ways-sim-home-s9");
+    let claude_dir = home.join(".claude");
+    std::fs::create_dir_all(&claude_dir).unwrap();
+
+    // Symlink ways
+    let ways_link = claude_dir.join("hooks/ways");
+    std::fs::create_dir_all(ways_link.parent().unwrap()).unwrap();
+    #[cfg(unix)]
+    {
+        let _ = std::fs::remove_file(&ways_link);
+        std::os::unix::fs::symlink(fixture_ways_dir(), &ways_link).unwrap();
+    }
+
+    // Write ways.json disabling testdomain
+    std::fs::write(
+        claude_dir.join("ways.json"),
+        r#"{"disabled": ["testdomain"]}"#,
+    )
+    .unwrap();
+
+    // Turn 1: prompt that would normally match testdomain/parent/child
+    s.scan_prompt_with_home("write unit tests with good coverage", &home);
+    assert_epoch(&s.id, 1);
+    // Should NOT fire — domain is disabled
+    assert_marker_absent("testdomain/parent/child", &s.id);
+
+    // Turn 2: testdomain2 is NOT disabled — with-check should still work
+    s.scan_prompt_with_home("supply chain dependency security audit", &home);
+    assert_epoch(&s.id, 2);
+    assert_marker_exists("testdomain2/with-check", &s.id);
+
+    // Cleanup
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+// ── Scenario 10: State Triggers ───────────────────────────────
+
+#[test]
+fn scenario_10_state_triggers() {
+    let s = Session::new("s10");
+
+    // Turn 1: state scan should fire session-start trigger
+    // (state scan doesn't bump epoch — it runs alongside prompt scan)
+    let output = s.scan_state();
+    assert_marker_exists("testdomain/state-trigger", &s.id);
+    assert!(
+        output.contains("State Trigger Test Way"),
+        "Expected state trigger content in output"
+    );
+
+    // Turn 2: second state scan — idempotent, marker prevents re-fire
+    let output2 = s.scan_state();
+    assert!(
+        !output2.contains("State Trigger Test Way"),
+        "State trigger should not re-fire (marker exists)"
+    );
 }

@@ -361,12 +361,20 @@ fn main() -> Result<()> {
         },
         Commands::Show { what } => match what {
             ShowCommand::Way { id, session, trigger } => {
-                cmd::show::way(&id, &session, &trigger)
+                let out = cmd::show::way(&id, &session, &trigger)?;
+                if !out.is_empty() { print!("{out}"); }
+                Ok(())
             }
             ShowCommand::Check { id, session, trigger, score } => {
-                cmd::show::check(&id, &session, &trigger, score)
+                let out = cmd::show::check(&id, &session, &trigger, score)?;
+                if !out.is_empty() { print!("{out}"); }
+                Ok(())
             }
-            ShowCommand::Core { session } => cmd::show::core(&session),
+            ShowCommand::Core { session } => {
+                let out = cmd::show::core(&session)?;
+                if !out.is_empty() { print!("{out}"); }
+                Ok(())
+            }
         },
         Commands::Suggest { file, min_freq } => cmd::suggest::run(file, min_freq),
         Commands::Reset { session, all, confirm } => {

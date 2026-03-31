@@ -139,12 +139,12 @@ pub(crate) fn parse_git_describe(s: &str) -> Option<GitDescribe> {
 }
 
 /// Print update availability status from the cached state file.
-pub(crate) fn print_update_status() {
+pub(crate) fn update_status_text() -> String {
     let uid = unsafe { libc_getuid() };
     let cache_file = format!("/tmp/.claude-config-update-state-{uid}");
     let content = match std::fs::read_to_string(&cache_file) {
         Ok(c) => c,
-        Err(_) => return,
+        Err(_) => return String::new(),
     };
 
     let get = |key: &str| -> Option<String> {
@@ -160,34 +160,35 @@ pub(crate) fn print_update_status() {
     let upstream_repo = "aaronsb/claude-code-config";
 
     if behind == 0 {
-        return;
+        return String::new();
     }
 
-    println!();
+    let mut out = String::from("\n");
     match cached_type.as_str() {
         "clone" => {
-            println!("**{behind} commit(s) behind origin/main.** Run: `cd ~/.claude && git pull`");
+            out.push_str(&format!("**{behind} commit(s) behind origin/main.** Run: `cd ~/.claude && git pull`\n"));
         }
         "fork" | "renamed_clone" => {
             if has_upstream {
-                println!("**Behind {upstream_repo}.** Run: `cd ~/.claude && git fetch upstream && git merge upstream/main`");
+                out.push_str(&format!("**Behind {upstream_repo}.** Run: `cd ~/.claude && git fetch upstream && git merge upstream/main`\n"));
             } else {
-                println!("**Behind {upstream_repo}.** First add upstream, then sync:");
-                println!("`git -C ~/.claude remote add upstream https://github.com/{upstream_repo}`");
-                println!("`cd ~/.claude && git fetch upstream && git merge upstream/main`");
+                out.push_str(&format!("**Behind {upstream_repo}.** First add upstream, then sync:\n"));
+                out.push_str(&format!("`git -C ~/.claude remote add upstream https://github.com/{upstream_repo}`\n"));
+                out.push_str(&format!("`cd ~/.claude && git fetch upstream && git merge upstream/main`\n"));
             }
         }
         "plugin" => {
             let installed = get("installed").unwrap_or_default();
             let latest = get("latest").unwrap_or_default();
-            println!("**Plugin update available (v{installed} -> v{latest}).** Run: `/plugin update disciplined-methodology`");
+            out.push_str(&format!("**Plugin update available (v{installed} -> v{latest}).** Run: `/plugin update disciplined-methodology`\n"));
         }
         _ => {}
     }
+    out
 }
 
-/// Print dirty file status from git.
-pub(crate) fn print_dirty_status(claude_dir: &Path) {
+/// Return dirty file status from git.
+pub(crate) fn dirty_status_text(claude_dir: &Path) -> String {
     let output = Command::new("git")
         .args(["-C", &claude_dir.display().to_string(), "status", "--short"])
         .output();
@@ -200,33 +201,34 @@ pub(crate) fn print_dirty_status(claude_dir: &Path) {
                 .map(|l| l.split_whitespace().last().unwrap_or("").to_string())
                 .collect()
         }
-        _ => return,
+        _ => return String::new(),
     };
 
     if files.is_empty() {
-        return;
+        return String::new();
     }
 
     let count = files.len();
-    println!();
+    let mut out = String::from("\n");
     if count >= 4 {
-        println!("**Uncommitted local changes ({count} files)** — not tracked by git.");
-        println!("Other sessions won't see these. Commit to keep, or discard to match remote.");
+        out.push_str(&format!("**Uncommitted local changes ({count} files)** — not tracked by git.\n"));
+        out.push_str("Other sessions won't see these. Commit to keep, or discard to match remote.\n");
     } else {
         let s = if count != 1 { "s" } else { "" };
-        println!("**Uncommitted local changes ({count} file{s}):**");
+        out.push_str(&format!("**Uncommitted local changes ({count} file{s}):**\n"));
     }
 
     let max_show = 5;
     for f in files.iter().take(max_show) {
-        println!("- `{f}`");
+        out.push_str(&format!("- `{f}`\n"));
     }
     if count > max_show {
-        println!("- ... and {} more", count - max_show);
+        out.push_str(&format!("- ... and {} more\n", count - max_show));
     }
     if count < 4 {
-        println!("\n_Run `git -C ~/.claude status` to review._");
+        out.push_str("\n_Run `git -C ~/.claude status` to review._\n");
     }
+    out
 }
 
 /// Get uid without pulling in libc crate.

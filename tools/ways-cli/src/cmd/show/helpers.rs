@@ -27,24 +27,27 @@ pub(crate) fn extract_field(content: &str, name: &str) -> Option<String> {
     None
 }
 
-/// Print markdown body (everything after YAML frontmatter).
-pub(crate) fn print_body(content: &str) {
+/// Return markdown body (everything after YAML frontmatter).
+pub(crate) fn body_text(content: &str) -> String {
     let mut fm_count = 0;
+    let mut lines = Vec::new();
     for line in content.lines() {
         if line == "---" {
             fm_count += 1;
             continue;
         }
         if fm_count >= 2 {
-            println!("{line}");
+            lines.push(line);
         }
     }
+    lines.join("\n")
 }
 
-/// Print check file sections (anchor and/or check).
-pub(crate) fn print_check_sections(content: &str, include_anchor: bool) {
+/// Return check file sections (anchor and/or check).
+pub(crate) fn check_sections_text(content: &str, include_anchor: bool) -> String {
     let mut fm_count = 0;
     let mut section = String::new();
+    let mut lines = Vec::new();
 
     for line in content.lines() {
         if line == "---" {
@@ -69,9 +72,10 @@ pub(crate) fn print_check_sections(content: &str, include_anchor: bool) {
         }
 
         if section == "check" || (section == "anchor" && include_anchor) {
-            println!("{line}");
+            lines.push(line);
         }
     }
+    lines.join("\n")
 }
 
 /// Execute a macro shell script and return its stdout.
