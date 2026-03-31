@@ -84,7 +84,8 @@ cd ~/.claude && make setup
 Read through this repo and copy the parts you want into your own config. The key pieces:
 - `hooks/` — the event-driven way system
 - `hooks/ways/` — the actual guidance content
-- `tools/way-match/` and `tools/way-embed/` — semantic matching engine
+- `tools/ways-cli/` — unified CLI (matching, scanning, linting, governance)
+- `tools/way-embed/` — embedding engine (separate binary, wraps llama.cpp)
 - `settings.json` — hook registration (merge with yours)
 
 This is more work but gives you full control.
@@ -151,19 +152,20 @@ mv ~/.claude-backup-20260323-141500 ~/.claude
 ## After installing
 
 1. **Restart Claude Code** — ways activate on session start
-2. **Check semantic matching** — `cd ~/.claude/tools/way-embed && bash test-embedding.sh`
+2. **Check engine status** — `ways status` shows binary, model, corpus, and project detection
 3. **Review ways.json** — `~/.claude/ways.json` controls which domains are active
 4. **Read the ways** — browse `~/.claude/hooks/ways/` to understand what guidance is loaded
 
 ## What gets downloaded
 
-The semantic matching engine downloads two artifacts to `~/.cache/claude-ways/user/` (XDG-compliant, outside `~/.claude/`):
+`make setup` acquires binaries and the embedding model. Downloaded artifacts live in XDG-compliant locations, outside `~/.claude/`:
 
-| Artifact | Size | Source | Verification |
-|----------|------|--------|--------------|
-| `way-embed` binary | ~3MB | GitHub Releases | SHA-256 checksum |
-| `minilm-l6-v2.gguf` model | ~21MB | GitHub Releases (or HuggingFace) | SHA-256 checksum |
+| Artifact | Size | Location | Source | Verification |
+|----------|------|----------|--------|--------------|
+| `ways` binary | ~3.6MB | `bin/ways` | GitHub Releases (or built from source) | SHA-256 checksum |
+| `way-embed` binary | ~3MB | `~/.cache/claude-ways/user/` | GitHub Releases | SHA-256 checksum |
+| `minilm-l6-v2.gguf` model | ~21MB | `~/.cache/claude-ways/user/` | GitHub Releases (or HuggingFace) | SHA-256 checksum |
 
-Nothing is downloaded into `~/.claude/` itself — the repo stays clean and diffable.
+The `ways` binary lands in `bin/` (gitignored) and is symlinked into `~/.local/bin/` by `make install`. The repo itself stays clean and diffable.
 
 If the download fails, BM25 fallback activates automatically (91% vs 98% accuracy — still very good).
