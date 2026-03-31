@@ -57,14 +57,13 @@ Runs on **Linux** and **macOS**. The hooks are all bash and lean on standard POS
 | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | The agent this configures | `npm install -g @anthropic-ai/claude-code` |
 | `git` | Version control, update checking | Usually pre-installed |
 | `jq` | JSON parsing (hook inputs, configs, API responses) | **Must install** |
-| `cc` | Build BM25 matcher from source (`make local`) | Usually pre-installed; see below |
-| `cmake` + `c++` | Build embedding engine from source (`make -C tools/way-embed`) | Optional — only if using embedding engine |
-| `python3` | Governance traceability tooling | Stdlib only — no pip packages |
+| `cargo` (Rust) | Build `ways` CLI from source | Pre-built binaries available via `make setup` |
+| `python3` | Governance traceability tooling, chart-tool | Stdlib only — no pip packages |
 | [`gh`](https://cli.github.com/) | GitHub API (update checks, repo macros) | Recommended, not required — degrades gracefully |
 
 Standard utilities (`bash`, `awk`, `sed`, `grep`, `find`, `timeout`, `tr`, `sort`, `wc`, `date`) are assumed present via coreutils.
 
-**Semantic matching** uses a two-tier engine: **embedding** (all-MiniLM-L6-v2, 98% accuracy) → **BM25** (91% accuracy). Auto-detected at runtime — the best available engine is used. The BM25 binary at `bin/way-match` is checked in as a cross-platform APE. The embedding engine requires a separate build and model download:
+**Semantic matching** uses a two-tier engine: **embedding** (all-MiniLM-L6-v2 via `ways embed`, 98% accuracy) → **BM25** (built into the `ways` binary, 91% accuracy). The embedding tier is preferred; BM25 is the fallback when the embedding model is unavailable. Both are managed through the unified `ways` CLI:
 
 ```bash
 make setup   # download binary + model (21MB), generate corpus, verify
@@ -190,7 +189,6 @@ This repo ships with **20+ ways** across three domains (softwaredev, itops, meta
 
 Also included:
 - **[Agent teams](docs/hooks-and-ways/teams.md)** — three-scope model (agent/teammate/subagent) with scope-gated governance and team telemetry. When one agent becomes a team, every teammate gets the same handbook.
-- **[Cross-instance chat](docs/architecture/system/ADR-102-irc-based-local-agent-communication.md)** — IRC-based communication between Claude instances. Break severance: agents on different projects share context through a common channel, with ambient message delivery on each tick. The human tabbing between windows *is* the clock.
 - **6 specialized subagents** for requirements, architecture, planning, review, workflow, and organization
 - **[Usage stats](docs/hooks-and-ways/stats.md)** — way firing telemetry by scope, team, project, and trigger type
 - **Update checking** — detects clones, forks, renamed copies; nudges you when behind upstream
