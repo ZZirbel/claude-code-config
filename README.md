@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/images/agent-ways-logo.svg" alt="Agent Ways" width="600" title="The W converges on the current task — green at the attention cursor, red at the fading edges. Each node is a way firing inside a larger network of possibilities." />
+  <img src="docs/images/agent-ways-logo.svg" alt="Agent Ways logo — a W made of nodes and edges with a red-to-green gradient representing attention falloff, emerging from a dim background knowledge graph" width="600" />
 </p>
 
 # Agent Ways
@@ -45,7 +45,7 @@ sequenceDiagram
 
 `ways rethink` replays a completed session's way-firing history as an interactive TUI animation. Each frame shows a way firing at a specific point in the conversation — you can see how guidance clusters near the active attention cursor and packs into the context window like a compression pattern.
 
-<img src="docs/images/ways-rethink.gif" alt="ways rethink session replay showing attention cursor tracking and compression packing" width="400" title="Session replay: each frame is a way firing. Watch how guidance clusters near the active context and packs in like a compression pattern as the conversation progresses." />
+<img src="docs/images/ways-rethink.gif" alt="ways rethink replaying a session — each frame shows a way firing, guidance clusters near the attention cursor and packs like a compression pattern as context fills" width="400" />
 
 The recording above shows a session matched with **BM25** (term-frequency scoring) — the automatic fallback engine. In production, most ways fire via the **embedding engine** (all-MiniLM-L6-v2, a ~21MB GGUF model), which achieves 98% accuracy vs BM25's 91%. The embedding tier handles semantic similarity — "pin lockfile versions" matches the supply chain way even though those exact words don't appear in the way's vocabulary. BM25 takes over when the model isn't available.
 
@@ -123,7 +123,7 @@ Matching is tiered: regex patterns for known keywords/commands/files, then seman
 
 `ways list` shows the live session state — which ways fired, when (epoch), how far back (distance), what triggered them, tree relationships, check decay curves, and a re-disclosure forecast showing when distant ways will re-fire as context fills:
 
-<img src="docs/images/ways-list-session.png" alt="ways list showing epoch tracking, distance, triggers, tree disclosure, and re-disclosure forecast" width="100%" title="Live session state: epoch tracking shows when each way fired, distance shows how far back in context, colored pins show proximity to the attention cursor, and the forecast predicts when distant ways will re-fire." />
+<img src="docs/images/ways-list-session.png" alt="ways list showing live session state — epoch when each way fired, distance in context, colored pins for attention proximity, tree disclosure, and a forecast of when distant ways will re-fire" width="100%" />
 
 For the complete system guide — trigger flow, state machines, the pipeline from principle to implementation — see **[docs/hooks-and-ways/README.md](docs/hooks-and-ways/README.md)**.
 
