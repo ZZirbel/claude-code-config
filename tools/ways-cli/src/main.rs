@@ -1,6 +1,7 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 
+pub mod agents;
 mod bm25;
 mod cmd;
 mod frontmatter;

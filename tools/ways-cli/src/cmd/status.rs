@@ -77,6 +77,9 @@ pub fn run(json_output: bool) -> Result<()> {
         })
         .unwrap_or_default();
 
+    // Output language
+    let output_language = crate::agents::resolve_language();
+
     // Disabled domains
     let disabled: Vec<String> = std::fs::read_to_string(&ways_json)
         .ok()
@@ -113,6 +116,7 @@ pub fn run(json_output: bool) -> Result<()> {
                 "global_semantic": global_semantic,
             },
             "projects": projects,
+            "output_language": output_language,
             "disabled_domains": disabled,
         });
         println!("{}", serde_json::to_string_pretty(&output)?);
@@ -121,8 +125,9 @@ pub fn run(json_output: bool) -> Result<()> {
         println!("==================");
         println!();
 
-        // Engine
+        // Engine & language
         println!("Engine:    {engine} (configured: {configured})");
+        println!("Language:  {output_language}");
         println!();
 
         // Binaries

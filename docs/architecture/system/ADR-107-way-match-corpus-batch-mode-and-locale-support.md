@@ -1,251 +1,176 @@
 ---
-status: Draft
-date: 2026-03-20
+status: Accepted
+date: 2026-04-02
+supersedes: ADR-107 Draft (2026-03-20)
 deciders:
   - aaronsb
   - claude
 related:
-  - ADR-014
+  - ADR-108
   - ADR-110
+  - ADR-111
 ---
 
-# ADR-107: Way-Match Corpus, Batch Mode, and Locale Support
+# ADR-107: Corpus, Matching Pipeline, and Locale Support
 
 ## Context
 
-ADR-014 introduced the `way-match` BM25 binary as a replacement for gzip NCD semantic matching. The binary works well — 0 false positives across 74 test fixtures, good recall on natural language prompts — but three limitations are now visible after scaling from 7 semantic ways to 55+.
+This ADR was originally drafted when the matching system was a C binary (`way-match`) called N times per prompt by shell scanners. Since then, ADR-111 consolidated everything into a single Rust binary (`ways`). This rewrite reflects the shipped architecture and defines the locale support plan within it.
 
-### Stale IDF corpus
+### What shipped (Phases 1 & 2)
 
-`way-match pair` mode (what the runtime scanners use) computes IDF against a hardcoded `BUILTIN_WAYS[]` array of 7 way descriptions baked into the C source (line 352-368 of `way-match.c`). This was the entire semantic corpus when the binary was written. With 55+ semantic ways, the IDF calculations are wrong — term rarity is computed against 7 documents when the real corpus is 55+. A term like "test" that appears in many ways still gets high IDF because the builtin only has one way containing it.
+**External corpus** — `ways corpus` generates `ways-corpus.jsonl` in `~/.cache/claude-ways/user/`. The corpus is a cache artifact, regenerated on demand, read-only at runtime. IDF is computed across the full corpus (85+ ways), not a hardcoded seed.
 
-The binary already has a `score` mode that loads an external JSONL corpus for correct IDF. But `pair` mode — the one called 55 times per prompt by the scanners — ignores it.
+**Batch scoring** — `ways scan prompt --query "..." --session ID` scores all ways in one call. The Rust binary loads the corpus once, tokenizes the query once, and scores every way. Scanner hooks call this instead of N separate invocations.
 
-### N process spawns per prompt
+**Two-tier matching** — ADR-108 added embedding (all-MiniLM-L6-v2, 98% accuracy). The pipeline is: embedding → BM25 fallback → keyword/regex patterns. All three tiers run in the same binary. Engine selection is automatic based on model availability.
 
-Each scanner (`check-prompt.sh`, `check-bash-pre.sh`, `check-file-pre.sh`) calls `way-match pair` once per semantic way. At 55 semantic ways, that's 55 process spawns per user prompt. Each spawn re-initializes the Snowball stemmer, re-tokenizes the query, and re-builds the (wrong) IDF from the builtin corpus. The `score` command already supports batch scoring — one invocation, all ways ranked — but the scanners don't use it.
+**Security boundary preserved** — runtime scanners never write to `~/.claude/`. The corpus and embedding model live in `~/.cache/claude-ways/user/` (XDG cache). Regeneration is an explicit authoring operation (`ways corpus`, `make setup`).
 
-### English-only
+### What remains: locale support
 
-The Snowball Porter2 stemmer (`stem_UTF_8_english.h`) and the stopword list are English. The ways system is currently English, but Claude Code has a `language` setting and users in non-English locales would benefit from ways written in their language with appropriate stemming.
+The matching pipeline is English-only:
+- BM25 stemmer: hardcoded `Algorithm::English` in `bm25.rs:175`
+- Stopwords: English-only array in `bm25.rs:12-21`
+- Embedding model: `all-MiniLM-L6-v2` is English-only
+- Way content: all 85+ ways are written in English
 
-### Security boundary
-
-Any evolution of the binary must respect a hard constraint: **runtime scanners must never write to `~/.claude/`**. Way matching happens during normal project work in arbitrary repositories. Writing to the user's config directory during a prompt evaluation would be a form of supply-chain poisoning — a project-level operation mutating user-global state. All writes to `~/.claude/` (corpus generation, binary rebuilds) are authoring operations invoked explicitly by the user.
+Claude Code has a `language` setting. Users in non-English locales type prompts in their language, but matching operates on English vocabulary. The gap: a Japanese user's prompt produces zero BM25 tokens (no whitespace boundaries) and low embedding similarity (English-only model).
 
 ## Decision
 
-Evolve `way-match` in three phases, each independently shippable:
+### Language resolution
 
-### Phase 1: External corpus file
+A new `agents/` module provides a resolution cascade for output language:
 
-Generate `hooks/ways/ways-corpus.jsonl` from all semantic way files. This file is:
+1. `ways.json` `output_language` — explicit user override
+2. Claude Code `settings.json` `language` — agent-level config (project then user scope)
+3. System locale (`$LC_ALL` → `$LC_MESSAGES` → `$LANG`) — parsed from locale strings like `ja_JP.UTF-8`
+4. Default: `en`
 
-- **Git-tracked** — committed to the repo like `bin/way-match`. It's a build artifact, not a runtime cache.
-- **Regenerated during authoring** — `lint-ways.sh` and `/ways-tests` scoring regenerate it before any operation that reads it. This ensures the linter and scorer always see the current state.
-- **Read-only at runtime** — scanners read the file if present, fall back to `BUILTIN_WAYS[]` if absent. No writes during prompt evaluation.
+The `agents/` module defines an `AgentConfig` trait. `claude_code.rs` implements it for Claude Code. This is the abstraction point for supporting other CLI agents — each gets its own module implementing the same trait.
 
-The corpus generator is a shell script (or a `way-match generate` subcommand) that:
-1. Finds all `{name}.md` way files (identified by having `description:` + `vocabulary:` fields in frontmatter)
-2. Extracts id, description, vocabulary, threshold from frontmatter
-3. Emits one JSON line per way to `ways-corpus.jsonl`
+The resolved language affects:
+- **Output directive**: `core.md`'s "must be in English" line is substituted at render time with the configured language. The agent writes commit messages, comments, and docs in the user's language.
+- **BM25 stemmer selection**: `languages.json` maps language codes to `rust_stemmers::Algorithm` names.
+- **Status display**: `ways status` shows the resolved language.
 
-`way-match pair` mode gains an optional `--corpus` flag. When provided, it loads the external corpus for IDF instead of `BUILTIN_WAYS[]`. The scanners pass `--corpus` if the file exists.
+### Language configuration resource
 
-### Phase 2: Batch scoring
+`languages.json` is embedded at compile time. It defines the 52 languages supported by the multilingual embedding model (`paraphrase-multilingual-MiniLM-L12-v2`), even though the current shipping model is English-only. Each entry contains:
 
-Replace N `pair` calls with a single `score` call per scanner. The scanner:
-1. Calls `way-match score --corpus ways-corpus.jsonl --query "the prompt"`
-2. Gets back all matching ways above their respective thresholds (tab-delimited)
-3. Fires `show-way.sh` for each match
-
-This reduces 55 process spawns to 1. The `score` command already exists and handles per-document thresholds. The scanner refactoring is in shell, not C.
-
-The `pair` command remains available for single-way testing (used by `/ways-tests score`).
-
-### Phase 3: Locale-aware ways
-
-Locale support separates two concerns: **matching** (frontmatter vocabulary in the user's language) and **injection** (the way body Claude reads). These don't have to come from the same file.
-
-Two tiers of localization:
-
-**Tier 1 — Language-specific matchers, shared body.** `{name}-en.md` has the full body. `{name}-es.md` has only frontmatter with Spanish vocabulary — no body. The scanner matches on `{name}-es.md`'s frontmatter (using the Spanish stemmer) but injects `{name}-en.md`'s body. The stub says "I know how to match in this language" but defers to the English file for content.
-
-**Tier 2 — Fully translated.** Both `{name}-en.md` and `{name}-fr.md` have frontmatter AND body in their respective languages. Full localization. Most expensive to maintain — the body content must be kept in sync across translations.
-
-**Rejected: Polyglot frontmatter** (mixing vocabulary from multiple languages in one file). This doesn't work — the English Porter2 stemmer mangles Spanish/French morphology. "vulnerabilidades" stemmed by the English stemmer produces unpredictable results. Each language's vocabulary must be processed by its own stemmer, which means separate files with separate `--language` invocations. There is no cheap shortcut that avoids per-language files.
-
-**Complete coverage requirement.** Adding a language is an all-or-nothing commitment across the entire way corpus. You cannot add Spanish stubs for 3 ways and leave the other 52 English-only — a Spanish user would get guidance for 3 topics and silence for the rest, which is worse than getting all guidance in English.
-
-The linter enforces this: if any `{name}-es.md` exists anywhere in the tree, every way directory must have a `{name}-es.md` (Tier 1 stub minimum). Creating 5 language stubs in 5 different ways produces a lint explosion: `(66 ways * 5 languages) - 5 existing = 325 errors`. That's the honest cost of "we support 5 languages" made visible before you ship. The lint explosion is intentional — it's the quality gate showing you the commitment you're making. Each stub is small (frontmatter-only, ~5 lines), but the aggregate authoring and scoring work is real. This prevents casual, incomplete localization from degrading the user experience.
-
-```
-hooks/ways/softwaredev/code/security/
-  security-en.md     # English: full frontmatter + body (Tier 2 base)
-  security-es.md     # Spanish: frontmatter only, no body (Tier 1 stub)
-  security-fr.md     # French: full frontmatter + body (Tier 2 translation)
+```json
+{
+  "ja": {
+    "name": "Japanese",
+    "native": "日本語",
+    "bm25_stemmer": null
+  },
+  "de": {
+    "name": "German",
+    "native": "Deutsch",
+    "bm25_stemmer": "German"
+  }
+}
 ```
 
-**Scanner logic:**
+- `name` / `native`: display and normalization (accepts codes, English names, or native names)
+- `bm25_stemmer`: the `rust_stemmers::Algorithm` variant name, or `null` if BM25 cannot support this language
 
-```
-1. Determine configured language from Claude Code settings
-2. Look for {name}-{lang}.md in each way directory
-3. If found and has body → match on its frontmatter, inject its body (Tier 2)
-4. If found but no body → match on its frontmatter, inject {name}-en.md body (Tier 1)
-5. If not found → match on {name}.md / {name}-en.md as today (default)
-```
+The `null` stemmer field is the honest signal. Languages where `bm25_stemmer` is null (CJK, Thai, Arabic, etc.) require the embedding engine for matching. BM25 cannot tokenize them — no whitespace boundaries, no suffix-stripping morphology. This is an architectural limitation, not a tuning problem.
 
-The key principle: **frontmatter is for matching, body is for injection, and they can come from different files.** A way directory can have one file serving all roles, or several files dividing the work. The scanner combines the right frontmatter with the right body based on what exists.
+### Matching: language coverage by engine
 
-**Schema addition:** `locale:` field in `frontmatter-schema.yaml`. The linter validates locale codes and checks that Tier 1 stubs (frontmatter-only files) have a corresponding file with a body.
+The matching pipeline runs: embedding → BM25 → keyword/regex. Each engine has different language coverage:
 
-**Binary changes — coupled rebuild required:** The stemmer, stopwords, and corpus are tightly coupled and must be rebuilt together when locale support lands. Currently all three are baked into the binary (English Porter2 stemmer as `#include`, stopwords as a C array, seed corpus as `BUILTIN_WAYS[]`). Phase 3 externalizes them:
+**Embedding (primary)** — with the multilingual model (`paraphrase-multilingual-MiniLM-L12-v2`), covers all 52 languages in `languages.json`. Cross-language matching works natively — a Japanese prompt about security produces a vector near the English `description: security vulnerability scanning`. This is the primary matching path for all non-English users.
 
-- **Stemmers:** Snowball ships stemmers for 20+ languages. The binary links multiple Snowball stemmer modules and selects at runtime via `--language`. This is a compile-time decision — each supported language adds ~5-10KB to the binary.
-- **Stopwords:** Move from a hardcoded C array to per-language stopword files in `tools/way-match/stopwords/` (e.g., `en.txt`, `es.txt`, `fr.txt`). These are small, source-auditable text files — same trust tier as the C source. The binary loads the appropriate file at startup based on `--language`, falling back to the baked-in English list if the file is absent.
-- **Corpus:** The `ways-corpus.jsonl` gains a `locale` field per entry. IDF is computed over the full corpus regardless of locale — not within-locale. A small locale (3 Spanish ways) computed in isolation would have meaningless IDF where every term is rare. Computing IDF across all 55+ documents preserves discriminative power. The `--language` flag affects stemming and stopwords only, not IDF calculation.
+**BM25 (fallback)** — covers the ~15 languages where Snowball stemmers exist (Romance, Germanic, Slavic, Turkic, Finnic). `languages.json` `bm25_stemmer` field identifies these. BM25 is the fallback when the embedding engine is unavailable (model not downloaded, `way-embed` binary missing).
 
-All three components are rebuilt together. The supported language set is not declared in a config — it's discovered from what exists. The corpus generator scans all `{name}*.md` way files, collects the set of locale codes in use (from filenames: `{name}-en.md` → `en`, `{name}-es.md` → `es`), and the Makefile includes the corresponding Snowball stemmers and stopword files. Adding a new language is: add `{name}-{lang}.md` files with frontmatter, run the rebuild. The build system discovers the language, the linter validates the pieces, the binary includes the stemmer.
+For languages with `bm25_stemmer: null`, BM25 is architecturally incapable — not "stemmer not yet added." These fall into two categories:
 
-**Scope:** Most ways stay English-only. Tier 1 and 2 only exist where someone commits to full-corpus coverage for a language. The system degrades gracefully — no locale file means English, which is the current behavior.
+- **No word boundaries**: Japanese, Chinese, Thai have no whitespace between words. BM25's tokenizer (`split on whitespace`) produces whole sentences as single tokens. A segmenter (MeCab, jieba, ICU) would be needed before BM25 could operate at all.
+- **Non-concatenative morphology**: Arabic and Hebrew build words from consonant roots with vowel patterns interleaved (k-t-b → kataba, kitāb, maktūb). Snowball's suffix-stripping approach cannot extract these roots. The concept of "stemming" doesn't apply — these languages need root extraction, a fundamentally different operation.
 
-### Phase 3 language feasibility: BM25 is not equally effective across languages
+These languages require the embedding engine. There is no BM25 path and adding one would mean replacing the tokenizer and morphological analyzer — at which point you've built a search engine, not a fallback.
 
-BM25 is a bag-of-words model — it tokenizes on whitespace, stems individual tokens, and scores term overlap. This works well for languages that share certain structural properties with English. It works poorly or not at all for languages that don't. This is an architectural limitation, not a tuning problem.
+**Keyword/regex (always)** — language-independent. Technical terms borrowed into all languages (`git commit`, `npm install`, file paths, error codes) match regardless of prompt language. This tier fires even when both embedding and BM25 miss.
 
-**Languages well-suited to BM25 (Snowball stemmers available, whitespace-tokenized):**
+**The practical implication:** for languages BM25 can't handle, the embedding engine is not optional — it's required. `ways status` should surface this: if the resolved language has `bm25_stemmer: null` and the embedding engine is unavailable, warn that matching will be limited to keyword/regex patterns only.
 
-- **Romance languages** (Spanish, French, Portuguese, Italian, Romanian) — similar morphology to English, good Snowball stemmers, whitespace-delimited. The closest fit. Vocabulary terms map naturally. Expected cross-language delta: low.
-- **Germanic languages** (German, Dutch, Swedish, Norwegian, Danish) — Snowball stemmers exist, but **compound nouns** are a challenge. German "Sicherheitslücke" (security vulnerability) is one whitespace token. BM25 sees it as a single term that won't match "Sicherheit" or "Lücke" individually. Compound splitting is needed as a pre-processing step — Snowball doesn't do this. Expected delta: moderate, with compound-splitting mitigation.
-- **Slavic languages** (Russian) — Snowball stemmer exists for Russian. Rich morphology (6 cases, 3 genders, extensive conjugation) means many surface forms per root. Good stemming is critical — a missed declension is a missed match. Expected delta: moderate if stemmer is strong.
+### Way content stays English
 
-**Languages where BM25 is structurally challenged:**
+Way body content (the guidance injected into agent context) is NOT translated. Rationale:
 
-- **Agglutinative languages** (Turkish, Finnish, Hungarian, Korean) — single words carry what English expresses in phrases. Turkish "güvenlik açıklarını kontrol et" compresses meaning into fewer, longer tokens with suffix chains. The stemmer must strip multiple layers of suffixes correctly. Snowball has stemmers for some (Finnish, Turkish) but quality varies. Expected delta: high, requires extensive vocabulary to compensate.
-- **Logographic and non-whitespace languages** (Chinese, Japanese, Thai) — no word boundaries by whitespace. The tokenizer (`split on whitespace + punctuation`) fails completely. Chinese "检查依赖项的漏洞" is one string with no spaces. You need a segmenter (jieba for Chinese, MeCab for Japanese, ICU for Thai) before BM25 can operate at all. This is not a stemmer swap — it's a fundamental tokenizer change. **BM25 as currently architected cannot support these languages.**
-- **High-context languages** (Japanese, Korean in practice) — cultural communication style uses fewer explicit terms, relying on context the model understands but BM25 cannot score. Prompts may be shorter, reducing term overlap signal.
-- **Arabic and Hebrew** — right-to-left, root-pattern morphology (not prefix/suffix like Indo-European). Standard stemmers extract 3-consonant roots, but the process is more complex than Snowball's suffix stripping. Snowball has an Arabic stemmer (experimental). Expected delta: high, needs specialist validation.
+- The agent reads English perfectly regardless of output language
+- 85+ way files × N languages is a maintenance nightmare with divergence risk
+- The guidance is for the agent's reasoning, not displayed to the user
+- Cross-language injection is well-understood: English instructions → non-English output
 
-**What this means for language commitments:**
+The ADR-107 Draft's Tier 1/Tier 2 file model (`{name}-{lang}.md` with frontmatter-only stubs) is **deferred**. It solved a real problem (matching vocabulary in the user's language) but the embedding engine solves it better — cross-language semantic matching without per-language vocabulary files. If BM25 is the only engine and a non-Romance language is needed, the tiered file model can be revisited.
 
-The complete coverage requirement (all ways, all stubs) is necessary but not sufficient. Before committing to a language, the cross-language delta test must demonstrate that BM25 + the available stemmer produces scores within acceptable range of the English baseline. If the delta is consistently > 2.0 across test prompts, the language is not feasible with BM25 and should not be offered — partial matching that misses half the prompts is worse than English-only.
+### Embedding model upgrade path
 
-For logographic languages (Chinese, Japanese, Thai), the honest answer is: BM25 cannot support them without a tokenizer replacement. This matters because **the model itself is fully multilingual** — Claude can generate nuanced, culturally-aware Japanese (poetry, technical prose, idiomatic expressions) with deep competence. The gap is not model capability, it's matching infrastructure. A user typing "ライブラリに脆弱性がないか調べて" ("check if there are vulnerabilities in the libraries") receives zero BM25 tokens — the tokenizer sees strings with no whitespace boundaries between meaningful units. The way never fires. Claude would understand this as a dependency security prompt and respond perfectly, but the guidance system is blind to it — the security and supply chain ways never activate.
+The current `all-MiniLM-L6-v2` (21MB, English, 98% accuracy) serves the English-only use case well. For multilingual matching:
 
-This asymmetry — a hyperlingual model behind a monolingual matching system — is the strongest honest argument for embeddings. Not as a general replacement for BM25 (which works well for the languages it works for), but as the path to matching what the model already understands. Embedding models operate on meaning, not whitespace boundaries. A Japanese prompt and an English prompt both become vectors in the same semantic space — no tokenizer required.
+| Model | Size | Languages | Notes |
+|-------|------|-----------|-------|
+| all-MiniLM-L6-v2 | 21MB | English | Current, shipping |
+| paraphrase-multilingual-MiniLM-L12-v2 | ~120MB | 52 | Same architecture, multilingual training data |
 
-But that's a future architectural decision (see Alternatives Considered), not a Phase 3 concern. Phase 3 targets languages where BM25 works. The logographic gap is documented here so the decision to revisit has a recorded rationale when the time comes.
+The upgrade is a model swap — same GGUF format, same `way-embed` binary, same embedding dimensions. `make setup` downloads the appropriate model based on configured language. If `output_language` is `en` or unset, the smaller English model is used. If non-English, the multilingual model is downloaded.
 
-### Phase 3 testing: Cross-language scoring validation
+`languages.json` defines the supported language set for the multilingual model. Adding a language means verifying it's in the model's training data and adding the entry — no code changes.
 
-Multilingual way testing is fundamentally different from monolingual testing. You cannot translate an English test prompt and score it — you must generate an *independently natural* prompt expressing the same intent in the target language. "check the dependencies for vulnerabilities" and "verificar las dependencias por vulnerabilidades" are parallel expressions of the same intent, not translations of each other's vocabulary terms.
+### Embedding model language verification
 
-**Why this matters:** BM25 scores depend on vocabulary term overlap after stemming. The English stemmer reduces "vulnerabilities" to "vulner" and matches against "vulnerability" in the vocabulary. The Spanish stemmer reduces "vulnerabilidades" to "vulnerabil" and must match against Spanish vocabulary terms. These are completely independent scoring paths. A mechanically translated test prompt might use words that don't appear in the target vocabulary, producing misleading low scores that reflect bad test design, not bad vocabulary.
+`languages.json` declares what languages we *intend* to support. The embedding model determines what we *actually* support. These must be verified to match.
 
-**Binary requirement:** The `--language` flag must select the correct Snowball stemmer and stopword list per invocation. Scoring English vocabulary with the Spanish stemmer (or vice versa) produces garbage. Each test invocation declares its language:
-
-```
-way-match pair --language en --description "..." --vocabulary "..." \
-  --query "check dependencies for vulnerabilities" --threshold 2.0
-
-way-match pair --language es --description "..." --vocabulary "..." \
-  --query "verificar las dependencias por vulnerabilidades" --threshold 2.0
-```
-
-**Cross-language delta report:** The linter compares scores across languages for the same way. English is the baseline. Delta measures how well each locale's vocabulary is tuned relative to the English vocabulary:
-
-```
-=== Cross-Language Delta: softwaredev/code/security ===
-
-  Language  Prompt                                          Score  Delta
-  en        check dependencies for vulnerabilities          4.20   baseline
-  es        verificar las dependencias por vulnerabilidades  3.85   -0.35
-  fr        vérifier les dépendances pour vulnérabilités    2.10   -2.10 ⚠
-
-  Assessment: French vocabulary needs tuning (delta > 1.0)
-```
-
-A delta within ~1.0 of the baseline indicates comparable vocabulary coverage. A delta beyond 1.0 indicates the target language vocabulary has gaps — missing terms, insufficient synonyms, or stemmer mismatch.
-
-**Autonomous test prompt generation:** Claude generates parallel test prompts because it's multilingual. But the test design must be structured: "express this intent naturally in language X" — not "translate this English prompt." The distinction is critical because natural phrasing in each language uses different words, different idioms, different sentence structures. A French user asking about security doesn't think in translated English — they think in French. The test prompts must reflect that.
-
-**Test fixture format extension:** The existing JSONL test fixtures gain a `language` field:
+A test fixture per language validates that the model produces meaningful cross-language similarity. Each fixture contains a prompt in the target language and an English way description expressing the same intent. The test embeds both and checks that cosine similarity exceeds a minimum threshold (e.g., 0.25 — well below the matching threshold but above random noise).
 
 ```jsonl
-{"prompt":"check dependencies for vulnerabilities","expected_way":"security","language":"en"}
-{"prompt":"verificar las dependencias por vulnerabilidades","expected_way":"security","language":"es"}
-{"prompt":"vérifier les dépendances pour vulnérabilités","expected_way":"security","language":"fr"}
+{"lang": "ja", "prompt": "依存関係の脆弱性をチェックして", "description": "dependency vulnerability scanning", "min_similarity": 0.25}
+{"lang": "de", "prompt": "Abhängigkeiten auf Schwachstellen prüfen", "description": "dependency vulnerability scanning", "min_similarity": 0.25}
+{"lang": "ko", "prompt": "의존성 취약점 검사", "description": "dependency vulnerability scanning", "min_similarity": 0.25}
 ```
 
-The test harness groups fixtures by language, runs each group with the appropriate `--language` flag, and reports per-language accuracy alongside the cross-language delta.
+When the test runs against the current English-only model (`all-MiniLM-L6-v2`), most non-English languages will fail — that's expected and informative. It tells us exactly which languages gain support when we swap to the multilingual model. When we do swap, the same tests validate the new model's coverage without manual verification.
 
-**Linter integration:** `lint-ways.sh` gains locale checks (not behind `--strict` — these are errors, not recommendations):
-- Scan all way directories, collect every locale code found (from `{name}-{lang}.md` filenames)
-- On first encounter of a non-English locale: check every other way directory for that locale. Flag every directory missing it. This is the complete-coverage enforcement — one `{name}-es.md` anywhere means `{name}-es.md` everywhere.
-- For each `{name}-{lang}.md`, verify the language code is a valid Snowball stemmer language
-- For Tier 1 stubs (frontmatter only), verify a body file (`{name}-en.md` or `{name}.md`) exists in the same directory
-- If test fixtures exist for multiple languages, run cross-language delta and flag deltas > 1.0
+The test is run as: `ways embed-test-languages` or as part of `make test`. It reads `languages.json`, loads the model, and reports per-language pass/fail. Any language that fails gets flagged — either the model doesn't support it, or the test fixture needs revision.
+
+This makes model selection empirical: run the tests against candidate models, pick the one that passes the languages you need at the size you can tolerate.
 
 ## Consequences
 
 ### Positive
 
-- Phase 1: Correct IDF across the real corpus. Immediate accuracy improvement with minimal code change.
-- Phase 2: 55x fewer process spawns per prompt. Measurable latency reduction on every user interaction.
-- Phase 3: Ways system becomes accessible to non-English users. Same architecture, same matching quality, different language.
-- Phases are sequential but each is a shippable increment — Phase 1 improves accuracy alone, Phase 2 improves performance alone, Phase 3 requires both but adds locale support. No big-bang migration.
-- The trust chain from ADR-014 is preserved: tier 0 (bash fallback) → tier 1 (source-auditable binary) → tier 1.5 (source-auditable binary + tracked corpus).
+- Output language works immediately for all languages — no model or matching changes required
+- `agents/` module provides the abstraction point for multi-agent support
+- Language resolution cascade respects user intent at every level
+- `languages.json` as embedded resource means the language list is data, not code
+- BM25 stemmer selection is a one-line change per language in `bm25.rs`
+- Embedding model upgrade is a config change, not an architecture change
 
 ### Negative
 
-- Phase 1: Another file to track in git. Regeneration adds a step to the authoring workflow (mitigated by integration with lint/score).
-- Phase 2: Scanner refactoring changes the output parsing contract between shell and binary. Needs careful testing.
-- Phase 3: Significant binary complexity (multi-stemmer, per-language stopwords). Translation maintenance burden grows with each locale.
-- The corpus file can go stale if someone modifies ways without running the linter. This is a process discipline issue, not an architectural one — same as forgetting to rebuild after changing source.
+- Multilingual matching requires a 6x larger embedding model (21MB → 120MB)
+- BM25 fallback quality varies significantly across language families
+- CJK/Thai users get no BM25 matching — embedding engine is required, not optional
+- Cross-language embedding similarity is lower than same-language — thresholds may need per-language tuning
 
 ### Neutral
 
-- `BUILTIN_WAYS[]` stays in the binary as a fallback. It's wrong but it's better than nothing when the corpus file is absent.
-- The `pair` command isn't removed — it's still useful for single-way testing via `/ways-tests`.
-- Locale support doesn't require all ways to be translated. English is and remains the default.
-- The defensive boundary (no runtime writes to `~/.claude/`) applies to all phases.
-
-## Interaction with ADR-110
-
-ADR-110 (Way File Separation and Graph-Compatible Structure) refines the scope of Phase 3 locale support:
-
-**Locale applies only to way files.** The `{name}-{lang}.md` naming convention (e.g., `security-es.md`, `quality-fr.md`) and the tiered localization model (Tier 1 stub, Tier 2 full translation) apply exclusively to the way document. Other files in a way directory are locale-independent:
-
-- `macro.sh` — detection logic is language-independent. A file length scanner doesn't care what language the guidance is written in.
-- `provenance.yaml` — governance controls and policy mappings don't vary by language. ISO/IEC 25010 applies equally whether the way is written in English or Spanish.
-
-This simplifies the locale migration: only way files need translation or vocabulary stubs. The complete coverage requirement ("if any `{name}-es.md` exists, every directory needs one") still applies, but the per-directory cost is one file, not three.
-
-**Corpus generation absorbs new fields.** ADR-110 adds conventional body sections (`<!-- epistemic: ... -->`, `## See Also`) that the corpus generator (Phase 1) can extract alongside `description`, `vocabulary`, and `threshold`. The `ways-corpus.jsonl` schema gains optional fields:
-
-```jsonl
-{"id":"code/quality","description":"...","vocabulary":"...","threshold":2.0,"epistemic":"heuristic","see_also":["code/testing","code/errors"]}
-```
-
-These fields are inert to matching — `way-match` and `way-embed` ignore them. They're carried through for downstream consumers (graph generators, Logseq vault builder, sibling scoring).
-
-**Provenance is no longer in the corpus.** Before ADR-110, provenance lived in frontmatter and the corpus generator had to decide whether to include or strip it. With provenance in a sidecar file, the corpus generator reads only `{name}.md` — cleaner separation with no stripping logic needed.
-
-## Alternatives Considered
-
-- **Embeddings (fastembed, ONNX, llamafile)**: Would solve the semantic gap ("make it faster" → performance) that BM25 can't handle. This was rejected when ADR-107 was drafted but subsequently implemented in ADR-108 (Embedding-Based Way Matching with all-MiniLM-L6-v2). The matching pipeline now uses embedding as the primary engine with BM25 as fallback — selected at session start, not both. The embedding engine also enables ADR-110's sibling scoring (way-vs-way similarity for authoring calibration).
-- **Runtime corpus regeneration**: Regen the JSONL on every prompt if any way.md is newer. Rejected — this writes to `~/.claude/` during project work, which is a poisoning vector. The corpus is a build artifact, not a cache.
-- **Embed corpus in the binary**: Compile `ways-corpus.jsonl` into the binary as a C array (like `BUILTIN_WAYS[]` but generated). Would eliminate the external file. Rejected — requires recompiling the binary every time a way changes. The current model (binary rarely changes, corpus changes with ways) is more practical.
-- **Move to Python/Node for matching**: Would make stemmer/locale swapping trivial (NLTK, etc). Rejected — adds a runtime dependency. The ways system runs on bash + coreutils + one static binary. That property is worth preserving.
-- **Use Claude itself for matching**: The model reading the ways has world-class semantic understanding. Could we score relevance in-band? The old `model-match.sh` tried this via `claude -p` subprocesses. Rejected — Anthropic's ToS restricts programmatic Claude subscription usage, and subprocess latency is orders of magnitude worse than BM25. If Claude Code ever exposes an in-process scoring API, this becomes viable.
+- Way content stays English — no translation infrastructure needed
+- The tiered file model from the original Draft is deferred, not rejected — it becomes relevant if someone needs BM25-only matching in non-Romance languages
+- `ways.json` `output_language: "en"` is the default — zero behavior change for existing users
 
 ## References
 
-- ADR-014: TF-IDF/BM25 Binary for Semantic Way Matching (predecessor)
-- ADR-108: Embedding-Based Way Matching with all-MiniLM-L6-v2 (supersedes the embeddings alternative)
-- ADR-110: Way File Separation and Graph-Compatible Structure (refines Phase 3 scope)
-- `tools/way-match/way-match.c`: Current implementation (907 lines)
-- `hooks/ways/frontmatter-schema.yaml`: Authoritative field definitions
-- [Snowball stemmer project](https://snowballstem.org/): Multi-language stemming algorithms
-- Claude Code `language` setting: User locale preference
+- ADR-108: Embedding-Based Way Matching with all-MiniLM-L6-v2
+- ADR-110: Way File Separation and Graph-Compatible Structure
+- ADR-111: Unified Ways CLI — Single Binary Tool Consolidation
+- `tools/ways-cli/src/agents/` — Agent config module (Claude Code, system locale)
+- `tools/ways-cli/src/bm25.rs` — BM25 engine with stemmer selection
+- `tools/ways-cli/languages.json` — Supported language definitions
+- [paraphrase-multilingual-MiniLM-L12-v2](https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2) — Multilingual upgrade candidate
+- [rust_stemmers](https://docs.rs/rust-stemmers/) — Snowball stemmer implementations

@@ -253,11 +253,22 @@ pub fn core(session_id: &str) -> Result<String> {
         }
     }
 
-    // Output core.md body
+    // Output core.md body with language substitution
     let core_file = ways_dir.join("core.md");
     if core_file.is_file() {
         let content = std::fs::read_to_string(&core_file)?;
-        output.push_str(&body_text(&content));
+        let mut body = body_text(&content);
+
+        // Replace hardcoded English directive with configured language
+        let lang = crate::agents::resolve_language();
+        if lang != "en" {
+            body = body.replace(
+                "All file output (commit messages, comments, documentation, PR descriptions) must be in English regardless of interface language setting.",
+                &format!("All file output (commit messages, comments, documentation, PR descriptions) must be in {lang}. Code identifiers (variable names, function names) should remain in English."),
+            );
+        }
+
+        output.push_str(&body);
     }
 
     // Version info

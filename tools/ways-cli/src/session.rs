@@ -393,6 +393,7 @@ pub fn domain_disabled(domain: &str) -> bool {
     false
 }
 
+
 // ── Way file resolution ─────────────────────────────────────────
 
 /// Resolve a way ID to its file path. Project-local takes precedence.
