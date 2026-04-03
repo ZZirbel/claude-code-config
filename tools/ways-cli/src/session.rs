@@ -50,21 +50,80 @@ fn ensure_parent(path: &Path) {
 // ── Way markers ─────────────────────────────────────────────────
 
 /// Check if a way has been shown this session.
+/// Check if a way has been shown for the current agent.
+/// Subagent markers use agent_id — a subagent firing a way does NOT
+/// prevent the main agent (or other subagents) from also getting it.
 pub fn way_is_shown(way_id: &str, session_id: &str) -> bool {
     way_marker_path(way_id, session_id).exists()
 }
 
-/// Write the way marker with the current token position.
+/// Write the way marker with token position, scope, and agent_id.
 pub fn stamp_way_marker(way_id: &str, session_id: &str, token_position: u64) {
     let path = way_marker_path(way_id, session_id);
     ensure_parent(&path);
-    let _ = std::fs::write(&path, token_position.to_string());
+    let scope = detect_scope(session_id);
+    let agent_id = current_agent_id().unwrap_or_else(|| "main".to_string());
+    let _ = std::fs::write(&path, format!("{token_position}\t{scope}\t{agent_id}"));
+}
+
+/// Read the scope that fired a way (for display in ways list).
+/// Returns (scope, agent_id).
+pub fn way_fired_scope(way_id: &str, session_id: &str) -> Option<(String, String)> {
+    // Try scoped marker first
+    let path = way_marker_path(way_id, session_id);
+    if path.exists() {
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            let parts: Vec<&str> = content.split('\t').collect();
+            let scope = parts.get(1).unwrap_or(&"agent").to_string();
+            let agent_id = parts.get(2).unwrap_or(&"main").to_string();
+            return Some((scope, agent_id));
+        }
+    }
+    // Backward compat: old-style unscoped marker
+    let old = session_dir(session_id).join("ways").join(way_id).join(".marker");
+    if old.exists() {
+        return Some(("agent".to_string(), "main".to_string()));
+    }
+    None
+}
+
+/// List all scopes that fired a way (for display — shows all agents that got it).
+pub fn way_fired_scopes(way_id: &str, session_id: &str) -> Vec<(String, String)> {
+    let base = session_dir(session_id).join("ways").join(way_id);
+    let mut results = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&base) {
+        for entry in entries.filter_map(|e| e.ok()) {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name.starts_with(".marker") {
+                if let Ok(content) = std::fs::read_to_string(entry.path()) {
+                    let parts: Vec<&str> = content.split('\t').collect();
+                    let scope = parts.get(1).unwrap_or(&"agent").to_string();
+                    let agent_id = parts.get(2).unwrap_or(&"main").to_string();
+                    results.push((scope, agent_id));
+                }
+            }
+        }
+    }
+    if results.is_empty() {
+        // Backward compat
+        if base.join(".marker").exists() {
+            results.push(("agent".to_string(), "main".to_string()));
+        }
+    }
+    results
 }
 
 fn way_marker_path(way_id: &str, session_id: &str) -> PathBuf {
-    // Use .marker file inside the way's directory to avoid
-    // file/directory collision (parent way is both a marker and a prefix for children)
-    session_dir(session_id).join("ways").join(way_id).join(".marker")
+    let agent_id = current_agent_id().unwrap_or_else(|| "main".to_string());
+    session_dir(session_id)
+        .join("ways")
+        .join(way_id)
+        .join(format!(".marker.{agent_id}"))
+}
+
+/// Read CLAUDE_AGENT_ID from the environment (set by Claude Code for subagents).
+fn current_agent_id() -> Option<String> {
+    std::env::var("CLAUDE_AGENT_ID").ok().filter(|s| !s.is_empty())
 }
 
 // ── Epochs ──────────────────────────────────────────────────────

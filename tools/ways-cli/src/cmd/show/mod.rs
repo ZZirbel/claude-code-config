@@ -103,6 +103,11 @@ pub fn way(id: &str, session_id: &str, trigger: &str) -> Result<String> {
     let (sibling_total, sibling_fired) = count_siblings(id, &project_dir, session_id);
 
     // Metrics JSONL
+    let agent_id = std::env::var("CLAUDE_AGENT_ID")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "main".to_string());
+
     session::append_metric(
         session_id,
         &json!({
@@ -115,6 +120,7 @@ pub fn way(id: &str, session_id: &str, trigger: &str) -> Result<String> {
             "sibling_total": sibling_total,
             "sibling_fired": sibling_fired,
             "trigger": trigger,
+            "agent_id": agent_id,
         }),
     );
 

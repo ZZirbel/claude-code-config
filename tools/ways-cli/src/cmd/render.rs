@@ -15,6 +15,7 @@ pub trait WayRow {
     fn trigger(&self) -> &str;
     fn check_fires(&self) -> u64;
     fn depth(&self) -> u64 { 0 }
+    fn agent_id(&self) -> &str { "main" }
 }
 
 // ── Constants ─────────────────────────────────────────────────
@@ -49,8 +50,8 @@ pub struct Layout {
 impl Layout {
     pub fn detect() -> Self {
         let term_w = crate::table::terminal_width();
-        // Fixed columns: epoch(6) + dist(6) + trigger(12) + pin(2) + redisclosure(8) + spaces(5) = 39
-        let fixed_cols = 39;
+        // Fixed columns: epoch(6) + dist(6) + trigger(12) + agent(7) + pin(2) + redisclosure(8) + spaces(6) = 47
+        let fixed_cols = 47;
         let indent = 2;
         // Way column gets everything left after fixed columns
         let way_col = term_w.saturating_sub(indent + fixed_cols).max(20);
@@ -118,8 +119,8 @@ pub fn write_table_header(out: &mut String) {
 pub fn write_table_header_with(out: &mut String, layout: &Layout) {
     let _ = writeln!(
         out,
-        "  \x1b[1m{:<w$} {:>5} {:>5} {:<11} {} {}\x1b[0m",
-        "Way", "Epoch", "Dist", "Trigger", "⌖", "Re-disclosure",
+        "  \x1b[1m{:<w$} {:>5} {:>5} {:<11} {:<6} {} {}\x1b[0m",
+        "Way", "Epoch", "Dist", "Trigger", "Agent", "⌖", "Re-disclosure",
         w = layout.way_col
     );
     let _ = writeln!(out, "  \x1b[2m{}\x1b[0m", "─".repeat(layout.separator));
@@ -182,14 +183,23 @@ pub fn write_way_row_with<W: WayRow>(
         " ".to_string()
     };
 
+    let agent_display = if w.agent_id() == "main" {
+        "\x1b[2m·\x1b[0m".to_string()
+    } else {
+        // Truncate agent_id to 5 chars for display
+        let aid = w.agent_id();
+        if aid.len() > 5 { format!("{}…", &aid[..4]) } else { aid.to_string() }
+    };
+
     let _ = writeln!(
         out,
-        "  {row_prefix}{:<w$} {:>5} {}{:>5}\x1b[0m {:<11} {} {}{row_suffix}",
+        "  {row_prefix}{:<w$} {:>5} {}{:>5}\x1b[0m {:<11} {:<6} {} {}{row_suffix}",
         truncate(&display_id, layout.way_col),
         w.epoch_fired(),
         dist_color,
         distance,
         trigger_display,
+        agent_display,
         pin,
         next,
         w = layout.way_col

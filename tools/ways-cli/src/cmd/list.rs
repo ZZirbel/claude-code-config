@@ -19,6 +19,7 @@ struct FiredWay {
     depth: u64,
     check_fires: u64,
     parent: String,
+    agent_id: String,
 }
 
 impl WayRow for FiredWay {
@@ -28,6 +29,7 @@ impl WayRow for FiredWay {
     fn trigger(&self) -> &str { &self.trigger }
     fn check_fires(&self) -> u64 { self.check_fires }
     fn depth(&self) -> u64 { self.depth }
+    fn agent_id(&self) -> &str { &self.agent_id }
 }
 
 pub fn run(session: Option<&str>, sort: &str, json_out: bool) -> Result<()> {
@@ -134,10 +136,10 @@ fn collect_fired_ways(session_id: &str, metrics: &HashMap<String, MetricEntry>) 
             let token_pos = session::get_token_position_for_way(&way_id, session_id);
             let check_fires = session::get_check_fires(&way_id, session_id);
 
-            let (trigger, depth, parent) = metrics
+            let (trigger, depth, parent, agent_id) = metrics
                 .get(&way_id)
-                .map(|m| (m.trigger.clone(), m.depth, m.parent.clone()))
-                .unwrap_or_else(|| ("unknown".to_string(), 0, "none".to_string()));
+                .map(|m| (m.trigger.clone(), m.depth, m.parent.clone(), m.agent_id.clone()))
+                .unwrap_or_else(|| ("unknown".to_string(), 0, "none".to_string(), "main".to_string()));
 
             FiredWay {
                 id: way_id,
@@ -147,6 +149,7 @@ fn collect_fired_ways(session_id: &str, metrics: &HashMap<String, MetricEntry>) 
                 depth,
                 check_fires,
                 parent,
+                agent_id,
             }
         })
         .collect()
@@ -156,6 +159,7 @@ struct MetricEntry {
     trigger: String,
     depth: u64,
     parent: String,
+    agent_id: String,
 }
 
 fn load_metrics(session_id: &str) -> HashMap<String, MetricEntry> {
@@ -175,6 +179,7 @@ fn load_metrics(session_id: &str) -> HashMap<String, MetricEntry> {
                         trigger: v["trigger"].as_str().unwrap_or("unknown").to_string(),
                         depth: v["depth"].as_u64().unwrap_or(0),
                         parent: v["parent"].as_str().unwrap_or("none").to_string(),
+                        agent_id: v["agent_id"].as_str().unwrap_or("main").to_string(),
                     },
                 );
             }
