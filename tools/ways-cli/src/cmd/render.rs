@@ -184,16 +184,17 @@ pub fn write_way_row_with<W: WayRow>(
     };
 
     let agent_display = if w.agent_id() == "main" {
-        "\x1b[2m·\x1b[0m".to_string()
+        format!("\x1b[2m·\x1b[0m{}", " ".repeat(5))
     } else {
-        // Truncate agent_id to 5 chars for display
         let aid = w.agent_id();
-        if aid.len() > 5 { format!("{}…", &aid[..4]) } else { aid.to_string() }
+        let truncated = if aid.len() > 5 { format!("{}…", &aid[..4]) } else { aid.to_string() };
+        let pad = 6usize.saturating_sub(truncated.len());
+        format!("{truncated}{}", " ".repeat(pad))
     };
 
     let _ = writeln!(
         out,
-        "  {row_prefix}{:<w$} {:>5} {}{:>5}\x1b[0m {:<11} {:<6} {} {}{row_suffix}",
+        "  {row_prefix}{:<w$} {:>5} {}{:>5}\x1b[0m {:<11} {} {} {}{row_suffix}",
         truncate(&display_id, layout.way_col),
         w.epoch_fired(),
         dist_color,
