@@ -12,6 +12,8 @@
 
 Event-driven cognitive steering for AI coding agents. Ways encode *how we do things* — prescriptive guidance triggered by context, not requested by intent — and inject them just-in-time before tools execute.
 
+> **Current status:** Agent Ways ships with full support for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Support for additional CLI-based coding agents is in development.
+
 ```mermaid
 sequenceDiagram
     participant U as 👤 You
