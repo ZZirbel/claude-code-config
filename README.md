@@ -1,4 +1,4 @@
-# Claude Code Config
+# Agent Ways
 
 ![GitHub stars](https://img.shields.io/github/stars/aaronsb/claude-code-config?style=social)
 ![GitHub forks](https://img.shields.io/github/forks/aaronsb/claude-code-config?style=social)
@@ -6,18 +6,14 @@
 ![License](https://img.shields.io/github/license/aaronsb/claude-code-config)
 ![Last commit](https://img.shields.io/github/last-commit/aaronsb/claude-code-config)
 
-<img src="docs/images/lumon-office-team.jpg" alt="A team coordinating in a managed environment" width="100%" />
+<img src="docs/images/ways-cli.png" alt="Agent Ways CLI" width="100%" />
 
-<sub>Fresh context. Injected guidance. Structured coordination. No memory of previous sessions.<br/>The parallels are entirely coincidental.</sub>
-
----
-
-Event-driven policy, process, and governance for Claude Code. Ways encode *how we do things* — prescriptive rules triggered by context, not requested by intent — and inject them just-in-time before tools execute.
+Event-driven cognitive steering for AI coding agents. Ways encode *how we do things* — prescriptive guidance triggered by context, not requested by intent — and inject them just-in-time before tools execute.
 
 ```mermaid
 sequenceDiagram
     participant U as 👤 You
-    participant C as 🤖 Claude
+    participant C as 🤖 Agent
     participant W as ⚡ Ways
 
     rect rgba(21, 101, 192, 0.2)
@@ -41,12 +37,22 @@ sequenceDiagram
 
 **Why this works:** System prompt adherence decays as a power law over conversation turns — instructions at position zero lose influence as context grows. Ways sidestep this by injecting small, relevant guidance near the attention cursor at the moment it matters, maintaining steady-state adherence instead of a damped sawtooth. It's [progressive disclosure](docs/hooks-and-ways/context-decay.md) applied to the model itself.
 
+### Session replay with `ways rethink`
+
+`ways rethink` replays a completed session's way-firing history as an interactive TUI animation. Each frame shows a way firing at a specific point in the conversation — you can see how guidance clusters near the active attention cursor and packs into the context window like a compression pattern.
+
+<img src="docs/images/ways-rethink.gif" alt="ways rethink session replay showing attention cursor tracking and compression packing" width="400" />
+
+The recording above shows a session matched with **BM25** (term-frequency scoring) — the automatic fallback engine. In production, most ways fire via the **embedding engine** (all-MiniLM-L6-v2, a ~21MB GGUF model), which achieves 98% accuracy vs BM25's 91%. The embedding tier handles semantic similarity — "pin lockfile versions" matches the supply chain way even though those exact words don't appear in the way's vocabulary. BM25 takes over when the model isn't available.
+
+---
+
 This repo ships with software development ways, but the mechanism is general-purpose. You could have ways for:
 - Excel/Office productivity
 - AWS operations
 - Financial analysis
 - Research workflows
-- Anything with patterns Claude should know about
+- Anything with patterns your agent should know about
 
 ## Prerequisites
 
@@ -254,12 +260,6 @@ They compose well: rules set baseline preferences, ways inject governance at too
 > **Is this just RAG?** Ways and RAG solve the same fundamental problem — getting the right context into the window at the right time — but through different architectures. RAG retrieves by semantic similarity; Ways retrieve by event. RAG is stateless; Ways track session state. The [full comparison](docs/hooks-and-ways/ways-vs-rag.md) explores what's shared, what's different, and when each approach wins.
 
 ## Governance
-
-<img src="docs/images/lumon-hq.jpg" alt="The institutional perspective" width="100%" />
-
-<sub>Someone decided what the handbooks should say. Someone decided which departments get which manuals.<br/>This is where those decisions are traceable.</sub>
-
-Everything above is about the severed floor — the agents, the guidance, the triggers. Governance is the floor above: where the policies come from, why they exist, and whether the guidance actually implements what was intended.
 
 Ways are compiled from policy. Every way can carry `provenance:` metadata linking it to policy documents and regulatory controls — the runtime strips it (zero tokens), but the [governance operator](governance/README.md) walks the chain:
 
