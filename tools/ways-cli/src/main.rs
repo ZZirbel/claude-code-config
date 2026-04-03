@@ -13,7 +13,7 @@ pub mod util;
 #[command(name = "ways", version, about = "Unified CLI for ways knowledge guidance")]
 struct Cli {
     #[command(subcommand)]
-    command: Commands,
+    command: Option<Commands>,
 }
 
 #[derive(Subcommand)]
@@ -355,9 +355,28 @@ enum GovernanceCommand {
 }
 
 fn main() -> Result<()> {
+    // Show banner + help when invoked with no args or "help"
+    let args: Vec<String> = std::env::args().collect();
+    let bare = args.len() == 1;
+    let help = args.len() == 2 && (args[1] == "help" || args[1] == "--help" || args[1] == "-h");
+    if bare || help {
+        cmd::banner::run()?;
+        if bare {
+            use clap::CommandFactory;
+            Cli::command().print_help()?;
+            println!();
+            return Ok(());
+        }
+    }
+
     let cli = Cli::parse();
 
-    match cli.command {
+    let command = match cli.command {
+        Some(cmd) => cmd,
+        None => return Ok(()), // already handled above
+    };
+
+    match command {
         Commands::Context { project, json } => cmd::context::run(project.as_deref(), json),
         Commands::Lint { path, schema, check, fix, global } => cmd::lint::run(path, schema, check, fix, global),
         Commands::Corpus { ways_dir, quiet, if_stale } => cmd::corpus::run(ways_dir, quiet, if_stale),
