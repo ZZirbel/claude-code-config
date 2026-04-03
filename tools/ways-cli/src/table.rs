@@ -26,17 +26,21 @@ pub struct Table {
     auto_fit: bool,
 }
 
-/// Detect terminal width via ioctl. Falls back to 80 if not a terminal.
+/// Detect terminal width via ioctl. Tries stderr first (most reliable when
+/// stdout is piped), then stdout, then stdin. Falls back to 80.
 pub fn terminal_width() -> usize {
     #[cfg(unix)]
     {
         use std::mem::MaybeUninit;
-        unsafe {
-            let mut ws = MaybeUninit::<libc::winsize>::zeroed();
-            if libc::ioctl(libc::STDOUT_FILENO, libc::TIOCGWINSZ, ws.as_mut_ptr()) == 0 {
-                let ws = ws.assume_init();
-                if ws.ws_col > 0 {
-                    return ws.ws_col as usize;
+        // Try all three fds — stderr is most likely to be the real terminal
+        for fd in [libc::STDERR_FILENO, libc::STDOUT_FILENO, libc::STDIN_FILENO] {
+            unsafe {
+                let mut ws = MaybeUninit::<libc::winsize>::zeroed();
+                if libc::ioctl(fd, libc::TIOCGWINSZ, ws.as_mut_ptr()) == 0 {
+                    let ws = ws.assume_init();
+                    if ws.ws_col > 0 {
+                        return ws.ws_col as usize;
+                    }
                 }
             }
         }
@@ -128,14 +132,15 @@ impl Table {
             }
         }).collect();
 
-        // Auto-fit: if total exceeds terminal, shrink the widest column(s)
+        // Auto-fit: shrink if too wide, expand first column if too narrow
         if self.auto_fit && ncols > 0 {
             let separators = ncols.saturating_sub(1); // 1 space between columns
             let available = term_w.saturating_sub(self.indent + separators);
 
             let mut total: usize = widths.iter().sum();
+
+            // Shrink: if total exceeds terminal, shrink the widest uncapped column
             while total > available {
-                // Find the widest column without an explicit cap
                 let widest_idx = widths
                     .iter()
                     .enumerate()
@@ -150,8 +155,13 @@ impl Table {
                         widths[idx] -= shrink;
                         total -= shrink;
                     }
-                    _ => break, // can't shrink further
+                    _ => break,
                 }
+            }
+
+            // Expand: give leftover space to the first column (typically the widest/most useful)
+            if total < available {
+                widths[0] += available - total;
             }
         }
 
