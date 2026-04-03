@@ -190,16 +190,19 @@ pub fn write_way_row_with<W: WayRow>(
         if aid.len() > 12 { format!("{}…", &aid[..11]) } else { aid.to_string() }
     };
 
+    // Pad re-disclosure to fixed visible width (ANSI-aware)
+    let next_padded = ansi_pad(&next, 13);
+
     let _ = writeln!(
         out,
-        "  {row_prefix}{:<w$} {:>5} {}{:>5}\x1b[0m {:<11} {} {:<13} {}{row_suffix}",
+        "  {row_prefix}{:<w$} {:>5} {}{:>5}\x1b[0m {:<11} {} {} {}{row_suffix}",
         truncate(&display_id, layout.way_col),
         w.epoch_fired(),
         dist_color,
         distance,
         trigger_display,
         pin,
-        next,
+        next_padded,
         agent_display,
         w = layout.way_col
     );
@@ -401,6 +404,10 @@ pub fn write_token_timeline<W: WayRow>(
             "  {}  \x1b[2m│ {redisclose_threshold_k}K interval\x1b[0m",
             zones.join("  ")
         );
+        let _ = writeln!(
+            out,
+            "  \x1b[2mnow = past threshold, will re-inject on next match  │  approaching = near threshold  │  distant = far from re-injection\x1b[0m"
+        );
     }
 }
 
@@ -478,4 +485,30 @@ pub fn truncate(s: &str, max: usize) -> String {
     } else {
         format!("{}…", &s[..max - 1])
     }
+}
+
+/// Pad a string containing ANSI codes to a fixed visible width.
+fn ansi_pad(s: &str, width: usize) -> String {
+    let visible = ansi_visible_len(s);
+    if visible >= width {
+        s.to_string()
+    } else {
+        format!("{s}{}", " ".repeat(width - visible))
+    }
+}
+
+/// Measure visible length of a string, ignoring ANSI escape sequences.
+fn ansi_visible_len(s: &str) -> usize {
+    let mut len = 0;
+    let mut in_escape = false;
+    for c in s.chars() {
+        if in_escape {
+            if c == 'm' { in_escape = false; }
+        } else if c == '\x1b' {
+            in_escape = true;
+        } else {
+            len += 1;
+        }
+    }
+    len
 }
