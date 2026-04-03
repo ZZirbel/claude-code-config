@@ -9,6 +9,8 @@ source "$(dirname "$0")/require-ways.sh"
 INPUT=$(cat)
 FP=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
+AGENT_ID=$(echo "$INPUT" | jq -r '.agent_id // empty')
+[[ -n "$AGENT_ID" ]] && export CLAUDE_AGENT_ID="$AGENT_ID"
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(echo "$INPUT" | jq -r '.cwd // empty')}"
 
 [[ -z "$FP" ]] && exit 0

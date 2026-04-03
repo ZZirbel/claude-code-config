@@ -10,6 +10,8 @@ source "$(dirname "$0")/require-ways.sh"
 INPUT=$(cat)
 TASK_PROMPT=$(echo "$INPUT" | jq -r '.tool_input.prompt // empty' | tr '[:upper:]' '[:lower:]')
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
+AGENT_ID=$(echo "$INPUT" | jq -r '.agent_id // empty')
+[[ -n "$AGENT_ID" ]] && export CLAUDE_AGENT_ID="$AGENT_ID"
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(echo "$INPUT" | jq -r '.cwd // empty')}"
 TEAM_NAME=$(echo "$INPUT" | jq -r '.tool_input.team_name // empty')
 

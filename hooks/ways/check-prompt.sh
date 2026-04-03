@@ -11,6 +11,8 @@ INPUT=$(cat)
 PROMPT=$(echo "$INPUT" | jq -r '.prompt // empty' | tr '[:upper:]' '[:lower:]')
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(echo "$INPUT" | jq -r '.cwd // empty')}"
+AGENT_ID=$(echo "$INPUT" | jq -r '.agent_id // empty')
+[[ -n "$AGENT_ID" ]] && export CLAUDE_AGENT_ID="$AGENT_ID"
 
 # Read response topics from Stop hook (if available)
 RESPONSE_STATE="/tmp/claude-response-topics-${SESSION_ID}"

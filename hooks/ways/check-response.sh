@@ -9,6 +9,8 @@
 
 INPUT=$(cat)
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
+AGENT_ID=$(echo "$INPUT" | jq -r '.agent_id // empty')
+[[ -n "$AGENT_ID" ]] && export CLAUDE_AGENT_ID="$AGENT_ID"
 TRANSCRIPT=$(echo "$INPUT" | jq -r '.transcript_path // empty')
 STOP_ACTIVE=$(echo "$INPUT" | jq -r '.stop_hook_active // false')
 
