@@ -40,32 +40,97 @@ pub(crate) fn batch_bm25_score(query: &str) -> Vec<(String, f64)> {
 /// This distinction matters: `Some(vec![])` means "engine is healthy,
 /// nothing matched" — BM25 should NOT fire. `None` means "engine is
 /// down" — BM25 fallback is appropriate.
+///
+/// Queries both EN and multilingual corpora (when available) and merges
+/// results. Each way is scored by the model specified in its `embed_model`
+/// frontmatter field.
 pub(crate) fn batch_embed_score(query: &str) -> Option<Vec<(String, f64)>> {
-    let ways_bin = home_dir().join(".claude/bin/ways");
-    if !ways_bin.is_file() {
+    let embed_bin = find_way_embed()?;
+    let xdg = xdg_cache_dir().join("claude-ways/user");
+
+    let mut results: Vec<(String, f64)> = Vec::new();
+    let mut any_ran = false;
+
+    // EN corpus + EN model
+    let en_corpus = xdg.join("ways-corpus-en.jsonl");
+    let en_model = xdg.join("minilm-l6-v2.gguf");
+    if en_corpus.is_file() && en_model.is_file() {
+        if let Some(matches) = run_embed_match(&embed_bin, &en_corpus, &en_model, query) {
+            results.extend(matches);
+            any_ran = true;
+        }
+    }
+
+    // Multilingual corpus + multilingual model
+    let multi_corpus = xdg.join("ways-corpus-multi.jsonl");
+    let multi_model = xdg.join("multilingual-minilm-l12-v2-q8.gguf");
+    if multi_corpus.is_file() && multi_model.is_file() {
+        if let Some(matches) = run_embed_match(&embed_bin, &multi_corpus, &multi_model, query) {
+            results.extend(matches);
+            any_ran = true;
+        }
+    }
+
+    // Fallback: combined corpus with EN model (backward compat)
+    if !any_ran {
+        let combined = xdg.join("ways-corpus.jsonl");
+        if combined.is_file() && en_model.is_file() {
+            if let Some(matches) = run_embed_match(&embed_bin, &combined, &en_model, query) {
+                results.extend(matches);
+                any_ran = true;
+            }
+        }
+    }
+
+    if any_ran { Some(results) } else { None }
+}
+
+/// Run way-embed match against a single corpus/model pair.
+fn run_embed_match(
+    bin: &std::path::Path,
+    corpus: &std::path::Path,
+    model: &std::path::Path,
+    query: &str,
+) -> Option<Vec<(String, f64)>> {
+    let output = std::process::Command::new(bin)
+        .args([
+            "match",
+            "--corpus", corpus.to_str()?,
+            "--model", model.to_str()?,
+            "--query", query,
+        ])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
         return None;
     }
 
-    let output = std::process::Command::new(&ways_bin)
-        .args(["embed", query])
-        .output();
+    Some(
+        String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .filter_map(|line| {
+                let mut parts = line.split('\t');
+                let id = parts.next()?.to_string();
+                let score: f64 = parts.next()?.parse().ok()?;
+                Some((id, score))
+            })
+            .collect(),
+    )
+}
 
-    match output {
-        Ok(o) if o.status.success() => {
-            Some(
-                String::from_utf8_lossy(&o.stdout)
-                    .lines()
-                    .filter_map(|line| {
-                        let mut parts = line.split('\t');
-                        let id = parts.next()?.to_string();
-                        let score: f64 = parts.next()?.parse().ok()?;
-                        Some((id, score))
-                    })
-                    .collect(),
-            )
-        }
-        _ => None,
-    }
+fn find_way_embed() -> Option<std::path::PathBuf> {
+    let xdg = xdg_cache_dir().join("claude-ways/user/way-embed");
+    if xdg.is_file() { return Some(xdg); }
+    let bin = home_dir().join(".claude/bin/way-embed");
+    if bin.is_file() { return Some(bin); }
+    None
+}
+
+fn xdg_cache_dir() -> std::path::PathBuf {
+    std::env::var("XDG_CACHE_HOME")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| home_dir().join(".cache"))
 }
 
 // ── In-process show capture ───────────────────────────────────
