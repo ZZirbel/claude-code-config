@@ -50,8 +50,8 @@ pub struct Layout {
 impl Layout {
     pub fn detect() -> Self {
         let term_w = crate::table::terminal_width();
-        // Fixed columns: epoch(6) + dist(6) + trigger(12) + agent(7) + pin(2) + redisclosure(8) + spaces(6) = 47
-        let fixed_cols = 47;
+        // Fixed columns: epoch(6) + dist(6) + trigger(12) + pin(2) + redisclosure(14) + agent(14) + spaces(6) = 60
+        let fixed_cols = 60;
         let indent = 2;
         // Way column gets everything left after fixed columns
         let way_col = term_w.saturating_sub(indent + fixed_cols).max(20);
@@ -119,8 +119,8 @@ pub fn write_table_header(out: &mut String) {
 pub fn write_table_header_with(out: &mut String, layout: &Layout) {
     let _ = writeln!(
         out,
-        "  \x1b[1m{:<w$} {:>5} {:>5} {:<11} {:<6} {} {}\x1b[0m",
-        "Way", "Epoch", "Dist", "Trigger", "Agent", "⌖", "Re-disclosure",
+        "  \x1b[1m{:<w$} {:>5} {:>5} {:<11} {} {:<13} {}\x1b[0m",
+        "Way", "Epoch", "Dist", "Trigger", "⌖", "Re-disclosure", "Agent",
         w = layout.way_col
     );
     let _ = writeln!(out, "  \x1b[2m{}\x1b[0m", "─".repeat(layout.separator));
@@ -184,25 +184,23 @@ pub fn write_way_row_with<W: WayRow>(
     };
 
     let agent_display = if w.agent_id() == "main" {
-        format!("\x1b[2m·\x1b[0m{}", " ".repeat(5))
+        "\x1b[2mmain\x1b[0m".to_string()
     } else {
         let aid = w.agent_id();
-        let truncated = if aid.len() > 5 { format!("{}…", &aid[..4]) } else { aid.to_string() };
-        let pad = 6usize.saturating_sub(truncated.len());
-        format!("{truncated}{}", " ".repeat(pad))
+        if aid.len() > 12 { format!("{}…", &aid[..11]) } else { aid.to_string() }
     };
 
     let _ = writeln!(
         out,
-        "  {row_prefix}{:<w$} {:>5} {}{:>5}\x1b[0m {:<11} {} {} {}{row_suffix}",
+        "  {row_prefix}{:<w$} {:>5} {}{:>5}\x1b[0m {:<11} {} {:<13} {}{row_suffix}",
         truncate(&display_id, layout.way_col),
         w.epoch_fired(),
         dist_color,
         distance,
         trigger_display,
-        agent_display,
         pin,
         next,
+        agent_display,
         w = layout.way_col
     );
 
