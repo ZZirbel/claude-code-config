@@ -1,0 +1,261 @@
+//! Language coverage report — shows multilingual state of ways.
+//!
+//! Reports: resolved output language, per-way embed_model,
+//! language stub files (.ja.md, .ko.md, etc.), and model availability.
+
+use anyhow::Result;
+use serde_json::json;
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
+use walkdir::WalkDir;
+
+use crate::agents;
+use crate::frontmatter;
+use crate::table::Table;
+use crate::util::home_dir;
+
+pub fn run(filter_lang: Option<&str>, json_output: bool) -> Result<()> {
+    let ways_dir = home_dir().join(".claude/hooks/ways");
+    let xdg_way = xdg_cache_dir().join("claude-ways/user");
+    let excluded = crate::util::load_excluded_segments();
+
+    // Resolved language
+    let resolved = agents::resolve_language();
+
+    // Model availability
+    let en_model = xdg_way.join("minilm-l6-v2.gguf").is_file();
+    let multi_model = xdg_way.join("multilingual-minilm-l12-v2-q8.gguf").is_file();
+
+    // Corpus stats
+    let en_corpus = xdg_way.join("ways-corpus-en.jsonl");
+    let multi_corpus = xdg_way.join("ways-corpus-multi.jsonl");
+    let en_corpus_count = line_count(&en_corpus);
+    let multi_corpus_count = line_count(&multi_corpus);
+
+    // Scan all way directories for language stubs and embed_model settings
+    let mut ways: Vec<WayLanguageInfo> = Vec::new();
+    let mut all_locales: BTreeSet<String> = BTreeSet::new();
+
+    scan_way_dirs(&ways_dir, "", &excluded, &mut ways, &mut all_locales)?;
+
+    // Apply filter
+    if let Some(lang) = filter_lang {
+        if lang != "en" {
+            ways.retain(|w| w.locales.contains(lang) || w.embed_model == "multilingual");
+        }
+    }
+
+    if json_output {
+        let output = json!({
+            "resolved_language": resolved,
+            "models": {
+                "en": { "available": en_model, "corpus_entries": en_corpus_count },
+                "multilingual": { "available": multi_model, "corpus_entries": multi_corpus_count },
+            },
+            "locales_found": all_locales,
+            "ways": ways.iter().map(|w| json!({
+                "id": w.id,
+                "embed_model": w.embed_model,
+                "locales": w.locales,
+            })).collect::<Vec<_>>(),
+        });
+        println!("{}", serde_json::to_string_pretty(&output)?);
+    } else {
+        println!("Language Coverage Report");
+        println!("=======================");
+        println!();
+        println!("Output language:  {resolved}");
+        println!("EN model:         {}", if en_model { "available" } else { "MISSING" });
+        println!("Multilingual:     {}", if multi_model { "available" } else { "MISSING" });
+        println!("EN corpus:        {en_corpus_count} ways");
+        println!("Multi corpus:     {multi_corpus_count} ways");
+        println!();
+
+        if !all_locales.is_empty() {
+            println!("Language stubs found: {}", all_locales.iter().cloned().collect::<Vec<_>>().join(", "));
+            println!();
+        }
+
+        // Summary counts
+        let en_count = ways.iter().filter(|w| w.embed_model == "en").count();
+        let multi_count = ways.iter().filter(|w| w.embed_model == "multilingual").count();
+        println!("Ways: {} total ({} en, {} multilingual)", ways.len(), en_count, multi_count);
+        println!();
+
+        // Per-way detail
+        if !ways.is_empty() {
+            let mut t = Table::new(&["Way", "Model", "Locales"]);
+            t.max_width(0, 45);
+            for w in &ways {
+                let locales = if w.locales.is_empty() {
+                    "en".to_string()
+                } else {
+                    let mut l: Vec<&str> = w.locales.iter().map(|s| s.as_str()).collect();
+                    l.insert(0, "en");
+                    l.join(", ")
+                };
+                t.add(vec![&w.id, &w.embed_model, &locales]);
+            }
+            t.print();
+        }
+
+        // Warnings
+        if resolved != "en" && !multi_model {
+            println!();
+            println!("⚠  Output language is {resolved} but multilingual model is not installed.");
+            println!("   Matching will use BM25 fallback only. Run: make setup");
+        }
+
+        let lang_code = resolve_to_code(&resolved);
+        if let Some(stemmer) = agents::bm25_stemmer_for(&lang_code) {
+            if stemmer == "impossible" && !multi_model {
+                println!();
+                println!("⚠  {resolved} requires the embedding engine for matching (BM25 impossible).");
+                println!("   Without it, only keyword/regex patterns will fire.");
+            }
+        }
+    }
+
+    Ok(())
+}
+
+struct WayLanguageInfo {
+    id: String,
+    embed_model: String,
+    locales: BTreeSet<String>,
+}
+
+fn scan_way_dirs(
+    dir: &Path,
+    prefix: &str,
+    excluded: &[String],
+    ways: &mut Vec<WayLanguageInfo>,
+    all_locales: &mut BTreeSet<String>,
+) -> Result<()> {
+    // Collect way directories (each dir with a .md file containing frontmatter)
+    let mut way_dirs: BTreeMap<String, PathBuf> = BTreeMap::new();
+
+    for entry in WalkDir::new(dir).follow_links(true).into_iter().filter_map(|e| e.ok()) {
+        let path = entry.path();
+        if !path.is_file() || path.extension().and_then(|e| e.to_str()) != Some("md") {
+            continue;
+        }
+        if path.file_name().and_then(|n| n.to_str()).map_or(false, |n| n.contains(".check.")) {
+            continue;
+        }
+        if crate::util::is_excluded_path(path, excluded) {
+            continue;
+        }
+
+        let parent = match path.parent() {
+            Some(p) => p,
+            None => continue,
+        };
+        let rel = parent.strip_prefix(dir).unwrap_or(parent);
+        let id = format!("{}{}", prefix, rel.display());
+
+        way_dirs.entry(id).or_insert_with(|| parent.to_path_buf());
+    }
+
+    for (id, dir_path) in &way_dirs {
+        let mut embed_model = "en".to_string();
+        let mut locales = BTreeSet::new();
+
+        // Read all .md files in this directory
+        if let Ok(entries) = std::fs::read_dir(dir_path) {
+            for entry in entries.filter_map(|e| e.ok()) {
+                let path = entry.path();
+                if path.extension().and_then(|e| e.to_str()) != Some("md") {
+                    continue;
+                }
+                let fname = match path.file_name().and_then(|n| n.to_str()) {
+                    Some(n) => n.to_string(),
+                    None => continue,
+                };
+
+                // Check for locale stubs: {name}.{lang}.md
+                if let Some(locale) = extract_locale(&fname) {
+                    locales.insert(locale.clone());
+                    all_locales.insert(locale);
+                    continue;
+                }
+
+                // Main way file — check embed_model
+                if let Ok(fm) = frontmatter::parse(&path) {
+                    if let Some(ref model) = fm.embed_model {
+                        embed_model = model.clone();
+                    }
+                }
+            }
+        }
+
+        ways.push(WayLanguageInfo {
+            id: id.clone(),
+            embed_model,
+            locales,
+        });
+    }
+
+    Ok(())
+}
+
+/// Extract locale code from filename like "security.ja.md" → "ja"
+/// Validates against languages.json to avoid false matches like ".check.md"
+fn extract_locale(filename: &str) -> Option<String> {
+    // Skip check files explicitly
+    if filename.contains(".check.") {
+        return None;
+    }
+
+    let parts: Vec<&str> = filename.strip_suffix(".md")?.split('.').collect();
+    if parts.len() >= 2 {
+        let candidate = parts[parts.len() - 1];
+        // Validate it looks like a locale code (2-5 chars, lowercase/hyphen)
+        if candidate.len() >= 2
+            && candidate.len() <= 5
+            && candidate.chars().all(|c| c.is_ascii_lowercase() || c == '-')
+        {
+            // Verify against languages.json
+            let parsed: serde_json::Value =
+                serde_json::from_str(agents::LANGUAGES_JSON).ok()?;
+            if parsed.get("languages")?.as_object()?.contains_key(candidate) {
+                return Some(candidate.to_string());
+            }
+        }
+    }
+    None
+}
+
+/// Best-effort reverse lookup: language name → code
+fn resolve_to_code(lang: &str) -> String {
+    let lower = lang.to_lowercase();
+    if lower.len() <= 5 && lower.chars().all(|c| c.is_ascii_lowercase() || c == '-') {
+        return lower;
+    }
+    // Search languages.json
+    let parsed: serde_json::Value = match serde_json::from_str(agents::LANGUAGES_JSON) {
+        Ok(v) => v,
+        Err(_) => return "en".to_string(),
+    };
+    if let Some(languages) = parsed.get("languages").and_then(|v| v.as_object()) {
+        for (code, entry) in languages {
+            let name = entry.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            if name.to_lowercase() == lower {
+                return code.clone();
+            }
+        }
+    }
+    "en".to_string()
+}
+
+fn line_count(path: &Path) -> usize {
+    std::fs::read_to_string(path)
+        .map(|c| c.lines().filter(|l| !l.is_empty()).count())
+        .unwrap_or(0)
+}
+
+fn xdg_cache_dir() -> PathBuf {
+    std::env::var("XDG_CACHE_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| home_dir().join(".cache"))
+}

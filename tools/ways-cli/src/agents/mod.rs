@@ -55,7 +55,7 @@ fn ways_json_language() -> Option<String> {
 }
 
 /// Language config embedded at compile time from languages.json.
-const LANGUAGES_JSON: &str = include_str!("../../languages.json");
+pub const LANGUAGES_JSON: &str = include_str!("../../languages.json");
 
 /// Normalize language input to the display name from languages.json.
 /// Accepts codes ("ja"), English names ("japanese"), native names ("日本語").

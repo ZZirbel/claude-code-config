@@ -5,6 +5,7 @@ pub mod embed;
 pub mod governance;
 pub mod graph;
 pub mod init;
+pub mod language;
 pub mod lint;
 pub mod list;
 pub mod match_bm25;
