@@ -49,13 +49,13 @@ pub struct Layout {
 impl Layout {
     pub fn detect() -> Self {
         let term_w = crate::table::terminal_width();
-        // Fixed columns: indent(2) + epoch(6) + dist(6) + trigger(12) + pin(2) + redisclosure(2) = ~30
-        let fixed = 30;
-        let available = term_w.saturating_sub(fixed + 2); // 2 for indent
-        // Way column gets 40% of available, bar gets the rest (clamped)
-        let way_col = (available * 40 / 100).clamp(20, 60);
-        let bar_width = (term_w.saturating_sub(6)).clamp(30, 120); // bar is on its own line
-        let separator = term_w.saturating_sub(4); // indent(2) + margin(2)
+        // Fixed columns: epoch(6) + dist(6) + trigger(12) + pin(2) + redisclosure(8) + spaces(5) = 39
+        let fixed_cols = 39;
+        let indent = 2;
+        // Way column gets everything left after fixed columns
+        let way_col = term_w.saturating_sub(indent + fixed_cols).max(20);
+        let bar_width = term_w.saturating_sub(indent + 4).clamp(30, 200);
+        let separator = term_w.saturating_sub(indent + 2);
         Layout { way_col, bar_width, separator }
     }
 }
