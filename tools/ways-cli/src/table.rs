@@ -5,6 +5,9 @@
 //!   t.align(1, Align::Right);
 //!   t.add(vec!["softwaredev/code/testing", "8.96", "unit testing..."]);
 //!   t.print();
+//!
+//! Terminal width is auto-detected via ioctl (Unix) or $COLUMNS.
+//! The last column auto-sizes to fill available width.
 
 /// Column alignment.
 #[derive(Clone, Copy)]
@@ -20,6 +23,26 @@ pub struct Table {
     max_widths: Vec<usize>,
     cap_widths: Vec<Option<usize>>,
     indent: usize,
+    auto_fit: bool,
+}
+
+/// Detect terminal width via ioctl. Falls back to 80 if not a terminal.
+pub fn terminal_width() -> usize {
+    #[cfg(unix)]
+    {
+        use std::mem::MaybeUninit;
+        unsafe {
+            let mut ws = MaybeUninit::<libc::winsize>::zeroed();
+            if libc::ioctl(libc::STDOUT_FILENO, libc::TIOCGWINSZ, ws.as_mut_ptr()) == 0 {
+                let ws = ws.assume_init();
+                if ws.ws_col > 0 {
+                    return ws.ws_col as usize;
+                }
+            }
+        }
+    }
+
+    80
 }
 
 impl Table {
@@ -34,6 +57,7 @@ impl Table {
             max_widths,
             cap_widths: vec![None; n],
             indent: 2,
+            auto_fit: true,
         }
     }
 
@@ -54,6 +78,12 @@ impl Table {
         if col < self.cap_widths.len() {
             self.cap_widths[col] = Some(width);
         }
+    }
+
+    /// Disable auto-fitting to terminal width.
+    #[allow(dead_code)]
+    pub fn no_auto_fit(&mut self) {
+        self.auto_fit = false;
     }
 
     /// Add a row. Accepts anything that can be stringified.
@@ -88,14 +118,42 @@ impl Table {
     pub fn print(&self) {
         let pad = " ".repeat(self.indent);
         let ncols = self.headers.len();
+        let term_w = if self.auto_fit { terminal_width() } else { usize::MAX };
 
-        // Apply caps
-        let widths: Vec<usize> = self.max_widths.iter().enumerate().map(|(i, w)| {
+        // Apply explicit caps first
+        let mut widths: Vec<usize> = self.max_widths.iter().enumerate().map(|(i, w)| {
             match self.cap_widths.get(i).and_then(|c| *c) {
                 Some(cap) => (*w).min(cap),
                 None => *w,
             }
         }).collect();
+
+        // Auto-fit: if total exceeds terminal, shrink the widest column(s)
+        if self.auto_fit && ncols > 0 {
+            let separators = ncols.saturating_sub(1); // 1 space between columns
+            let available = term_w.saturating_sub(self.indent + separators);
+
+            let mut total: usize = widths.iter().sum();
+            while total > available {
+                // Find the widest column without an explicit cap
+                let widest_idx = widths
+                    .iter()
+                    .enumerate()
+                    .filter(|(i, _)| self.cap_widths.get(*i).and_then(|c| *c).is_none())
+                    .max_by_key(|(_, w)| **w)
+                    .map(|(i, _)| i);
+
+                match widest_idx {
+                    Some(idx) if widths[idx] > 4 => {
+                        let excess = total - available;
+                        let shrink = excess.min(widths[idx].saturating_sub(4));
+                        widths[idx] -= shrink;
+                        total -= shrink;
+                    }
+                    _ => break, // can't shrink further
+                }
+            }
+        }
 
         // Header
         let mut header = String::new();
