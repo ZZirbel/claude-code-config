@@ -571,8 +571,17 @@ fn collect_way_ids(dir: &Path, base: &Path) -> Vec<String> {
     if !dir.is_dir() {
         return ids;
     }
-    // Check if this directory itself is a way (has .marker or .value)
-    if dir.join(".marker").exists() || dir.join(".value").exists() {
+    // Check if this directory itself is a way (has .marker.* or old .marker or .value)
+    let has_marker = dir.join(".marker").exists()
+        || std::fs::read_dir(dir)
+            .ok()
+            .map(|entries| {
+                entries.filter_map(|e| e.ok()).any(|e| {
+                    e.file_name().to_string_lossy().starts_with(".marker.")
+                })
+            })
+            .unwrap_or(false);
+    if has_marker || dir.join(".value").exists() {
         if let Ok(rel) = dir.strip_prefix(base) {
             let id = rel.display().to_string();
             if !id.is_empty() {
