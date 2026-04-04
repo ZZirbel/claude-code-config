@@ -1,0 +1,192 @@
+name: PR Test (Windows)
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+    paths:
+      - 'hooks/ways/win/**'
+      - 'tests/pester/**'
+      - 'settings.windows.json'
+      - '.github/workflows/pr-test-windows.yml'
+
+jobs:
+  test-windows:
+    name: Windows PowerShell Tests
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify way-match binary exists
+        shell: pwsh
+        run: |
+          $binaryPath = "bin/way-match"
+          if (-not (Test-Path $binaryPath)) {
+            Write-Error "way-match binary not found at $binaryPath"
+            exit 1
+          }
+          Write-Host "Binary found at $binaryPath"
+
+      - name: Test way-match binary execution
+        shell: pwsh
+        run: |
+          # Try running the APE binary directly
+          $result = ./bin/way-match pair `
+            --description "test description" `
+            --vocabulary "test vocab" `
+            --query "test query" `
+            --threshold 0.1 2>&1
+
+          if ($LASTEXITCODE -notin @(0, 1)) {
+            Write-Error "Binary execution failed with exit code: $LASTEXITCODE"
+            Write-Error "Output: $result"
+            exit 1
+          }
+          Write-Host "Binary execution successful (exit code: $LASTEXITCODE)"
+
+      - name: Validate settings.windows.json
+        shell: pwsh
+        run: |
+          $settingsPath = "settings.windows.json"
+          try {
+            $settings = Get-Content $settingsPath -Raw | ConvertFrom-Json
+            Write-Host "settings.windows.json is valid JSON"
+
+            # Verify hooks are defined
+            if (-not $settings.hooks) {
+              Write-Error "No hooks defined in settings.windows.json"
+              exit 1
+            }
+            Write-Host "Hooks defined: $($settings.hooks.PSObject.Properties.Name -join ', ')"
+          } catch {
+            Write-Error "Invalid JSON in settings.windows.json: $_"
+            exit 1
+          }
+
+      - name: Validate PowerShell script syntax
+        shell: pwsh
+        run: |
+          $scripts = Get-ChildItem -Path "hooks/ways/win" -Filter "*.ps1" -ErrorAction SilentlyContinue
+          $errors = @()
+
+          foreach ($script in $scripts) {
+            $parseErrors = $null
+            [System.Management.Automation.PSParser]::Tokenize(
+              (Get-Content $script.FullName -Raw),
+              [ref]$parseErrors
+            ) | Out-Null
+
+            if ($parseErrors.Count -gt 0) {
+              $errors += "$($script.Name): $($parseErrors.Count) parse errors"
+              foreach ($err in $parseErrors) {
+                Write-Warning "  Line $($err.Token.StartLine): $($err.Message)"
+              }
+            }
+          }
+
+          if ($errors.Count -gt 0) {
+            Write-Error "Syntax errors found in scripts:"
+            $errors | ForEach-Object { Write-Error "  $_" }
+            exit 1
+          }
+
+          Write-Host "All $($scripts.Count) PowerShell scripts have valid syntax"
+
+      - name: Install Pester
+        shell: pwsh
+        run: |
+          Install-Module Pester -Force -Scope CurrentUser -MinimumVersion 5.0 -SkipPublisherCheck
+          Import-Module Pester
+          Write-Host "Pester version: $((Get-Module Pester).Version)"
+
+      - name: Run Pester tests
+        shell: pwsh
+        run: |
+          $config = New-PesterConfiguration
+          $config.Run.Path = "./tests/pester"
+          $config.Run.Exit = $true
+          $config.Output.Verbosity = "Detailed"
+          $config.TestResult.Enabled = $true
+          $config.TestResult.OutputPath = "TestResults.xml"
+          $config.TestResult.OutputFormat = "NUnitXml"
+
+          Invoke-Pester -Configuration $config
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pester-test-results
+          path: TestResults.xml
+
+      - name: Test Report Summary
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Pester Test Results
+          path: TestResults.xml
+          reporter: java-junit
+
+  validate-ways:
+    name: Validate Way Files
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check way.md frontmatter
+        run: |
+          echo "Checking way.md files for valid frontmatter..."
+          errors=0
+
+          for wayfile in $(find hooks/ways -name "way.md" -not -path "*/win/*"); do
+            # Check for frontmatter delimiters
+            if ! head -1 "$wayfile" | grep -q "^---$"; then
+              echo "ERROR: $wayfile missing opening frontmatter delimiter"
+              errors=$((errors + 1))
+              continue
+            fi
+
+            # Check for closing delimiter
+            if ! awk '/^---$/{n++} n==2{found=1; exit} END{exit !found}' "$wayfile"; then
+              echo "ERROR: $wayfile missing closing frontmatter delimiter"
+              errors=$((errors + 1))
+            fi
+          done
+
+          if [ $errors -gt 0 ]; then
+            echo "Found $errors frontmatter errors"
+            exit 1
+          fi
+
+          waycount=$(find hooks/ways -name "way.md" -not -path "*/win/*" | wc -l)
+          echo "All $waycount way.md files have valid frontmatter structure"
+
+      - name: Check for orphaned PowerShell scripts
+        run: |
+          echo "Checking for bash scripts without PowerShell equivalents..."
+          warnings=0
+
+          for bashscript in hooks/ways/*.sh; do
+            if [ -f "$bashscript" ]; then
+              scriptname=$(basename "$bashscript" .sh)
+              psscript="hooks/ways/win/${scriptname}.ps1"
+
+              if [ ! -f "$psscript" ]; then
+                echo "WARNING: $bashscript has no PowerShell equivalent at $psscript"
+                warnings=$((warnings + 1))
+              fi
+            fi
+          done
+
+          if [ $warnings -gt 0 ]; then
+            echo ""
+            echo "Found $warnings bash scripts without PowerShell equivalents"
+            echo "Consider creating these for Windows compatibility"
+          else
+            echo "All bash scripts have PowerShell equivalents"
+          fi

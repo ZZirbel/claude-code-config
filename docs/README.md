@@ -34,6 +34,12 @@ Same pattern: guide, reference, implementation.
 | [../governance/policies/](../governance/policies/) | Policy source documents (governance chain targets) |
 | [hooks-and-ways/provenance.md](hooks-and-ways/provenance.md) | How-to: adding provenance to your ways |
 
+## Windows
+
+| Path | What's there |
+|------|-------------|
+| [windows-setup.md](windows-setup.md) | Windows installation and PowerShell hooks setup |
+
 ## Other docs
 
 | Path | What's there |

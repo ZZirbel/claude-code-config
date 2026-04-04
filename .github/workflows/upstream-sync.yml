@@ -1,0 +1,391 @@
+name: Upstream Sync
+
+on:
+  schedule:
+    # Run daily at 6 AM UTC
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      force_sync:
+        description: 'Force sync even if no changes detected'
+        required: false
+        default: 'false'
+        type: boolean
+      auto_merge:
+        description: 'Auto-merge if only data files changed'
+        required: false
+        default: 'true'
+        type: boolean
+
+env:
+  UPSTREAM_REPO: aaronsb/claude-code-config
+  UPSTREAM_BRANCH: main
+
+jobs:
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Job 1: Check for upstream changes
+  # ═══════════════════════════════════════════════════════════════════════════
+  detect-changes:
+    name: Detect Upstream Changes
+    runs-on: ubuntu-latest
+    outputs:
+      has_changes: ${{ steps.check.outputs.has_changes }}
+      data_files_only: ${{ steps.analyze.outputs.data_files_only }}
+      changed_scripts: ${{ steps.analyze.outputs.changed_scripts }}
+      new_scripts: ${{ steps.analyze.outputs.new_scripts }}
+      summary: ${{ steps.analyze.outputs.summary }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream https://github.com/${{ env.UPSTREAM_REPO }}.git
+          git fetch upstream ${{ env.UPSTREAM_BRANCH }}
+
+      - name: Check for changes
+        id: check
+        run: |
+          DIFF=$(git diff HEAD..upstream/${{ env.UPSTREAM_BRANCH }} --stat)
+
+          if [ -z "$DIFF" ] && [ "${{ github.event.inputs.force_sync }}" != "true" ]; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "No changes detected from upstream"
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "Changes detected:"
+            echo "$DIFF"
+          fi
+
+      - name: Analyze changes
+        id: analyze
+        if: steps.check.outputs.has_changes == 'true'
+        run: |
+          # Get list of changed files
+          CHANGED=$(git diff HEAD..upstream/${{ env.UPSTREAM_BRANCH }} --name-only)
+
+          # Categorize
+          DATA_FILES=""
+          CHANGED_SCRIPTS=""
+          NEW_SCRIPTS=""
+          OTHER_FILES=""
+
+          for file in $CHANGED; do
+            # Data files (ways, docs, governance)
+            if echo "$file" | grep -qE "way\.md$|^docs/|^governance/"; then
+              DATA_FILES="$DATA_FILES $file"
+
+            # Shell scripts in hooks/ways
+            elif echo "$file" | grep -qE "^hooks/ways/[^/]+\.sh$"; then
+              # Check if new or existing
+              if [ -f "$file" ]; then
+                # Check diff size
+                DIFF_LINES=$(git diff HEAD..upstream/${{ env.UPSTREAM_BRANCH }} -- "$file" | wc -l)
+                if [ "$DIFF_LINES" -gt 50 ]; then
+                  CHANGED_SCRIPTS="$CHANGED_SCRIPTS $file"
+                fi
+              else
+                NEW_SCRIPTS="$NEW_SCRIPTS $file"
+              fi
+
+            else
+              OTHER_FILES="$OTHER_FILES $file"
+            fi
+          done
+
+          # Determine if data files only
+          if [ -z "$CHANGED_SCRIPTS" ] && [ -z "$NEW_SCRIPTS" ] && [ -z "$OTHER_FILES" ]; then
+            echo "data_files_only=true" >> $GITHUB_OUTPUT
+          else
+            echo "data_files_only=false" >> $GITHUB_OUTPUT
+          fi
+
+          # Store lists (newline separated for PR body)
+          echo "changed_scripts<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGED_SCRIPTS" | tr ' ' '\n' | grep -v '^$' >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          echo "new_scripts<<EOF" >> $GITHUB_OUTPUT
+          echo "$NEW_SCRIPTS" | tr ' ' '\n' | grep -v '^$' >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          # Summary
+          DATA_COUNT=$(echo "$DATA_FILES" | wc -w)
+          SCRIPT_COUNT=$(echo "$CHANGED_SCRIPTS $NEW_SCRIPTS" | wc -w)
+          OTHER_COUNT=$(echo "$OTHER_FILES" | wc -w)
+
+          echo "summary<<EOF" >> $GITHUB_OUTPUT
+          echo "- Data files: $DATA_COUNT" >> $GITHUB_OUTPUT
+          echo "- Script changes: $SCRIPT_COUNT" >> $GITHUB_OUTPUT
+          echo "- Other files: $OTHER_COUNT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Job 2: Create sync PR
+  # ═══════════════════════════════════════════════════════════════════════════
+  create-sync-pr:
+    name: Create Sync PR
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      pr_number: ${{ steps.create-pr.outputs.pull-request-number }}
+      pr_url: ${{ steps.create-pr.outputs.pull-request-url }}
+      branch: ${{ steps.branch.outputs.name }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Create sync branch
+        id: branch
+        run: |
+          BRANCH="upstream-sync-$(date +%Y%m%d-%H%M%S)"
+          git checkout -b "$BRANCH"
+          echo "name=$BRANCH" >> $GITHUB_OUTPUT
+
+      - name: Add upstream and fetch
+        run: |
+          git remote add upstream https://github.com/${{ env.UPSTREAM_REPO }}.git
+          git fetch upstream ${{ env.UPSTREAM_BRANCH }}
+
+      - name: Sync data files
+        run: |
+          # Sync way.md files
+          git checkout upstream/${{ env.UPSTREAM_BRANCH }} -- 'hooks/ways/*/*/way.md' 2>/dev/null || true
+
+          # Sync docs
+          git checkout upstream/${{ env.UPSTREAM_BRANCH }} -- 'docs/' 2>/dev/null || true
+
+          # Sync governance
+          git checkout upstream/${{ env.UPSTREAM_BRANCH }} -- 'governance/' 2>/dev/null || true
+
+          git add -A
+          git commit -m "chore: sync data files from upstream" --allow-empty
+
+      - name: Sync bash scripts (preserve win/ directory)
+        run: |
+          # Sync bash scripts but NOT the win/ directory
+          for script in hooks/ways/*.sh; do
+            if [ -f "$(git ls-tree upstream/${{ env.UPSTREAM_BRANCH }} --name-only -- "$script" 2>/dev/null)" ]; then
+              git checkout upstream/${{ env.UPSTREAM_BRANCH }} -- "$script" 2>/dev/null || true
+            fi
+          done
+
+          git add -A
+          git commit -m "chore: sync bash scripts from upstream" --allow-empty
+
+      - name: Create review required file if needed
+        if: needs.detect-changes.outputs.data_files_only == 'false'
+        run: |
+          cat > SYNC_REVIEW_REQUIRED.md << 'EOF'
+          # Sync Review Required
+
+          This sync from upstream requires manual attention.
+
+          ## Changed Scripts (need PowerShell port updates)
+
+          ${{ needs.detect-changes.outputs.changed_scripts }}
+
+          ## New Scripts (need new PowerShell ports)
+
+          ${{ needs.detect-changes.outputs.new_scripts }}
+
+          ## Instructions
+
+          1. Review each bash script change
+          2. Update/create PowerShell equivalents in `hooks/ways/win/`
+          3. Use patterns from `pc-refactor.md`
+          4. Run tests: `Invoke-Pester -Path .\tests\pester`
+          5. Delete this file and commit
+
+          ---
+          Generated: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          EOF
+
+          git add SYNC_REVIEW_REQUIRED.md
+          git commit -m "chore: flag scripts requiring PowerShell port" --allow-empty
+
+      - name: Push branch
+        run: git push -u origin ${{ steps.branch.outputs.name }}
+
+      - name: Create Pull Request
+        id: create-pr
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ steps.branch.outputs.name }}
+          base: main
+          title: "🔄 Upstream Sync (${{ steps.branch.outputs.name }})"
+          labels: upstream-sync,automated
+          body: |
+            ## Automated Upstream Sync
+
+            This PR syncs changes from [`${{ env.UPSTREAM_REPO }}`](https://github.com/${{ env.UPSTREAM_REPO }}).
+
+            ### Changes Summary
+            ${{ needs.detect-changes.outputs.summary }}
+
+            ### Automation Status
+
+            ${{ needs.detect-changes.outputs.data_files_only == 'true' && '✅ **Data files only** - Safe to auto-merge after tests pass' || '⚠️ **Script changes detected** - Manual PowerShell porting required' }}
+
+            ### Scripts Requiring Review
+
+            ${{ needs.detect-changes.outputs.changed_scripts && format('**Changed:**\n```\n{0}\n```', needs.detect-changes.outputs.changed_scripts) || 'No significant script changes' }}
+
+            ${{ needs.detect-changes.outputs.new_scripts && format('**New:**\n```\n{0}\n```', needs.detect-changes.outputs.new_scripts) || '' }}
+
+            ### Next Steps
+
+            ${{ needs.detect-changes.outputs.data_files_only == 'true' && '1. Wait for tests to pass\n2. PR will auto-merge if enabled' || '1. Review `SYNC_REVIEW_REQUIRED.md`\n2. Port changes to PowerShell using `pc-refactor.md`\n3. Run local tests\n4. Delete `SYNC_REVIEW_REQUIRED.md`\n5. Approve and merge' }}
+
+            ---
+            🤖 *This PR was created automatically by the upstream-sync workflow*
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Job 3: Run Windows tests on PR
+  # ═══════════════════════════════════════════════════════════════════════════
+  test-windows:
+    name: Test Windows Compatibility
+    needs: create-sync-pr
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.create-sync-pr.outputs.branch }}
+
+      - name: Test way-match binary
+        shell: pwsh
+        run: |
+          $result = ./bin/way-match pair `
+            --description "GitHub pull requests" `
+            --vocabulary "pr issue review" `
+            --query "create a pull request" `
+            --threshold 1.0 2>&1
+
+          if ($LASTEXITCODE -notin @(0, 1)) {
+            throw "Binary test failed with exit code: $LASTEXITCODE"
+          }
+          Write-Host "✓ Binary test passed"
+
+      - name: Validate PowerShell scripts
+        shell: pwsh
+        run: |
+          $scripts = Get-ChildItem -Path "hooks/ways/win" -Filter "*.ps1" -ErrorAction SilentlyContinue
+          $errors = 0
+
+          foreach ($script in $scripts) {
+            $parseErrors = $null
+            [System.Management.Automation.PSParser]::Tokenize(
+              (Get-Content $script.FullName -Raw),
+              [ref]$parseErrors
+            ) | Out-Null
+
+            if ($parseErrors.Count -gt 0) {
+              Write-Error "$($script.Name) has syntax errors"
+              $errors++
+            }
+          }
+
+          if ($errors -gt 0) {
+            throw "$errors scripts have syntax errors"
+          }
+          Write-Host "✓ All PowerShell scripts valid"
+
+      - name: Install and run Pester
+        shell: pwsh
+        run: |
+          Install-Module Pester -Force -Scope CurrentUser -MinimumVersion 5.0 -SkipPublisherCheck
+
+          $config = New-PesterConfiguration
+          $config.Run.Path = "./tests/pester"
+          $config.Run.Exit = $true
+          $config.Output.Verbosity = "Detailed"
+
+          Invoke-Pester -Configuration $config
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Job 4: Auto-merge if data files only and tests pass
+  # ═══════════════════════════════════════════════════════════════════════════
+  auto-merge:
+    name: Auto-Merge (if eligible)
+    needs: [detect-changes, create-sync-pr, test-windows]
+    if: |
+      needs.detect-changes.outputs.data_files_only == 'true' &&
+      github.event.inputs.auto_merge != 'false'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Enable auto-merge
+        uses: peter-evans/enable-pull-request-automerge@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          pull-request-number: ${{ needs.create-sync-pr.outputs.pr_number }}
+          merge-method: squash
+
+      - name: Add auto-merge comment
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          issue-number: ${{ needs.create-sync-pr.outputs.pr_number }}
+          body: |
+            ✅ **Auto-merge enabled**
+
+            All tests passed and only data files changed.
+            This PR will be automatically merged.
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Job 5: Notify if manual review required
+  # ═══════════════════════════════════════════════════════════════════════════
+  notify-review:
+    name: Request Manual Review
+    needs: [detect-changes, create-sync-pr, test-windows]
+    if: needs.detect-changes.outputs.data_files_only == 'false'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Add review comment
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          issue-number: ${{ needs.create-sync-pr.outputs.pr_number }}
+          body: |
+            ⚠️ **Manual review required**
+
+            Tests passed, but script changes were detected that need PowerShell porting.
+
+            **To complete this sync:**
+
+            1. Check out this branch locally:
+               ```bash
+               git fetch origin ${{ needs.create-sync-pr.outputs.branch }}
+               git checkout ${{ needs.create-sync-pr.outputs.branch }}
+               ```
+
+            2. Review `SYNC_REVIEW_REQUIRED.md` for list of scripts
+
+            3. Port changes using guidance in `pc-refactor.md`
+
+            4. Run tests locally:
+               ```powershell
+               Invoke-Pester -Path .\tests\pester
+               ```
+
+            5. Commit, push, and merge
+
+            ---
+            💡 *Tip: Ask Claude Code to help with porting using the `pc-refactor.md` instructions*
