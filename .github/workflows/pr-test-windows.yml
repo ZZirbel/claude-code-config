@@ -128,12 +128,12 @@ jobs:
 
       - name: Test Report Summary
         uses: dorny/test-reporter@v1
-        if: always()
+        if: always() && hashFiles('TestResults.xml') != ''
         with:
           name: Pester Test Results
           path: TestResults.xml
-          reporter: java-junit
-          fail-on-empty: 'false'
+          reporter: dotnet-nunit
+          fail-on-error: 'false'
 
   validate-ways:
     name: Validate Way Files
