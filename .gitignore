@@ -110,6 +110,7 @@
 !tests/**/*.md
 !tests/**/*.sh
 !tests/**/*.ps1
+!tests/**/*.psm1
 
 # Plugin config (not runtime data)
 !plugins/
