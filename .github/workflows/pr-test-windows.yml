@@ -127,13 +127,19 @@ jobs:
           path: TestResults.xml
 
       - name: Test Report Summary
-        uses: dorny/test-reporter@v1
-        if: always() && hashFiles('TestResults.xml') != ''
-        with:
-          name: Pester Test Results
-          path: TestResults.xml
-          reporter: dotnet-nunit
-          fail-on-error: 'false'
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path "TestResults.xml") {
+            [xml]$results = Get-Content "TestResults.xml"
+            $total = $results.'test-results'.total
+            $passed = $results.'test-results'.passed
+            $failed = $results.'test-results'.failed
+            $skipped = $results.'test-results'.skipped
+            Write-Host "Pester Results: $total total, $passed passed, $failed failed, $skipped skipped"
+          } else {
+            Write-Host "No test results file found"
+          }
 
   validate-ways:
     name: Validate Way Files
