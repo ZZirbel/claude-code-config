@@ -326,11 +326,17 @@ function Update-ClaudeConfig {
             Write-Host "  Updated to $newCommit" -ForegroundColor Green
         } else {
             Write-Host "  Pull failed (exit code $LASTEXITCODE)" -ForegroundColor Red
+            return
         }
     }
     finally {
         Pop-Location
     }
+
+    # Regenerate settings.json from template with resolved paths
+    Write-Host ""
+    Write-Host "  Regenerating settings.json from template..." -ForegroundColor DarkGray
+    New-ClaudeSettings -Force
 
     Write-Host ""
 }
@@ -382,15 +388,23 @@ function New-ClaudeSettings {
     # Read template and resolve paths
     $content = Get-Content $templatePath -Raw
 
-    # Replace PowerShell env var syntax with actual path (forward slashes for bash compat)
+    # Replace $env:USERPROFILE with actual path using string replacement (not regex)
+    # Forward slashes for bash compatibility
     $resolvedHome = $env:USERPROFILE -replace '\\', '/'
-    $content = $content -replace '\$env:USERPROFILE\\\\', "$resolvedHome/"
-    $content = $content -replace '\$env:USERPROFILE/', "$resolvedHome/"
-    $content = $content -replace '\$env:USERPROFILE', "$resolvedHome"
 
-    # Also normalize any remaining double-backslashes to forward slashes in paths
-    # (within command strings that reference .claude)
-    $content = $content -replace '(C:/Users/[^"'']+?)\\\\', '$1/'
+    # Replace $env:USERPROFILE\\ (JSON-escaped backslashes) with resolved path + /
+    $content = $content.Replace('$env:USERPROFILE\\', "$resolvedHome/")
+    # Replace any remaining bare $env:USERPROFILE references
+    $content = $content.Replace('$env:USERPROFILE', $resolvedHome)
+
+    # Normalize remaining JSON-escaped backslashes in paths to forward slashes
+    # In JSON, \\ = literal \. After resolving $env:USERPROFILE, remaining \\
+    # in .claude paths should become / for consistency
+    $content = $content.Replace('.claude\\', '.claude/')
+    $content = $content.Replace('hooks\\', 'hooks/')
+    $content = $content.Replace('ways\\', 'ways/')
+    $content = $content.Replace('win\\', 'win/')
+    $content = $content.Replace('bin\\', 'bin/')
 
     Set-Content -Path $settingsPath -Value $content -Encoding UTF8
 
