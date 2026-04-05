@@ -335,6 +335,71 @@ function Update-ClaudeConfig {
     Write-Host ""
 }
 
+function New-ClaudeSettings {
+    <#
+    .SYNOPSIS
+        Generates settings.json from the Windows template with resolved paths
+
+    .DESCRIPTION
+        Reads settings.windows.json (the portable template) and generates
+        settings.json with $env:USERPROFILE expanded to the actual path.
+
+        Claude Code hooks are invoked by bash (Git Bash on Windows), which
+        doesn't understand $env:USERPROFILE. This function resolves those
+        to absolute paths so the hooks work correctly.
+
+    .PARAMETER Force
+        Overwrite existing settings.json without prompting
+
+    .EXAMPLE
+        New-ClaudeSettings
+        Generates settings.json from template (prompts if exists)
+
+    .EXAMPLE
+        New-ClaudeSettings -Force
+        Overwrites existing settings.json
+    #>
+    [CmdletBinding()]
+    param(
+        [switch]$Force
+    )
+
+    $templatePath = Join-Path $script:ConfigDir "settings.windows.json"
+    $settingsPath = Join-Path $script:ConfigDir "settings.json"
+
+    if (-not (Test-Path $templatePath)) {
+        Write-Host "Template not found: $templatePath" -ForegroundColor Red
+        Write-Host "Run Install-ClaudeConfig first to clone the config repo." -ForegroundColor Yellow
+        return
+    }
+
+    if ((Test-Path $settingsPath) -and -not $Force) {
+        Write-Host "settings.json already exists." -ForegroundColor Yellow
+        Write-Host "Use -Force to overwrite, or edit it manually." -ForegroundColor DarkGray
+        return
+    }
+
+    # Read template and resolve paths
+    $content = Get-Content $templatePath -Raw
+
+    # Replace PowerShell env var syntax with actual path (forward slashes for bash compat)
+    $resolvedHome = $env:USERPROFILE -replace '\\', '/'
+    $content = $content -replace '\$env:USERPROFILE\\\\', "$resolvedHome/"
+    $content = $content -replace '\$env:USERPROFILE/', "$resolvedHome/"
+    $content = $content -replace '\$env:USERPROFILE', "$resolvedHome"
+
+    # Also normalize any remaining double-backslashes to forward slashes in paths
+    # (within command strings that reference .claude)
+    $content = $content -replace '(C:/Users/[^"'']+?)\\\\', '$1/'
+
+    Set-Content -Path $settingsPath -Value $content -Encoding UTF8
+
+    Write-Host "Generated settings.json with resolved paths." -ForegroundColor Green
+    Write-Host "  Template: $templatePath" -ForegroundColor DarkGray
+    Write-Host "  Output:   $settingsPath" -ForegroundColor DarkGray
+    Write-Host "  Home:     $resolvedHome" -ForegroundColor DarkGray
+}
+
 function Install-ClaudeConfig {
     <#
     .SYNOPSIS
@@ -343,6 +408,7 @@ function Install-ClaudeConfig {
     .DESCRIPTION
         Sets up ~/.claude/ by cloning your config repo. If the directory
         already exists, validates and fixes the git remote instead.
+        Generates settings.json from the Windows template with resolved paths.
 
         Designed for first-time setup: install Claude Code, log in,
         then run this to apply your full configuration.
@@ -452,6 +518,10 @@ function Install-ClaudeConfig {
             Pop-Location
         }
     }
+
+    # Generate settings.json from template
+    Write-Host ""
+    New-ClaudeSettings -Force
 
     # Verify setup
     Write-Host ""
@@ -566,6 +636,7 @@ Export-ModuleMember -Function @(
     'Get-ClaudeConfigStatus'
     'Update-ClaudeConfig'
     'Install-ClaudeConfig'
+    'New-ClaudeSettings'
     'Show-ClaudeConfigStatusOnStartup'
 ) -Alias @(
     'ccstatus'
