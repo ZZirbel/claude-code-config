@@ -302,7 +302,15 @@ function Update-ClaudeConfig {
 
     Push-Location $script:ConfigDir
     try {
-        # Check for local changes
+        # settings.json is always generated from the template, so it will
+        # always show as modified. Restore it before pulling to avoid conflicts,
+        # then regenerate after.
+        $settingsModified = git diff --name-only 2>$null | Where-Object { $_ -eq "settings.json" }
+        if ($settingsModified) {
+            git checkout -- settings.json 2>&1 | Out-Null
+        }
+
+        # Check for other local changes (excluding the generated settings.json)
         $changes = git status --porcelain 2>$null
         if ($changes -and -not $Force) {
             Write-Host "  Local changes detected:" -ForegroundColor Yellow
