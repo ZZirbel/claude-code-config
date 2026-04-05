@@ -20,19 +20,19 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"$env:USERPROFILE\\.claude\\hooks\\ways\\win\\clear-markers.ps1\""
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"$env:USERPROFILE\\.claude\\hooks\\ways\\win\\clear-markers.ps1\"'"
           },
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"$env:USERPROFILE\\.claude\\hooks\\ways\\win\\show-core.ps1\""
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"$env:USERPROFILE\\.claude\\hooks\\ways\\win\\show-core.ps1\"'"
           },
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"$env:USERPROFILE\\.claude\\hooks\\ways\\win\\init-project-ways.ps1\""
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"$env:USERPROFILE\\.claude\\hooks\\ways\\win\\init-project-ways.ps1\"'"
           },
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"$env:USERPROFILE\\.claude\\hooks\\ways\\win\\check-config-updates.ps1\""
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"$env:USERPROFILE\\.claude\\hooks\\ways\\win\\check-config-updates.ps1\"'"
           }
         ]
       },
@@ -41,11 +41,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"$env:USERPROFILE\\.claude\\hooks\\ways\\win\\clear-markers.ps1\""
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"$env:USERPROFILE\\.claude\\hooks\\ways\\win\\clear-markers.ps1\"'"
           },
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"$env:USERPROFILE\\.claude\\hooks\\ways\\win\\show-core.ps1\""
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"$env:USERPROFILE\\.claude\\hooks\\ways\\win\\show-core.ps1\"'"
           }
         ]
       },
@@ -54,7 +54,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"$env:USERPROFILE\\.claude\\hooks\\ways\\win\\show-core.ps1\""
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"$env:USERPROFILE\\.claude\\hooks\\ways\\win\\show-core.ps1\"'"
           }
         ]
       },
@@ -63,15 +63,15 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"$env:USERPROFILE\\.claude\\hooks\\ways\\win\\clear-markers.ps1\""
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"$env:USERPROFILE\\.claude\\hooks\\ways\\win\\clear-markers.ps1\"'"
           },
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"$env:USERPROFILE\\.claude\\hooks\\ways\\win\\show-core.ps1\""
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"$env:USERPROFILE\\.claude\\hooks\\ways\\win\\show-core.ps1\"'"
           },
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"$env:USERPROFILE\\.claude\\hooks\\ways\\win\\init-project-ways.ps1\""
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"$env:USERPROFILE\\.claude\\hooks\\ways\\win\\init-project-ways.ps1\"'"
           }
         ]
       }
@@ -82,7 +82,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"$env:USERPROFILE\\.claude\\hooks\\ways\\win\\check-file-pre.ps1\""
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"$env:USERPROFILE\\.claude\\hooks\\ways\\win\\check-file-pre.ps1\"'"
           }
         ]
       },
@@ -91,7 +91,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"$env:USERPROFILE\\.claude\\hooks\\ways\\win\\check-bash-pre.ps1\""
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"$env:USERPROFILE\\.claude\\hooks\\ways\\win\\check-bash-pre.ps1\"'"
           }
         ]
       },
@@ -100,7 +100,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"$env:USERPROFILE\\.claude\\hooks\\ways\\win\\mark-tasks-active.ps1\""
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"$env:USERPROFILE\\.claude\\hooks\\ways\\win\\mark-tasks-active.ps1\"'"
           }
         ]
       },
@@ -109,7 +109,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"$env:USERPROFILE\\.claude\\hooks\\ways\\win\\check-task-pre.ps1\""
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"$env:USERPROFILE\\.claude\\hooks\\ways\\win\\check-task-pre.ps1\"'"
           }
         ]
       }
@@ -119,11 +119,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"$env:USERPROFILE\\.claude\\hooks\\ways\\win\\check-prompt.ps1\""
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"$env:USERPROFILE\\.claude\\hooks\\ways\\win\\check-prompt.ps1\"'"
           },
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"$env:USERPROFILE\\.claude\\hooks\\ways\\win\\check-state.ps1\""
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"$env:USERPROFILE\\.claude\\hooks\\ways\\win\\check-state.ps1\"'"
           }
         ]
       }
@@ -133,7 +133,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"$env:USERPROFILE\\.claude\\hooks\\ways\\win\\inject-subagent.ps1\""
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"$env:USERPROFILE\\.claude\\hooks\\ways\\win\\inject-subagent.ps1\"'"
           }
         ]
       }
@@ -143,7 +143,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"$env:USERPROFILE\\.claude\\hooks\\ways\\win\\check-response.ps1\""
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"$env:USERPROFILE\\.claude\\hooks\\ways\\win\\check-response.ps1\"'"
           }
         ]
       }
@@ -151,7 +151,7 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"$env:USERPROFILE\\.claude\\statusline.ps1\""
+    "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"$env:USERPROFILE\\.claude\\statusline.ps1\"'"
   },
   "alwaysThinkingEnabled": true
 }
