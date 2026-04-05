@@ -10,9 +10,11 @@
     verifying that the PowerShell scripts process them correctly.
 #>
 
+# Import at file scope so variables are available during Pester discovery
+Import-Module "$PSScriptRoot\TestHelpers.psm1" -Force
+$script:WinHooksDir = Get-WinHooksDir
+
 BeforeAll {
-    Import-Module "$PSScriptRoot\TestHelpers.psm1" -Force
-    $script:WinHooksDir = Get-WinHooksDir
     $script:TempDir = New-TestMarkerDir
     $env:CLAUDE_TEST_TEMP = $script:TempDir
 }

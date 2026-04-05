@@ -13,25 +13,24 @@
     These tests are skipped if bash is not available.
 #>
 
-BeforeAll {
-    Import-Module "$PSScriptRoot\TestHelpers.psm1" -Force
-    $script:WinHooksDir = Get-WinHooksDir
-    $script:HooksDir = Get-HooksDir
+# Import at file scope so variables are available during Pester discovery
+Import-Module "$PSScriptRoot\TestHelpers.psm1" -Force
+$script:WinHooksDir = Get-WinHooksDir
+$script:HooksDir = Get-HooksDir
 
-    # Check if bash is available
+# Check if bash is available (needed for -Skip during discovery)
+$script:BashAvailable = $false
+try {
+    $bashResult = bash --version 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        $script:BashAvailable = $true
+    }
+} catch {
     $script:BashAvailable = $false
-    try {
-        $bashResult = bash --version 2>&1
-        if ($LASTEXITCODE -eq 0) {
-            $script:BashAvailable = $true
-        }
-    } catch {
-        $script:BashAvailable = $false
-    }
+}
 
-    if (-not $script:BashAvailable) {
-        Write-Warning "Bash not available - parity tests will be skipped"
-    }
+if (-not $script:BashAvailable) {
+    Write-Warning "Bash not available - parity tests will be skipped"
 }
 
 Describe "Bash-PowerShell Parity" -Skip:(-not $script:BashAvailable) {
