@@ -191,7 +191,7 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/statusline.sh\"'"
+    "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"$env:USERPROFILE/.claude/statusline.ps1\""
   },
   "enabledPlugins": {
     "clangd-lsp@claude-plugins-official": true,
