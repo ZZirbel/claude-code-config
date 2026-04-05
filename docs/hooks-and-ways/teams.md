@@ -1,10 +1,6 @@
 # Teams
 
-<img src="../images/lumon-office-team-working.jpg" alt="Separate workstations, shared protocols, coordinated output" width="100%" />
-
-<sub>Each one sees their own screen. None of them chose the procedures. All of them follow them.</sub>
-
-When you go from one agent to a team of them, each teammate arrives with no prior context, receives injected guidance it didn't ask for, follows structured procedures, communicates through approved channels, and gets observed through telemetry. This started as something I built for myself because I got tired of agents going off-script. It turns out the problem — consistent governance across multiple autonomous agents — is the same whether you're one person with a side project or an organization managing a fleet.
+When you go from one agent to a team of them, each teammate arrives with no prior context, receives injected guidance it didn't ask for, follows structured procedures, communicates through approved channels, and gets observed through telemetry. The problem — consistent governance across multiple autonomous agents — is the same whether you're one person with a side project or an organization managing a fleet.
 
 The ways system handles it either way. Every teammate operates under the same governance, regardless of who spawned it or what it's working on. The ways are the employee handbook. These policy docs are the management rationale the handbook doesn't include.
 
@@ -15,7 +11,7 @@ Every Claude Code session runs in one of three scopes:
 | Scope | What it is | How it's detected |
 |-------|-----------|-------------------|
 | **agent** | Your main session — the one you're talking to | Default. No marker file exists. |
-| **teammate** | A named agent in a coordinated team | Marker file at `/tmp/.claude-teammate-{session_id}` |
+| **teammate** | A named agent in a coordinated team | Marker file at `{SESSIONS_ROOT}/{session_id}/teammate` |
 | **subagent** | A quick Task tool delegate (no team, no name) | Spawned via Task without `team_name` parameter |
 
 Scopes matter because they control which ways fire. A teammate should get coordination norms but shouldn't try to write MEMORY.md (concurrent writes from three teammates corrupt the file). A subagent doing a quick search doesn't need team coordination guidance at all.
@@ -28,7 +24,7 @@ The detection chain is a two-phase handoff between the lead agent and the spawne
 `check-task-pre.sh` reads the Task tool's parameters. If `team_name` is present, it writes a stash file with `is_teammate: true` and the team name. It also scans ways with `scope: teammate` or `scope: subagent` for content to inject.
 
 **Phase 2 — Teammate's hooks (SubagentStart):**
-`inject-subagent.sh` reads the stash, sees `is_teammate: true`, and creates a persistent marker at `/tmp/.claude-teammate-{session_id}` containing the team name. From this point forward, all of the teammate's own hooks (check-prompt, check-state, etc.) source `detect-scope.sh`, find the marker, and filter ways accordingly.
+`inject-subagent.sh` reads the stash, sees `is_teammate: true`, and creates a persistent marker at `{SESSIONS_ROOT}/{session_id}/teammate` containing the team name. From this point forward, the `ways` binary detects the marker and filters ways by scope accordingly.
 
 ### Scope Filtering
 
@@ -45,11 +41,11 @@ scope: agent, subagent    # Fires for main session and delegates, not teammates
 
 When no `scope:` is declared, the default is `agent` — backward compatible with all existing ways.
 
-The filtering logic in `detect-scope.sh` is a simple word match: does the way's scope field contain the current session's scope? This runs on every trigger evaluation, so the cost is one `grep -qw` per way per hook.
+Scope filtering is handled by the `ways` binary: it checks the way's `scope:` field against the current session's scope. This runs on every trigger evaluation.
 
 ## The Teams Way
 
-`meta/teams/way.md` fires on `session-start` with `scope: teammate`. When a teammate's first `UserPromptSubmit` hook runs, `check-state.sh` evaluates this trigger, confirms the scope matches, and injects the coordination norms:
+`meta/teams/teams.md` fires on `session-start` with `scope: teammate`. When a teammate's first `UserPromptSubmit` hook runs, `check-state.sh` evaluates this trigger, confirms the scope matches, and injects the coordination norms:
 
 - Check TaskList after completing each task
 - Use SendMessage to report progress and blockers

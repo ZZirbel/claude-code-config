@@ -53,6 +53,8 @@ The ways architecture draws on four research traditions. We're not implementing 
 
 **How it maps to ways:** Hook-based injection is analogous to precision-weighting -- increasing the gain on relevant prediction error at the right moment. When a way fires at `git commit`, it's the system saying "this is a moment where prediction accuracy matters, here's a high-precision prior." Loading everything upfront treats all information as equally precise at all times, which is computationally wasteful and informationally meaningless.
 
+For the formal treatment — how the system prompt acts as a prior that gets overwhelmed by the likelihood, and how ways re-anchor the posterior — see [context-decay-formal-foundations.md](context-decay-formal-foundations.md) §6.1.
+
 ### Predictive Processing
 
 **Core idea:** The brain operates as a hierarchical prediction machine. Only prediction errors propagate upward through the hierarchy; correct predictions are silently confirmed. Cognition is largely about generating and refining top-down predictions (Clark, 2016; Rao & Ballard, 1999).
@@ -121,10 +123,9 @@ The beauty of this dual role is that it's self-calibrating. A system that captur
 The implementation uses deliberately simple detection mechanisms:
 
 - **Regex matching** for keywords, commands, and file patterns
-- **BM25 term-frequency scoring** for semantic similarity (primary)
-- **Gzip NCD** as fallback when the BM25 binary isn't available
+- **BM25 term-frequency scoring** for semantic similarity
 
-There are no embedding models, no vector databases, no neural classifiers in the core matching pipeline. The BM25 matcher scores term importance across the way corpus — common words contribute less, domain-specific vocabulary contributes more. It runs in milliseconds with a single compiled binary (`bin/way-match`). When the binary isn't available, the system falls back to gzip NCD (compression-ratio similarity) using only `gzip` and `bc`.
+The matching pipeline uses a lightweight embedding model (all-MiniLM-L6-v2) for cosine-similarity scoring, with BM25 (built into the `ways` binary) as fallback. Both run in milliseconds. The embedding engine scores all ways in a single batch call (~20ms), while BM25 scores term importance across the way corpus — common words contribute less, domain-specific vocabulary contributes more.
 
 This simplicity is a feature, not a limitation. It's evidence of a design principle: **well-calibrated timing beats sophisticated detection**.
 
@@ -134,9 +135,8 @@ The matching tiers, in practice:
 
 | Mechanism | Latency | Accuracy | When We Use It |
 |-----------|---------|----------|----------------|
-| Regex | < 1ms | High for known patterns | Most ways -- keywords, commands, file paths |
+| Regex | < 1ms | High for known patterns | Most ways — keywords, commands, file paths |
 | BM25 | ~5ms | Good for semantic neighborhood | Ways where exact keywords aren't predictable |
-| Gzip NCD | ~5ms | Adequate | Fallback when BM25 binary unavailable |
 
 ## References
 

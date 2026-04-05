@@ -23,7 +23,7 @@ Before engaging the human, assess what exists:
 2. Check if `.claude/ways/` exists in the project
 3. If ways exist, list them with their matching modes:
    ```bash
-   find "$CLAUDE_PROJECT_DIR/.claude/ways" -name "way.md" 2>/dev/null
+   find "$CLAUDE_PROJECT_DIR/.claude/ways" -name "*.md" ! -name "*.check.md" 2>/dev/null
    ```
 4. For each existing way, extract the frontmatter (pattern, description, vocabulary, trigger) and show a summary table
 
@@ -63,9 +63,9 @@ Ask what's wrong:
 - "The guidance isn't helpful" → review the content, apply voice/framing principles
 - "I want to change what it covers" → may need vocabulary tuning, scope change, or split into sub-ways
 
-Use the `way-match` binary for live diagnostics:
+Use the `ways` binary for live diagnostics:
 ```bash
-~/.claude/bin/way-match pair --description "$desc" --vocabulary "$vocab" --query "$prompt" --threshold "${thresh:-2.0}"
+ways match --description "$desc" --vocabulary "$vocab" --query "$prompt" --threshold "${thresh:-2.0}"
 ```
 
 ## Scaffold
@@ -85,7 +85,7 @@ If the project has existing ways, show the domains in use and suggest consistenc
 mkdir -p "$CLAUDE_PROJECT_DIR/.claude/ways/{domain}/{wayname}"
 ```
 
-### 3. Write way.md
+### 3. Write {wayname}.md
 
 The frontmatter must match the chosen trigger strategy. The body should:
 - Be directive and concise (20-60 lines ideal)
@@ -154,7 +154,7 @@ After creating or revising a way:
 
 2. **Score** (for semantic ways): Test against sample prompts from the conversation
    ```bash
-   ~/.claude/bin/way-match pair --description "$desc" --vocabulary "$vocab" --query "sample prompt" --threshold 2.0
+   ways match --description "$desc" --vocabulary "$vocab" --query "sample prompt" --threshold 2.0
    ```
 
 3. **Cross-check**: Score all project ways against the same prompt to verify no cross-firing
@@ -168,11 +168,59 @@ After creating or revising a way:
 
 After the way is created or revised:
 
-- Show the file location: `.claude/ways/{domain}/{wayname}/way.md`
+- Show the file location: `.claude/ways/{domain}/{wayname}/{wayname}.md`
 - Explain when it will fire: "Next session, when you [trigger condition], this guidance will load automatically"
 - Point to `/ways-tests` for ongoing tuning: "Use `/ways-tests score {wayname} 'prompt'` to test matching, `/ways-tests suggest {wayname}` to analyze vocabulary"
 - If the way has semantic matching, suggest running `/ways-tests score-all "sample prompt"` to verify it doesn't overlap with other ways
 - Remind them the way is committed to the project repo — teammates get it too
+
+## Checks — Confidence Sensors
+
+Ways can have an optional paired `{wayname}.check.md` in the same directory. Checks fire on PreToolUse (before edits/commands) with an epoch-distance-aware scoring curve. See ADR-103 for the full design.
+
+### When to suggest a check
+
+When the way covers a domain where Claude might act on assumptions — architecture, deployment, security, data migrations. Not every way needs a check. Simple formatting or style ways don't benefit.
+
+Ask: "Would it help if Claude verified assumptions before acting in this area?" If yes, offer to scaffold a check.
+
+### Check template
+
+```markdown
+---
+description: what this check verifies (narrower than parent way)
+vocabulary: domain terms (subset of parent way, more specific)
+threshold: 2.0
+scope: agent
+---
+
+## anchor
+
+[1-2 line re-anchor to parent way's intent — shown when way is distant in context]
+
+## check
+
+[3-5 verification questions specific to this domain]
+- Did you read the existing code before changing it?
+- [Domain-specific assumption to verify]
+- [Domain-specific blast radius question]
+```
+
+### Check authoring guidance
+
+- **Keep checks short** — 3-5 verification questions max
+- **Anchor section**: 1-2 lines that semantically bridge back to the parent way's intent
+- **Vocabulary**: should overlap with but be narrower than parent way (checks are more specific)
+- **Threshold**: start at parent way's threshold, adjust based on observed fire rate
+- Checks fire multiple times with decay — they self-limit, so don't worry about noise
+
+### File structure
+
+```
+.claude/ways/{domain}/{wayname}/
+  {wayname}.md        # directive (fires on domain entry)
+  {wayname}.check.md  # sensor (fires before action, with decay)
+```
 
 ## Principles
 

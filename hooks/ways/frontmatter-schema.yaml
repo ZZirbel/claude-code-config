@@ -1,0 +1,185 @@
+# Way frontmatter schema — single source of truth
+# Read by: ways lint, ways-tests skill, authoring way
+#
+# Fields are categorized by role and marked required/recommended/optional.
+# "required" means the linter flags its absence as an error.
+# "recommended" means every way should have it, but the system has a sensible
+#   default. Linter flags absence as a warning (with --strict).
+# "optional" means absence is correct and never flagged.
+# "conditional" means required only when a paired field is present.
+
+way:
+  trigger:
+    description:
+      type: string
+      required: conditional  # required if vocabulary present
+      role: Semantic matching reference text
+    vocabulary:
+      type: string
+      required: conditional  # required if description present
+      role: Space-separated domain keywords for BM25 scoring
+    threshold:
+      type: number
+      required: recommended  # always explicit about scoring sensitivity
+      default: 2.0
+      role: BM25 score threshold (higher = stricter)
+    embed_threshold:
+      type: number
+      required: optional
+      default: 0.35
+      role: Cosine similarity threshold for embedding engine (0.0-1.0, higher = stricter)
+    redisclose:
+      type: number
+      required: optional
+      default: 25
+      role: Context window % before re-disclosure (lower = more frequent, default 25)
+    pattern:
+      type: regex
+      required: optional
+      role: Supplementary regex trigger — use alongside semantic, not instead of
+    files:
+      type: regex
+      required: optional
+      role: Regex matched against file paths (Edit/Write hooks)
+    commands:
+      type: regex
+      required: optional
+      role: Regex matched against bash commands
+
+  preconditions:
+    scope:
+      type: enum
+      values: [agent, subagent, teammate]
+      required: recommended
+      default: agent
+      role: Who receives this way (comma-separated)
+    when:
+      type: block
+      required: optional
+      role: Deterministic gate checked before any matching
+      subfields:
+        project:
+          type: path
+          required: optional
+          role: Only fire in this project directory
+
+  state:
+    trigger:
+      type: enum
+      values: [context-threshold, file-exists, session-start]
+      required: optional
+      role: State-based trigger type (instead of pattern/semantic)
+    repeat:
+      type: boolean
+      required: optional
+      role: Keep firing until condition met
+    path:
+      type: glob
+      required: optional
+      role: For file-exists trigger, glob relative to project
+
+  display:
+    macro:
+      type: enum
+      values: [prepend, append]
+      required: optional
+      role: Run macro.sh alongside way content
+
+  extended:
+    scan_exclude:
+      type: regex
+      required: optional
+      role: File patterns for macros to skip (macro-specific)
+
+  # provenance: moved to provenance.yaml sidecar (ADR-110)
+  # Presence of provenance: in frontmatter is flagged as UNKNOWN by the linter.
+  # See provenance_sidecar section below for the sidecar schema.
+
+check:
+  trigger:
+    description:
+      type: string
+      required: conditional
+    vocabulary:
+      type: string
+      required: conditional
+    threshold:
+      type: number
+      required: optional
+      default: 2.0
+    files:
+      type: regex
+      required: optional
+    commands:
+      type: regex
+      required: optional
+
+  preconditions:
+    scope:
+      type: enum
+      values: [agent, subagent, teammate]
+      required: optional
+      default: agent
+    when:
+      type: block
+      required: optional
+      role: Deterministic gate checked before any matching
+      subfields:
+        project:
+          type: path
+          required: optional
+          role: Only fire in this project directory
+        file_exists:
+          type: path
+          required: optional
+          role: Only fire when this file exists in the project
+
+# Lint configuration
+# Path segments that indicate backup/sync tool artifacts — not real ways.
+# The linter skips any file whose path contains one of these segments.
+lint:
+  excluded_path_segments:
+    - logseq/
+    - /bak/
+    - /.backup/
+    - /backup/
+    - /.obsidian/
+    - /.sync/
+    - /.trash/
+    - /node_modules/
+    - /.git/
+
+# Provenance sidecar schema (ADR-110)
+# Lives in provenance.yaml alongside the way file, not in frontmatter.
+# Consumed by `ways governance` and `ways provenance`.
+provenance_sidecar:
+  policy:
+    type: array
+    required: optional
+    role: Policy document URIs that this way implements
+    items:
+      uri:
+        type: string
+        required: true
+      type:
+        type: string
+        required: optional
+  controls:
+    type: array
+    required: optional
+    role: Regulatory or standards controls addressed by this way
+    items:
+      id:
+        type: string
+        required: true
+      justifications:
+        type: array
+        required: optional
+  verified:
+    type: date
+    required: optional
+    role: Last date provenance was reviewed for accuracy
+  rationale:
+    type: string
+    required: optional
+    role: Brief explanation of why these controls apply

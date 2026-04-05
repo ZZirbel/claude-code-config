@@ -1,0 +1,379 @@
+#!/usr/bin/env python3
+"""
+chart - ANSI terminal chart renderer
+
+Renders charts from JSON data piped via stdin.
+
+Usage:
+    echo '{"type":"bar","data":{"apples":5,"oranges":3}}' | chart
+    echo '{"type":"spark","values":[1,4,2,8,3]}' | chart
+    echo '{"type":"hbar","data":{"GET":120,"POST":45,"PUT":12}}' | chart
+    chart <<< '{"type":"line","values":[1,3,2,7,4,6],"title":"Requests/s"}'
+
+Chart types:
+    bar     Vertical bar chart (labels + filled columns)
+    hbar    Horizontal bar chart (labels + filled rows)
+    spark   Sparkline (compact inline, one row)
+    line    Line chart using braille characters
+    table   Colored data table
+    hist    Histogram from raw values
+
+JSON schema:
+    {
+      "type": "bar|hbar|spark|line|table|hist",
+      "title": "optional title",
+      "data": {"label": value, ...},       # for bar, hbar, table
+      "values": [number, ...],             # for spark, line, hist
+      "labels": ["x1", "x2", ...],         # optional x-axis labels for line
+      "width": 60,                         # optional max width (default: 60)
+      "height": 15,                        # optional max height (default: 15)
+      "color": "auto|red|green|blue|cyan|magenta|yellow|white",
+      "bins": 10                           # for hist type
+    }
+"""
+
+import json
+import math
+import sys
+from collections import Counter
+
+# ============================================================================
+# Color helpers
+# ============================================================================
+
+NAMED_COLORS = {
+    "red": (220, 50, 50), "green": (50, 200, 80), "blue": (60, 120, 220),
+    "cyan": (50, 200, 200), "magenta": (200, 50, 200), "yellow": (230, 200, 50),
+    "white": (200, 200, 200), "orange": (230, 150, 50),
+}
+
+def rgb(r, g, b):
+    return f"\033[38;2;{r};{g};{b}m"
+
+def bg_rgb(r, g, b):
+    return f"\033[48;2;{r};{g};{b}m"
+
+RESET = "\033[0m"
+BOLD = "\033[1m"
+DIM = "\033[2m"
+
+def palette(n, base_color=None):
+    """Generate n distinct colors. If base_color given, vary brightness."""
+    if base_color and base_color in NAMED_COLORS:
+        r0, g0, b0 = NAMED_COLORS[base_color]
+        return [
+            (max(30, r0 - 40 + i * 80 // n), max(30, g0 - 40 + i * 80 // n), max(30, b0 - 40 + i * 80 // n))
+            for i in range(n)
+        ]
+    # Default: cycle through pleasant hues
+    colors = [
+        (100, 180, 255), (130, 220, 100), (255, 160, 70), (200, 130, 255),
+        (255, 100, 100), (80, 220, 200), (255, 210, 80), (255, 130, 180),
+        (160, 200, 90), (120, 160, 240),
+    ]
+    return [colors[i % len(colors)] for i in range(n)]
+
+# ============================================================================
+# Sparkline
+# ============================================================================
+
+SPARK_CHARS = "▁▂▃▄▅▆▇█"
+
+def render_spark(data):
+    values = data["values"]
+    title = data.get("title", "")
+    if not values:
+        return
+
+    lo, hi = min(values), max(values)
+    rng = hi - lo if hi != lo else 1
+
+    line = ""
+    for v in values:
+        idx = int((v - lo) / rng * (len(SPARK_CHARS) - 1))
+        c = palette(1)[0]
+        frac = (v - lo) / rng
+        r = int(80 + 140 * frac)
+        g = int(180 - 60 * frac)
+        b = int(255 - 155 * frac)
+        line += f"{rgb(r, g, b)}{SPARK_CHARS[idx]}{RESET}"
+
+    if title:
+        print(f"{BOLD}{title}{RESET}")
+    print(line)
+    print(f"{DIM}{lo:.4g} … {hi:.4g}{RESET}")
+
+# ============================================================================
+# Horizontal bar chart
+# ============================================================================
+
+def fmt_val(v, fmt=None):
+    """Format a numeric value. Use 'human' for K/M suffixes, or default to compact."""
+    if fmt == "human":
+        if abs(v) >= 1_000_000:
+            return f"{v/1_000_000:.1f}M"
+        elif abs(v) >= 1_000:
+            return f"{v/1_000:.0f}k"
+        return f"{v:.0f}"
+    # Default: avoid scientific notation for values under 10M
+    if abs(v) < 10_000_000 and v == int(v):
+        return f"{int(v):,}"
+    return f"{v:,.4g}"
+
+def render_hbar(data):
+    items = data.get("data", {})
+    title = data.get("title", "")
+    width = data.get("width", 60)
+    num_fmt = data.get("format")
+
+    if not items:
+        return
+
+    labels = list(items.keys())
+    values = [items[k] for k in labels]
+    max_val = max(values) if values else 1
+    label_w = max(len(l) for l in labels)
+    colors = palette(len(labels), data.get("color"))
+
+    if title:
+        print(f"\n{BOLD}{title}{RESET}")
+
+    bar_width = width - label_w - 12
+    for i, (label, val) in enumerate(zip(labels, values)):
+        bar_len = int(val / max_val * bar_width) if max_val else 0
+        r, g, b = colors[i]
+        bar = f"{bg_rgb(r, g, b)}{' ' * bar_len}{RESET}"
+        print(f"  {label:>{label_w}}  {bar} {rgb(r, g, b)}{fmt_val(val, num_fmt)}{RESET}")
+
+# ============================================================================
+# Vertical bar chart
+# ============================================================================
+
+def render_bar(data):
+    items = data.get("data", {})
+    title = data.get("title", "")
+    height = data.get("height", 15)
+
+    if not items:
+        return
+
+    labels = list(items.keys())
+    values = [items[k] for k in labels]
+    max_val = max(values) if values else 1
+    colors = palette(len(labels), data.get("color"))
+
+    if title:
+        print(f"\n{BOLD}{title}{RESET}")
+
+    col_w = max(max(len(l) for l in labels), 4)
+    # Build rows top to bottom
+    for row in range(height, 0, -1):
+        threshold = max_val * row / height
+        line = "  "
+        for i, val in enumerate(values):
+            r, g, b = colors[i]
+            if val >= threshold:
+                line += f"{bg_rgb(r, g, b)}{' ' * col_w}{RESET} "
+            else:
+                line += " " * col_w + " "
+        print(line)
+
+    # Labels
+    print("  " + " ".join(f"{l:^{col_w}}" for l in labels))
+    # Values
+    num_fmt = data.get("format")
+    val_line = "  " + " ".join(
+        f"{rgb(*colors[i])}{fmt_val(v, num_fmt):^{col_w}}{RESET}" for i, v in enumerate(values)
+    )
+    print(val_line)
+
+# ============================================================================
+# Line chart (braille)
+# ============================================================================
+
+BRAILLE_BASE = 0x2800
+# Braille dot positions: (col, row) -> bit
+# Col 0: dots 1,2,3,7  Col 1: dots 4,5,6,8
+BRAILLE_DOTS = {
+    (0, 0): 0x01, (0, 1): 0x02, (0, 2): 0x04, (0, 3): 0x40,
+    (1, 0): 0x08, (1, 1): 0x10, (1, 2): 0x20, (1, 3): 0x80,
+}
+
+def render_line(data):
+    values = data["values"]
+    title = data.get("title", "")
+    width = data.get("width", 60)
+    height = data.get("height", 15)
+    xlabels = data.get("labels", [])
+
+    if not values:
+        return
+
+    # Braille: each char is 2 wide x 4 tall dots
+    cols = width
+    rows = height
+    grid_w = cols * 2
+    grid_h = rows * 4
+
+    lo, hi = min(values), max(values)
+    rng = hi - lo if hi != lo else 1
+
+    # Map values to grid coordinates
+    points = []
+    for i, v in enumerate(values):
+        x = int(i / (len(values) - 1) * (grid_w - 1)) if len(values) > 1 else 0
+        y = int((1 - (v - lo) / rng) * (grid_h - 1))
+        points.append((x, y))
+
+    # Draw lines between consecutive points
+    grid = [[0] * cols for _ in range(rows)]
+
+    def plot(x, y):
+        cx, dx = divmod(x, 2)
+        cy, dy = divmod(y, 4)
+        if 0 <= cx < cols and 0 <= cy < rows:
+            grid[cy][cx] |= BRAILLE_DOTS.get((dx, dy), 0)
+
+    for i in range(len(points) - 1):
+        x0, y0 = points[i]
+        x1, y1 = points[i + 1]
+        steps = max(abs(x1 - x0), abs(y1 - y0), 1)
+        for s in range(steps + 1):
+            t = s / steps
+            px = int(x0 + (x1 - x0) * t)
+            py = int(y0 + (y1 - y0) * t)
+            plot(px, py)
+
+    if title:
+        print(f"\n{BOLD}{title}{RESET}")
+
+    r, g, b = NAMED_COLORS.get(data.get("color", ""), (100, 180, 255))
+
+    # Y-axis labels
+    val_w = max(len(f"{hi:.4g}"), len(f"{lo:.4g}"))
+    for row_i, row in enumerate(grid):
+        line = "".join(chr(BRAILLE_BASE + cell) for cell in row)
+        # Show y-axis value at top and bottom
+        if row_i == 0:
+            label = f"{hi:.4g}"
+        elif row_i == rows - 1:
+            label = f"{lo:.4g}"
+        else:
+            label = ""
+        print(f"  {label:>{val_w}}  {rgb(r, g, b)}{line}{RESET}")
+
+    # X-axis labels
+    if xlabels:
+        spaced = ""
+        step = max(1, len(xlabels) // min(len(xlabels), cols // 6))
+        for i in range(0, len(xlabels), step):
+            spaced += f"{xlabels[i]:<6}"
+        print(f"  {' ' * val_w}  {DIM}{spaced}{RESET}")
+
+# ============================================================================
+# Table
+# ============================================================================
+
+def render_table(data):
+    items = data.get("data", {})
+    title = data.get("title", "")
+    num_fmt = data.get("format")
+
+    if not items:
+        return
+
+    if title:
+        print(f"\n{BOLD}{title}{RESET}")
+
+    labels = list(items.keys())
+    values = [items[k] for k in labels]
+    label_w = max(len(l) for l in labels)
+    colors = palette(len(labels), data.get("color"))
+
+    # Separate numeric and string values
+    numeric_vals = [v for v in values if isinstance(v, (int, float))]
+    max_val = max(abs(v) for v in numeric_vals) if numeric_vals else 1
+
+    for i, (label, val) in enumerate(zip(labels, values)):
+        r, g, b = colors[i]
+        if isinstance(val, (int, float)):
+            frac = abs(val) / max_val if max_val else 0
+            indicator = SPARK_CHARS[int(frac * (len(SPARK_CHARS) - 1))]
+            print(f"  {label:>{label_w}}  {rgb(r, g, b)}{indicator} {fmt_val(val, num_fmt):>10}{RESET}")
+        else:
+            print(f"  {label:>{label_w}}  {rgb(r, g, b)}  {str(val):>10}{RESET}")
+
+# ============================================================================
+# Histogram
+# ============================================================================
+
+def render_hist(data):
+    values = data["values"]
+    title = data.get("title", "")
+    n_bins = data.get("bins", 10)
+    width = data.get("width", 60)
+
+    if not values:
+        return
+
+    lo, hi = min(values), max(values)
+    if lo == hi:
+        hi = lo + 1
+
+    bin_width = (hi - lo) / n_bins
+    bins = [0] * n_bins
+    for v in values:
+        idx = min(int((v - lo) / bin_width), n_bins - 1)
+        bins[idx] += 1
+
+    # Render as hbar
+    labels = {}
+    for i in range(n_bins):
+        edge = lo + i * bin_width
+        labels[f"{edge:.3g}"] = bins[i]
+
+    render_hbar({"data": labels, "title": title or "Histogram", "width": width, "color": data.get("color")})
+
+# ============================================================================
+# Main
+# ============================================================================
+
+RENDERERS = {
+    "bar": render_bar,
+    "hbar": render_hbar,
+    "spark": render_spark,
+    "line": render_line,
+    "table": render_table,
+    "hist": render_hist,
+}
+
+def main():
+    if sys.stdin.isatty():
+        print(__doc__)
+        sys.exit(0)
+
+    raw = sys.stdin.read().strip()
+    if not raw:
+        print("Error: no input", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as e:
+        print(f"Error: invalid JSON: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    chart_type = data.get("type", "hbar")
+    renderer = RENDERERS.get(chart_type)
+    if not renderer:
+        print(f"Error: unknown chart type '{chart_type}'. Use: {', '.join(RENDERERS)}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        renderer(data)
+    except KeyError as e:
+        print(f"Error: missing field {e} for chart type '{chart_type}'", file=sys.stderr)
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()

@@ -5,7 +5,7 @@ macro: prepend
 
 Detailed guidance appears automatically (once per session) on tool use or keywords.
 
-Ways are organized by domain: `~/.claude/hooks/ways/{domain}/{way}/way.md`
+Ways are organized by domain: `~/.claude/hooks/ways/{domain}/{way}/{way}.md`
 
 Just work naturally. No need to request guidance upfront.
 

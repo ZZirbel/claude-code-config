@@ -4,7 +4,7 @@ How policy traceability works for ways. This is the reference layer — for gett
 
 ## The Compilation Chain
 
-Ways are compiled policy. A human reads a policy document, interprets it for the agent context, and writes a `way.md` — compressed, directive, stripped of rationale. The governance system makes that compilation traceable.
+Ways are compiled policy. A human reads a policy document, interprets it for the agent context, and writes a way file — compressed, directive, stripped of rationale. The governance system makes that compilation traceable.
 
 ```
 Regulatory Framework    (NIST, ISO, OWASP, SOC 2, CIS, IEEE...)
@@ -13,7 +13,7 @@ Control Requirement     (NIST SP 800-53 CM-3, OWASP A03:Injection...)
        ↓
 Policy Document         (governance/policies/*.md — human prose)
        ↓
-Way File                (hooks/ways/*/way.md — compiled guidance)
+Way File                (hooks/ways/*/{name}.md — compiled guidance)
        ↓
 Agent Context           (injected at runtime when triggers match)
 ```
@@ -67,69 +67,31 @@ flowchart LR
     classDef data fill:#FF9800,stroke:#E65100,color:#fff
     classDef output fill:#4CAF50,stroke:#2E7D32,color:#fff
 
-    W["way.md files<br/>(provenance frontmatter)"]:::data
+    W["way files<br/>(provenance frontmatter)"]:::data
     P["governance/policies/<br/>(policy source docs)"]:::data
-    S["provenance-scan.py"]:::tool
-    M["manifest.json"]:::output
-    V["provenance-verify.sh"]:::tool
-    G["governance.sh"]:::tool
+    CLI["ways governance"]:::tool
     R["Reports<br/>(coverage, traces,<br/>matrices, lint)"]:::output
 
-    W --> S
-    S --> M
-    M --> G
-    P --> V
-    V --> G
-    G --> R
+    W --> CLI
+    P --> CLI
+    CLI --> R
 ```
 
 ## Tools
 
-### provenance-scan.py
-
-Scans all `way.md` files, extracts `provenance:` blocks from YAML frontmatter, and generates a JSON manifest. No external dependencies — stdlib only.
-
-The manifest contains:
-- Per-way provenance data (policy URIs, controls, justifications, verified dates)
-- Inverted index: policy document → implementing ways
-- Inverted index: control reference → addressing ways
-- Coverage statistics
-
-```bash
-# Generate to stdout
-python3 governance/provenance-scan.py
-
-# Write to file
-python3 governance/provenance-scan.py -o provenance-manifest.json
-```
-
-### provenance-verify.sh
-
-Reads the manifest and validates structural integrity:
-- Every `policy.uri` points to a real file
-- Every `verified` date is well-formed and not stale
-- Every control has at least one justification
-
-```bash
-bash governance/provenance-verify.sh
-bash governance/provenance-verify.sh --json
-```
-
-### governance.sh (the operator)
-
-Unified CLI that wraps the scanner and verifier with auditor-friendly query modes:
+All governance queries are handled by the `ways` CLI (`ways governance <mode>`). The CLI scans way files directly, generates the provenance manifest in memory, and runs queries against it.
 
 | Mode | Command | Output |
 |------|---------|--------|
-| **Coverage** | `governance.sh` | Which ways have provenance, which don't |
-| **Trace** | `governance.sh --trace softwaredev/commits` | End-to-end chain for one way |
-| **Control query** | `governance.sh --control OWASP` | Which ways implement a control |
-| **Policy query** | `governance.sh --policy code-lifecycle` | Which ways derive from a policy |
-| **Gaps** | `governance.sh --gaps` | Ways without provenance |
-| **Stale** | `governance.sh --stale 90` | Ways with old verified dates |
-| **Active** | `governance.sh --active` | Cross-reference with way firing stats |
-| **Matrix** | `governance.sh --matrix` | Flat spreadsheet: way / control / justification |
-| **Lint** | `governance.sh --lint` | Validate provenance integrity |
+| **Coverage** | `ways governance report` | Which ways have provenance, which don't |
+| **Trace** | `ways governance trace softwaredev/commits` | End-to-end chain for one way |
+| **Control query** | `ways governance control OWASP` | Which ways implement a control |
+| **Policy query** | `ways governance policy code-lifecycle` | Which ways derive from a policy |
+| **Gaps** | `ways governance gaps` | Ways without provenance |
+| **Stale** | `ways governance stale 90` | Ways with old verified dates |
+| **Active** | `ways governance active` | Cross-reference with way firing stats |
+| **Matrix** | `ways governance matrix` | Flat spreadsheet: way / control / justification |
+| **Lint** | `ways governance lint` | Validate provenance integrity |
 
 All modes support `--json` for machine-readable output.
 
@@ -157,9 +119,9 @@ In an enterprise, policy documents and way implementations typically live in sep
 ```
 compliance-repo/              your-claude-config/
 ├── docs/architecture/        ├── hooks/ways/
-│   ├── ADR-150.md           │   ├── softwaredev/delivery/commits/way.md
+│   ├── ADR-150.md           │   ├── softwaredev/delivery/commits/commits.md
 │   └── ADR-200.md           │   │   (provenance: → ADR-150)
-├── audit-ledger.json        │   └── softwaredev/code/security/way.md
+├── audit-ledger.json        │   └── softwaredev/code/security/security.md
 └── controls.xlsx            └── governance/
                                  ├── policies/
                                  └── provenance-manifest.json
@@ -173,7 +135,7 @@ The provenance frontmatter references policies by URI. The manifest bridges repo
 |---------|---------------|-------------------|
 | Source code | `.c` files | `governance/policies/*.md` |
 | Compiler | `gcc` | Human authoring process |
-| Object code | `.o` files | `hooks/ways/*/way.md` |
+| Object code | `.o` files | `hooks/ways/*/{name}.md` |
 | Debug symbols | DWARF / PDB | `provenance:` frontmatter block |
 | Symbol table | `.map` file | `provenance-manifest.json` |
-| Build system | `make` | `governance.sh` |
+| Build system | `make` | `ways governance` |

@@ -1,4 +1,8 @@
-# Claude Code Config
+<p align="center">
+  <img src="docs/images/agent-ways-logo.svg" alt="Agent Ways logo — a W made of nodes and edges with a red-to-green gradient representing attention falloff, emerging from a dim background knowledge graph" width="600" />
+</p>
+
+# Agent Ways
 
 ![GitHub stars](https://img.shields.io/github/stars/aaronsb/claude-code-config?style=social)
 ![GitHub forks](https://img.shields.io/github/forks/aaronsb/claude-code-config?style=social)
@@ -6,18 +10,14 @@
 ![License](https://img.shields.io/github/license/aaronsb/claude-code-config)
 ![Last commit](https://img.shields.io/github/last-commit/aaronsb/claude-code-config)
 
-<img src="docs/images/lumon-office-team.jpg" alt="A team coordinating in a managed environment" width="100%" />
+Event-driven cognitive steering for AI coding agents. Ways encode *how we do things* — prescriptive guidance triggered by context, not requested by intent — and inject them just-in-time before tools execute.
 
-<sub>Fresh context. Injected guidance. Structured coordination. No memory of previous sessions.<br/>The parallels are entirely coincidental.</sub>
-
----
-
-Event-driven policy, process, and governance for Claude Code. Ways encode *how we do things* — prescriptive rules triggered by context, not requested by intent — and inject them just-in-time before tools execute.
+> **Current status:** Agent Ways ships with full support for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Support for additional CLI-based coding agents is in development.
 
 ```mermaid
 sequenceDiagram
     participant U as 👤 You
-    participant C as 🤖 Claude
+    participant C as 🤖 Agent
     participant W as ⚡ Ways
 
     rect rgba(21, 101, 192, 0.2)
@@ -39,31 +39,47 @@ sequenceDiagram
 
 **Ways** = policy and process encoded as contextual guidance. Triggered by keywords, commands, and file patterns — they fire once per session, before tools execute, and carry into subagents.
 
+**Why this works:** System prompt adherence decays as a power law over conversation turns — instructions at position zero lose influence as context grows. Ways sidestep this by injecting small, relevant guidance near the attention cursor at the moment it matters, maintaining steady-state adherence instead of a damped sawtooth. It's [progressive disclosure](docs/hooks-and-ways/context-decay.md) applied to the model itself.
+
+### Session replay with `ways rethink`
+
+`ways rethink` replays a completed session's way-firing history as an interactive TUI animation. Each frame shows a way firing at a specific point in the conversation — you can see how guidance clusters near the active attention cursor and packs into the context window like a compression pattern.
+
+<img src="docs/images/ways-rethink.gif" alt="ways rethink replaying a session — each frame shows a way firing, guidance clusters near the attention cursor and packs like a compression pattern as context fills" width="400" />
+
+The recording above shows a session matched with **BM25** (term-frequency scoring) — the automatic fallback engine. In production, most ways fire via the **embedding engine** (all-MiniLM-L6-v2, a ~21MB GGUF model), which achieves 98% accuracy vs BM25's 91%. The embedding tier handles semantic similarity — "pin lockfile versions" matches the supply chain way even though those exact words don't appear in the way's vocabulary. BM25 takes over when the model isn't available.
+
+---
+
 This repo ships with software development ways, but the mechanism is general-purpose. You could have ways for:
 - Excel/Office productivity
 - AWS operations
 - Financial analysis
 - Research workflows
-- Anything with patterns Claude should know about
+- Anything with patterns your agent should know about
 
 ## Prerequisites
 
-Runs on **Linux** and **macOS**. The hooks are all bash and lean on standard POSIX utilities plus a few extras:
+Runs on **Linux** and **macOS**. The core system is a Rust binary (`ways`) plus thin bash hook scripts:
 
 | Tool | Purpose | Notes |
 |------|---------|-------|
 | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | The agent this configures | `npm install -g @anthropic-ai/claude-code` |
+| `ways` | Unified CLI — matching, scanning, linting, governance | Downloaded or built by `make setup` |
 | `git` | Version control, update checking | Usually pre-installed |
 | `jq` | JSON parsing (hook inputs, configs, API responses) | **Must install** |
-| `cc` | Build BM25 matcher from source (`make local`) | Usually pre-installed; see below |
-| `gzip` | Fallback semantic matching (NCD, when BM25 binary unavailable) | Usually pre-installed |
-| `bc` | Math for NCD fallback scoring | Usually pre-installed (not in Arch `base`) |
-| `python3` | Governance traceability tooling | Stdlib only — no pip packages |
+| `python3` | Governance traceability tooling, chart-tool | Stdlib only — no pip packages |
 | [`gh`](https://cli.github.com/) | GitHub API (update checks, repo macros) | Recommended, not required — degrades gracefully |
 
-Standard utilities (`bash`, `awk`, `sed`, `grep`, `find`, `timeout`, `tr`, `sort`, `wc`, `date`) are assumed present via coreutils.
+`make setup` acquires the `ways` binary automatically: pre-built download from GitHub Releases → build from source (requires `cargo`/Rust toolchain) → error with instructions. Standard utilities (`bash`, `awk`, `sed`, `grep`, `find`, `timeout`, `tr`, `sort`, `wc`, `date`) are assumed present via coreutils.
 
-**BM25 semantic matcher:** The primary matching engine is a C binary at `bin/way-match` (source in `tools/way-match/`). Build it with `make local` (uses system `cc`) or `make` (uses [Cosmopolitan](https://cosmo.zip/) for cross-platform binaries). If the binary isn't present, matching degrades gracefully: BM25 → gzip NCD fallback → regex only.
+**Semantic matching** uses a two-tier engine: **embedding** (all-MiniLM-L6-v2 via a separate `way-embed` binary, 98% accuracy) → **BM25** (built into `ways`, 91% accuracy). The embedding tier is preferred; BM25 is the automatic fallback when the embedding model is unavailable. Both are managed through the unified `ways` CLI:
+
+```bash
+make setup   # download ways binary + embedding model (~21MB), generate corpus
+```
+
+See [Semantic Matching](docs/hooks-and-ways.md#semantic-matching) for the full setup and engine comparison.
 
 **Platform install guides:**
 [macOS (Homebrew)](docs/prerequisites-macos.md) · [Arch Linux](docs/prerequisites-arch.md) · [Debian / Ubuntu](docs/prerequisites-debian.md) · [Fedora / RHEL](docs/prerequisites-fedora.md)
@@ -72,78 +88,42 @@ Standard utilities (`bash`, `awk`, `sed`, `grep`, `find`, `timeout`, `tr`, `sort
 
 ## Quick Start
 
-**Fork first.** This repo is a starting point — you'll want to add your own ways for your own workflows. Fork it, then clone your fork:
-
 ```bash
-# Backup existing config if any
-[ -d ~/.claude ] && mv ~/.claude ~/.claude-backup-$(date +%Y%m%d)
+# Clone (fork first if you plan to customize)
+git clone https://github.com/aaronsb/claude-code-config ~/.claude
 
-# Clone your fork
-git clone https://github.com/YOUR-USERNAME/claude-code-config ~/.claude
+# Set up semantic matching engine (downloads ~21MB model)
+cd ~/.claude && make setup
 
-# Make hooks executable
-chmod +x ~/.claude/hooks/**/*.sh ~/.claude/hooks/*.sh 2>/dev/null
-
-# Restart Claude Code - ways are now active
+# Restart Claude Code — ways are now active
 ```
 
-The built-in ways cover software development, but the framework doesn't care about the domain. Replace them, extend them, add entirely new ones. Your fork stays synced with upstream improvements while keeping your custom ways separate.
-
-> **Just want to try it?** You can clone directly (`git clone https://github.com/aaronsb/claude-code-config ~/.claude`) — the system will nudge you if you fall behind upstream.
-
-### Agent-assisted install
-
-If you're asking a coding agent (Claude, Copilot, Cursor, etc.) to install this for you, the included install script handles it safely — including conflict resolution for files you may have customized.
-
-> **Stop and read this.** You are about to let an AI agent modify `~/.claude/` — the directory that controls how Claude Code behaves. This means the agent is editing its own configuration. That's powerful and useful, but you need to understand what you're agreeing to:
->
-> - **Review the repo first.** Browse https://github.com/aaronsb/claude-code-config before installing. Read the hooks. Understand what they do. Don't blindly trust what's here — or anywhere.
-> - **You are responsible.** If you tell an agent to install this, you own the result. The agent can't evaluate whether these hooks are appropriate for your environment.
-> - **Backup is automatic.** The installer backs up your existing `~/.claude/` before touching anything, but verify it yourself.
-
-There are several ways to install — pick whichever fits your comfort level:
+Or as a one-liner (clones to temp, verifies, then installs):
 
 ```bash
-# Clone and run the installer (interactive — prompts on conflicts)
-TMPDIR=$(mktemp -d)
-git clone https://github.com/aaronsb/claude-code-config "$TMPDIR/claude-code-config"
-"$TMPDIR/claude-code-config/scripts/install.sh" "$TMPDIR/claude-code-config"
-rm -rf "$TMPDIR"
-```
-
-```bash
-# Non-interactive (for coding agents — applies defaults without prompting)
-TMPDIR=$(mktemp -d)
-git clone https://github.com/aaronsb/claude-code-config "$TMPDIR/claude-code-config"
-"$TMPDIR/claude-code-config/scripts/install.sh" --auto "$TMPDIR/claude-code-config"
-rm -rf "$TMPDIR"
-```
-
-```bash
-# Or one-line bootstrap (clones, verifies, then runs install.sh from the clone)
 curl -sL https://raw.githubusercontent.com/aaronsb/claude-code-config/main/scripts/install.sh | bash -s -- --bootstrap
 ```
 
-The install script diffs changed files and lets you choose what to keep. With `--auto`, defaults are applied without prompting (safe for coding agents). The `curl | bash` option clones to a temp directory, verifies the clone, then re-executes from the verified copy.
+The built-in ways cover software development, but the framework is domain-agnostic. Fork it, replace the ways, add your own domains.
 
-Restart Claude Code after install — ways are now active.
+> **Already have `~/.claude/`?** The installer detects existing files and won't clobber them. See the **[install guide](docs/install-guide.md)** for how to back up, merge, or start fresh. If you're sure: `scripts/install.sh --dangerously-clobber`.
 
-| Category | Examples | Default | Conflict handling |
-|----------|---------|---------|-------------------|
-| **User config** | `CLAUDE.md`, `settings.json`, `ways.json` | Keep | Diff, merge, replace, or keep |
-| **Ways content** | `way.md` files | Keep | Diff, merge, replace, or keep |
-| **Infrastructure** | `*.sh` scripts, docs, plumbing | Update | Update or skip (with consistency warning) |
+> **Stop and read this** if you're letting an AI agent run the installer. You are about to let an agent modify `~/.claude/` — the directory that controls how Claude Code behaves. The agent is editing its own configuration. Review the repo first. You are responsible for the result.
 
 ## How It Works
 
 `core.md` loads at session start with behavioral guidance, operational rules, and a dynamic ways index. Then, as you work:
 
-1. **UserPromptSubmit** scans your message for keyword and BM25 semantic matches
+1. **UserPromptSubmit** scans your message for keyword and semantic matches (embedding or BM25)
 2. **PreToolUse** intercepts commands and file edits *before they execute*
 3. **SubagentStart** injects relevant ways into subagents spawned via Task
 4. Each way fires **once per session** — marker files prevent re-triggering
 
-Matching is tiered: regex patterns for known keywords/commands/files, [BM25](https://en.wikipedia.org/wiki/Okapi_BM25) term-frequency scoring for semantic similarity, with gzip NCD as fallback. See [matching.md](docs/hooks-and-ways/matching.md) for the full strategy.
+Matching is tiered: regex patterns for known keywords/commands/files, then semantic scoring — either [sentence embeddings](docs/architecture/system/ADR-108-embedding-based-way-matching-with-all-minilm-l6-v2.md) (all-MiniLM-L6-v2) or [BM25](https://en.wikipedia.org/wiki/Okapi_BM25) term-frequency scoring. See [matching.md](docs/hooks-and-ways/matching.md) for the full strategy.
+
+`ways list` shows the live session state — which ways fired, when (epoch), how far back (distance), what triggered them, tree relationships, check decay curves, and a re-disclosure forecast showing when distant ways will re-fire as context fills:
+
+<img src="docs/images/ways-list-session.png" alt="ways list showing live session state — epoch when each way fired, distance in context, colored pins for attention proximity, tree disclosure, and a forecast of when distant ways will re-fire" width="100%" />
 
 For the complete system guide — trigger flow, state machines, the pipeline from principle to implementation — see **[docs/hooks-and-ways/README.md](docs/hooks-and-ways/README.md)**.
 
@@ -153,36 +133,39 @@ Ways config lives in `~/.claude/ways.json`:
 
 ```json
 {
-  "disabled": ["itops"]
+  "disabled": [],
+  "semantic_engine": "auto"
 }
 ```
 
 | Field | Purpose |
 |-------|---------|
 | `disabled` | Array of domain names to skip (e.g., `["itops", "softwaredev"]`) |
+| `semantic_engine` | `"auto"` (default), `"embedding"`, or `"bm25"` — force a specific engine |
 
-Disabled domains are completely ignored — no pattern matching, no output.
+Disabled domains are completely ignored — no pattern matching, no output. The `semantic_engine` override is useful for testing or when the embedding engine causes issues — set to `"bm25"` to fall back.
 
 ## Creating Ways
 
-Each way is a `way.md` file with YAML frontmatter in `~/.claude/hooks/ways/{domain}/{wayname}/`:
+Each way is a `{wayname}.md` file with YAML frontmatter in `~/.claude/hooks/ways/{domain}/{wayname}/`:
 
 ```yaml
 ---
-pattern: commit|push          # regex on user prompts
+description: semantic text    # embedding/BM25 matching (preferred)
+vocabulary: domain keywords   # space-separated terms for BM25 scoring
+threshold: 2.0                # BM25 score threshold
+embed_threshold: 0.35         # cosine similarity threshold (optional per-way tuning)
+pattern: commit|push          # regex on user prompts (supplementary)
 commands: git\ commit         # regex on bash commands
 files: \.env$                 # regex on file paths
-description: semantic text    # BM25 matching
-vocabulary: domain keywords   # BM25 vocabulary
-threshold: 2.0                # BM25 score threshold
 macro: prepend                # dynamic context via macro.sh
-scope: agent,subagent         # injection scope
+scope: agent, subagent        # injection scope
 ---
 ```
 
 Matching is **additive** — regex and semantic are OR'd. A way with both can fire from either channel.
 
-**Project-local ways** live in `$PROJECT/.claude/ways/{domain}/{wayname}/way.md` and override global ways with the same path. Project macros are disabled by default — trust a project with `echo "/path/to/project" >> ~/.claude/trusted-project-macros`.
+**Project-local ways** live in `$PROJECT/.claude/ways/{domain}/{wayname}/{wayname}.md` and override global ways with the same path. Project macros are disabled by default — trust a project with `echo "/path/to/project" >> ~/.claude/trusted-project-macros`.
 
 For the full authoring guide: [extending.md](docs/hooks-and-ways/extending.md) | For matching strategy: [matching.md](docs/hooks-and-ways/matching.md) | For macros: [macros.md](docs/hooks-and-ways/macros.md)
 
@@ -191,26 +174,52 @@ For the full authoring guide: [extending.md](docs/hooks-and-ways/extending.md) |
 After creating or tuning a way, verify it matches what you expect — and doesn't match what it shouldn't.
 
 ```bash
-# Quick check: score a prompt against all semantic ways
-/ways-tests "write some unit tests for this module"
+# Score a way against sample prompts (inside Claude Code)
+/ways-tests score security "how do i hash passwords with bcrypt"
 
-# Automated: BM25 vs NCD against synthetic corpus (32 tests)
-tests/way-match/run-tests.sh fixture --verbose
+# Rank all ways against a prompt
+/ways-tests score-all "write some unit tests for this module"
 
-# Automated: score against real way.md files (31 tests)
-tests/way-match/run-tests.sh integration
+# Validate frontmatter
+ways lint --global
 
-# Interactive: full hook pipeline with subagent injection (6 steps)
+# Vocabulary gap analysis
+ways suggest --file ~/.claude/hooks/ways/softwaredev/code/security/security.md
+
+# Embedding similarity scores
+way-embed match --corpus ~/.cache/claude-ways/user/ways-corpus.jsonl \
+  --model ~/.cache/claude-ways/user/minilm-l6-v2.gguf \
+  --query "pin lockfile versions"
+
+# Sibling vocabulary overlap (Jaccard)
+ways siblings softwaredev/code/supplychain/depscan/node
+
+# Session simulation tests (Rust integration tests)
+make test-sim
+
+# Embedding engine comparison (embedding vs BM25 on 64 fixtures)
+bash tools/way-embed/compare-engines.sh
+
+# Interactive: full hook pipeline with subagent injection
 # Start a fresh session, then: read and run tests/way-activation-test.md
 ```
 
-The fixture and integration tests compare BM25 accuracy against the gzip NCD fallback. Typical results: BM25 81-87% accuracy with 0 false positives, NCD 48-75% with occasional false positives on unrelated prompts. See [tests/way-match/results.md](tests/way-match/results.md) for detailed output and interpretation.
+The embedding engine achieves 98.4% accuracy (63/64) vs BM25's 90.6% (58/64) with 0 false negatives. See `tools/way-embed/compare-engines.sh` for the full comparison.
 
-Other test tools: `scripts/doc-graph.sh --stats` checks documentation link integrity; `governance/provenance-verify.sh` validates provenance metadata. Full test guide: [tests/README.md](tests/README.md).
+Other test tools: `scripts/doc-graph.sh --stats` checks documentation link integrity; `ways governance lint` validates provenance metadata. Full test guide: [tests/README.md](tests/README.md).
 
 ## What's Included
 
-This repo ships with **20+ ways** across three domains (softwaredev, itops, meta) — covering commits, security, testing, debugging, dependencies, documentation, and more. The live index is generated at session start. **Replace these entirely** if your domain isn't software dev.
+This repo ships with **85+ ways** across six domains — covering commits, security, testing, debugging, dependencies, architecture, documentation, and more. The live index is generated at session start. **Replace these entirely** if your domain isn't software dev.
+
+| Domain | Ways | Coverage |
+|--------|------|----------|
+| `softwaredev` | 50 | Commits, security, testing, debugging, deps, supply chain, architecture, delivery |
+| `meta` | 19 | Ways system itself — knowledge, authoring, optimization, introspection |
+| `ea` | 10 | Executive assistant — email, calendar, scheduling |
+| `itops` | 4 | Infrastructure operations |
+| `research` | 1 | Research workflows |
+| `writing` | 1 | Writing and documentation |
 
 Also included:
 - **[Agent teams](docs/hooks-and-ways/teams.md)** — three-scope model (agent/teammate/subagent) with scope-gated governance and team telemetry. When one agent becomes a team, every teammate gets the same handbook.
@@ -218,30 +227,43 @@ Also included:
 - **[Usage stats](docs/hooks-and-ways/stats.md)** — way firing telemetry by scope, team, project, and trigger type
 - **Update checking** — detects clones, forks, renamed copies; nudges you when behind upstream
 
-## Ways vs Skills
+## Why Ways? (Rules, Skills, and Ways)
 
-Claude Code has built-in **Skills** that use semantic matching to discover relevant knowledge. Ways do the same thing — but externally.
+Claude Code ships two official features for injecting guidance: **Rules** (`.claude/rules/*.md`) and **Skills** (`~/.claude/skills/`). Ways solve problems that neither can.
 
-Both use semantic similarity to decide what guidance to inject. Skills match inside Claude's process against skill descriptions. Ways match outside it, using [BM25](https://en.wikipedia.org/wiki/Okapi_BM25) term-frequency scoring running in bash hooks before tools execute. The matching is similar; the control is different.
+### The progressive disclosure problem
 
-| | Skills | Ways |
-|--|--------|------|
-| **Matching** | Claude's internal semantic matching | BM25 scoring (external, in hooks) |
-| **Trigger** | User intent → Claude decides | Tool use, file edits, keywords, BM25 score |
-| **Control** | Claude requests permission | Automatic injection (no permission needed) |
-| **Frequency** | Per semantic match | Once per session (marker-gated) |
+Rules and ways both inject guidance conditionally — but their disclosure models are fundamentally different:
 
-Ways also support regex patterns and command/file triggers that skills can't — they fire on `git commit`, on editing `.env`, on spawning a subagent. Skills can restrict tools (`allowed-tools`), which ways can't. They complement each other: ways push governance *in* automatically, skills let Claude pull capability *out* by intent.
+- **Rules** disclose based on **file paths** (`paths: src/api/**`). The project's directory tree *is* the disclosure taxonomy. This works when concerns map cleanly to directories, but most concerns don't — security, testing conventions, commit standards, and performance patterns cut across every directory.
 
-For the full comparison: [docs/hooks-and-ways/README.md](docs/hooks-and-ways/README.md#ways-vs-skills)
+- **Ways** disclose based on **actions and intent** — what you're doing (running `git commit`), what you're talking about ("optimize this query"), or what state the session is in (context 75% full). The disclosure schedule is decoupled from the file hierarchy entirely.
+
+This matters because of how attention works in transformers. Rules loaded at file-read time are closer to the generation cursor than startup rules, but ways inject at the **tool-call boundary** — the closest possible point to where the model is actively generating. The [context decay model](docs/hooks-and-ways/context-decay.md) formalizes why this temporal coupling outperforms spatial coupling for maintaining adherence over long sessions.
+
+### Three features, three jobs
+
+| | **Rules** | **Skills** | **Ways** |
+|--|-----------|------------|----------|
+| **What** | Static instructions | Action templates | Event-driven guidance |
+| **Job** | "Always do X" | "Here's how to do Y" | "Right now, remember Z" |
+| **Trigger** | File access or startup | User intent (Claude decides) | Tool use, keywords, state conditions |
+| **Conditional on** | File paths (directory tree) | Semantic similarity | Multi-channel: regex, embeddings/BM25, commands, files, state |
+| **Cross-cutting concerns** | Needs duplicate `paths:` entries | N/A (intent-based) | Single way fires regardless of file location |
+| **Dynamic content** | No | No | Yes (shell macros) |
+| **Survives refactoring** | No (`src/` → `lib/` breaks paths) | Yes | Yes |
+| **Non-file triggers** | No | No | Yes (`git commit`, context threshold, subagent spawn) |
+| **Governance provenance** | No | No | Yes (NIST, OWASP, ISO, SOC 2 traceability) |
+| **Org-level scope** | Yes (`/etc/claude-code/`) | No | No |
+| **Zero-config simplicity** | Yes (drop a `.md` file) | Yes | No (requires hook infrastructure) |
+
+**Rules** are best for static, always-on preferences ("use TypeScript strict mode", "tabs not spaces"). **Skills** are best for specific capabilities invoked by intent ("ship this PR", "rotate AWS keys"). **Ways** are best for context-sensitive guidance that fires on events, cuts across the file tree, and needs to stay fresh in long sessions.
+
+They compose well: rules set baseline preferences, ways inject governance at tool boundaries, skills provide specific workflows. The [full comparison](docs/hooks-and-ways/README.md#ways-rules-and-skills) covers the architectural details.
+
+> **Is this just RAG?** Ways and RAG solve the same fundamental problem — getting the right context into the window at the right time — but through different architectures. RAG retrieves by semantic similarity; Ways retrieve by event. RAG is stateless; Ways track session state. The [full comparison](docs/hooks-and-ways/ways-vs-rag.md) explores what's shared, what's different, and when each approach wins.
 
 ## Governance
-
-<img src="docs/images/lumon-hq.jpg" alt="The institutional perspective" width="100%" />
-
-<sub>Someone decided what the handbooks should say. Someone decided which departments get which manuals.<br/>This is where those decisions are traceable.</sub>
-
-Everything above is about the severed floor — the agents, the guidance, the triggers. Governance is the floor above: where the policies come from, why they exist, and whether the guidance actually implements what was intended.
 
 Ways are compiled from policy. Every way can carry `provenance:` metadata linking it to policy documents and regulatory controls — the runtime strips it (zero tokens), but the [governance operator](governance/README.md) walks the chain:
 
@@ -261,17 +283,17 @@ Policy-as-code for AI agents — lightweight, portable, deterministic.
 
 | Feature | Why It Matters |
 |---------|----------------|
-| **Pattern matching** | Predictable, debuggable (no semantic black box) |
+| **Tiered matching** | Regex for precision, embeddings for semantics, BM25 fallback — no cloud API needed |
 | **Shell macros** | Dynamic context from any source (APIs, files, system state) |
-| **Zero dependencies** | Bash + jq — runs anywhere |
+| **Minimal dependencies** | `ways` binary + bash + jq — no runtime services, no cloud APIs |
 | **Domain-agnostic** | Swap software dev ways for finance, ops, research, anything |
 | **Fully hackable** | Plain text files, fork and customize in minutes |
 
-For the cognitive science rationale: [docs/hooks-and-ways/rationale.md](docs/hooks-and-ways/rationale.md)
+For the attention mechanics: [context-decay.md](docs/hooks-and-ways/context-decay.md) | For the cognitive science rationale: [rationale.md](docs/hooks-and-ways/rationale.md)
 
 ## Updating
 
-At session start, `check-config-updates.sh` compares your local copy against upstream (`aaronsb/claude-code-config`). It runs silently unless you're behind — then it prints a notice with the exact commands to sync. Network calls are rate-limited to once per hour.
+At session start, `check-config-updates.sh` compares your local copy against upstream (`aaronsb/claude-code-config`). It runs silently unless you're behind — then it prints a notice with the exact commands to sync. Network calls are rate-limited to once per hour. After pulling, run `make setup` to update the semantic matching corpus.
 
 | Scenario | How detected | Sync command |
 |----------|-------------|--------------|

@@ -1,11 +1,9 @@
 #!/bin/bash
 # Macro: prepend way vocabulary health summary when optimization way fires
-# Runs way-match suggest on all semantic ways and outputs a compact summary
+# Runs ways suggest on all semantic ways and outputs a compact summary
 
-WAY_MATCH="${HOME}/.claude/bin/way-match"
-
-if [[ ! -x "$WAY_MATCH" ]]; then
-  echo "**way-match binary not found** — build with: \`make -f tools/way-match/Makefile local\`"
+if ! command -v ways &>/dev/null; then
+  echo "**ways binary not found** — build with: \`make install\`"
   exit 0
 fi
 
@@ -14,9 +12,9 @@ echo ""
 printf "%-35s %6s %6s %6s %s\n" "Way" "Gaps" "Cover" "Unused" "Match"
 printf "%-35s %6s %6s %6s %s\n" "---" "----" "-----" "------" "-----"
 
-for wayfile in $(find "${HOME}/.claude/hooks/ways" -name "way.md" -print 2>/dev/null | sort); do
+for wayfile in $(find -L "${HOME}/.claude/hooks/ways" -name "*.md" ! -name "*.check.md" -print 2>/dev/null | while IFS= read -r f; do head -1 "$f" 2>/dev/null | grep -q '^---$' && echo "$f"; done | sort); do
   relpath="${wayfile#${HOME}/.claude/hooks/ways/}"
-  relpath="${relpath%/way.md}"
+  relpath="${relpath%/*}"
 
   # Check if this way has vocabulary (semantic matching)
   has_vocab=$(awk 'NR==1 && /^---$/{p=1;next} p&&/^---$/{exit} p && /^vocabulary:/{print "yes";exit}' "$wayfile")
@@ -33,7 +31,7 @@ for wayfile in $(find "${HOME}/.claude/hooks/ways" -name "way.md" -print 2>/dev/
   fi
 
   if [[ "$match_type" == "BM25" ]]; then
-    stderr=$("$WAY_MATCH" suggest --file "$wayfile" 2>&1 >/dev/null)
+    stderr=$(ways suggest "$wayfile" 2>&1 >/dev/null)
     gaps=$(echo "$stderr" | sed -n 's/suggest: \([0-9]*\) gaps.*/\1/p')
     covered=$(echo "$stderr" | sed -n 's/.*, \([0-9]*\) covered.*/\1/p')
     unused=$(echo "$stderr" | sed -n 's/.*, \([0-9]*\) unused/\1/p')
@@ -48,9 +46,9 @@ PROJECT_DIR="${CLAUDE_PROJECT_DIR:-}"
 if [[ -n "$PROJECT_DIR" && -d "$PROJECT_DIR/.claude/ways" ]]; then
   echo ""
   echo "### Project-local ways"
-  for wayfile in $(find "$PROJECT_DIR/.claude/ways" -name "way.md" -print 2>/dev/null | sort); do
+  for wayfile in $(find -L "$PROJECT_DIR/.claude/ways" -name "*.md" ! -name "*.check.md" -print 2>/dev/null | while IFS= read -r f; do head -1 "$f" 2>/dev/null | grep -q '^---$' && echo "$f"; done | sort); do
     relpath="${wayfile#$PROJECT_DIR/.claude/ways/}"
-    relpath="${relpath%/way.md}"
+    relpath="${relpath%/*}"
     printf "%-35s %s\n" "$relpath" "(project-local)"
   done
 fi

@@ -1,8 +1,13 @@
-# ADR-004: Way Macros for Dynamic Context Injection
+---
+status: Accepted
+date: 2025-12-30
+deciders:
+  - aaronsb
+  - claude
+related: []
+---
 
-Status: Proposed
-Date: 2025-12-30
-Deciders: @aaronsb, @claude
+# ADR-004: Way Macros for Dynamic Context Injection
 
 ## Context
 

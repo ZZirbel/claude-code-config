@@ -55,6 +55,11 @@ wait
 CONTRIBUTORS=$(jq -r 'length' "$WORK_DIR/contributors.json" 2>/dev/null)
 CURRENT_USER=$(cat "$WORK_DIR/user.txt" 2>/dev/null)
 
+# Active contributors — anyone who committed in the last 90 days
+# Local git log is faster and more accurate than API for this
+ACTIVE_CONTRIBUTORS=$(git log --since="90 days ago" --format='%aN' 2>/dev/null | sort -u | wc -l)
+ACTIVE_CONTRIBUTORS=${ACTIVE_CONTRIBUTORS:-0}
+
 # Repo details
 DESCRIPTION=$(jq -r '.description // empty' "$WORK_DIR/repo.json" 2>/dev/null)
 TOPICS=$(jq -r '.topics | length' "$WORK_DIR/repo.json" 2>/dev/null)
@@ -106,19 +111,21 @@ fi
 # ============================================================
 
 if [[ -n "$CONTRIBUTORS" ]]; then
-  if [[ "$CONTRIBUTORS" -le 2 ]]; then
-    echo "**Context**: Solo/pair project ($CONTRIBUTORS contributors)"
+  # Classify by active contributors (last 90 days), not total
+  if [[ "$ACTIVE_CONTRIBUTORS" -le 2 ]]; then
+    echo "**Context**: Solo/pair project ($ACTIVE_CONTRIBUTORS active, $CONTRIBUTORS total contributors)"
     echo "- PRs recommended even for solo work — they create history, enable CI, and build good habits"
     echo "- Lightweight PRs are fine: a title and a few bullet points"
   else
     # Reuse saved contributors response instead of re-fetching
     REVIEWERS=$(jq -r '.[0:5][].login' "$WORK_DIR/contributors.json" 2>/dev/null \
       | grep -v "$CURRENT_USER" | head -3 | tr '\n' ', ' | sed 's/,$//')
-    echo "**Context**: Team project ($CONTRIBUTORS contributors)"
-    echo "- PR required for all changes"
+    echo "**Context**: Team project ($ACTIVE_CONTRIBUTORS active, $CONTRIBUTORS total contributors)"
+    echo "- PR required for all changes — review before merge"
     if [[ -n "$REVIEWERS" ]]; then
       echo "- Potential reviewers: $REVIEWERS"
     fi
+    echo "- Consider [Claude Code Review](https://claude.com/blog/code-review) for automated multi-agent PR analysis (\$15-25/review, Team/Enterprise plans)"
   fi
 fi
 

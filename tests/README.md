@@ -9,41 +9,37 @@ tests/run-all.sh
 
 ## Way Matching Tests
 
-Three layers, from fast/automated to slow/interactive. See [way-match/results.md](way-match/results.md) for typical output with BM25 vs NCD comparison and interpretation.
+Three layers, from fast/automated to slow/interactive.
 
-### 1. Fixture Tests (BM25 vs NCD scorer comparison)
+### 1. Session Simulation Tests (Rust integration)
 
-Runs 70 test prompts against a fixed 20-way corpus (all softwaredev ways with BM25 semantic matching). Compares BM25 binary against gzip NCD baseline. Reports TP/FP/TN/FN for each scorer. Includes co-activation fixtures that validate multi-way triggering.
-
-```bash
-tests/way-match/run-tests.sh fixture --verbose
-# or directly:
-bash tools/way-match/test-harness.sh --verbose
-```
-
-Options: `--bm25-only`, `--ncd-only`, `--verbose`
-
-**What it covers**: Scorer accuracy, false positive rate, head-to-head comparison. Tests direct vocabulary matches, synonym/paraphrase variants, negative controls, and co-activation (multi-way expected sets).
-
-**Current baseline**: BM25 63/70, 0 FP. Co-activation: 6/6 FULL.
-
-### 2. Integration Tests (real way files)
-
-Scores 34 test prompts (including 3 co-activation) against actual `way.md` files extracted from the live ways directory. Tests the real frontmatter extraction pipeline.
+Rust-based tests that exercise the `ways` binary against fixture ways. Validates scan, matching, session state, and epoch tracking.
 
 ```bash
-tests/way-match/run-tests.sh integration
+make test-sim
 # or directly:
-bash tools/way-match/test-integration.sh
+cargo test --manifest-path tools/ways-cli/Cargo.toml --test session_sim -- --test-threads=1
 ```
 
-**What it covers**: End-to-end scoring with real way vocabulary, multi-way discrimination (does the right way win?), threshold behavior with actual threshold values.
+**What it covers**: End-to-end scan pipeline, BM25 scoring against real frontmatter, session marker lifecycle, epoch distance calculations.
 
-**Current baseline**: BM25 28/34 (0 FP), NCD 16/34 (3 FP).
+### 2. Embedding Engine Tests
+
+Validates the embedding tier (all-MiniLM-L6-v2) against the BM25 fallback on a shared fixture set.
+
+```bash
+# Embedding-specific validation (15 tests)
+bash tools/way-embed/test-embedding.sh
+
+# Head-to-head: embedding vs BM25 on 64 fixtures
+bash tools/way-embed/compare-engines.sh
+```
+
+**Current baseline**: Embedding 98.4% (63/64), BM25 90.6% (58/64), 0 false negatives on both.
 
 ### 3. Activation Test (live agent + subagent)
 
-Interactive test protocol that verifies the full hook pipeline in a running Claude Code session. Tests regex matching, BM25 semantic matching (established and newly-added vocabularies), co-activation of related ways, negative controls, and subagent injection.
+Interactive test protocol that verifies the full hook pipeline in a running Claude Code session. Tests regex matching, semantic matching, co-activation, negative controls, and subagent injection.
 
 **To run**: Start a fresh session from `~/.claude/` and type:
 
@@ -57,9 +53,9 @@ Claude reads the test file (avoiding prompt-hook contamination), then walks you 
 |------|-----|-------|
 | 1 | Claude | Session baseline (no premature domain activation) |
 | 2 | User types prompt | Regex pattern matching (delivery/commits) |
-| 3 | User types prompt | BM25 semantic matching, established way (code/security) |
-| 4 | User types prompt | BM25 semantic matching, newly-semantic way (code/performance) |
-| 5 | User types prompt | Co-activation of multiple related ways (delivery/migrations + others) |
+| 3 | User types prompt | Semantic matching, established way (code/security) |
+| 4 | User types prompt | Semantic matching, newer way (code/performance) |
+| 5 | User types prompt | Co-activation of multiple related ways |
 | 6 | User types prompt | Negative control (no false positives) |
 | 7 | Claude | Subagent injection (Testing Way via SubagentStart) |
 | 8 | Claude | Subagent negative (no fresh injection; parent context OK) |
@@ -67,12 +63,50 @@ Claude reads the test file (avoiding prompt-hook contamination), then walks you 
 
 Takes about 5 minutes. **Current baseline**: 8/8 PASS (steps 1-8).
 
-### Ad-Hoc Vocabulary Testing
+### 4. Multilingual Matching Test (live agent)
 
-The `/ways-tests` skill scores a prompt against all semantic ways and reports BM25 scores. Use it during vocabulary tuning to check discrimination between ways.
+Interactive test protocol that verifies locale stubs fire correctly for non-English prompts across 12 languages and 5 script families.
+
+**To run**: Start a fresh session from `~/.claude/` and type:
 
 ```
-/ways-tests "write some unit tests for this module"
+read and run the multilingual test at tests/multilingual-test.md
+```
+
+Claude reads the test file, then walks you through 16 steps:
+
+| Steps | Script | Languages | Tests |
+|-------|--------|-----------|-------|
+| 1-4 | Latin | de, es, fr, pt-br | Locale vocabulary matching for familiar scripts |
+| 5-7 | CJK | ja, ko, zh | Cross-script embedding matching |
+| 8-9 | Cyrillic | ru, uk | Cyrillic vocabulary matching |
+| 10 | Arabic | ar | Right-to-left script matching |
+| 11-12 | Thai, Devanagari | th, hi | Southeast Asian and Indic scripts |
+| 13-14 | Latin | en, it | Cross-language consistency (same concept, two languages) |
+| 15 | Latin | nl (inactive) | Negative: inactive language falls back to English |
+| 16 | — | — | Summary table |
+
+Takes about 10 minutes. Tests all 18 active languages are reachable.
+
+### Ad-Hoc Testing with /ways-tests
+
+The `/ways-tests` skill and `ways` CLI provide targeted testing without writing scripts:
+
+```bash
+# Score a specific way against a prompt
+/ways-tests score security "how do i hash passwords with bcrypt"
+
+# Rank all ways against a prompt (check discrimination)
+/ways-tests score-all "write some unit tests for this module"
+
+# Vocabulary gap analysis
+/ways-tests suggest security
+
+# Validate frontmatter
+/ways-tests lint --all
+
+# Sibling vocabulary overlap
+ways siblings softwaredev/code/supplychain/depscan/node
 ```
 
 ## Documentation Tests
@@ -92,27 +126,27 @@ bash scripts/doc-graph.sh --all       # all outputs
 
 ### Governance Provenance Verification
 
-Validates that provenance metadata in way frontmatter is structurally sound: policy URIs point to real files, verified dates aren't stale, controls have justifications.
+Validates that provenance metadata is structurally sound: policy URIs point to real files, verified dates aren't stale, controls have justifications.
 
 ```bash
-bash governance/provenance-verify.sh         # human-readable report
-bash governance/provenance-verify.sh --json  # machine-readable
-bash governance/governance.sh --lint         # full governance lint
+ways governance lint              # human-readable report
+ways governance lint --json       # machine-readable
+ways governance report            # full coverage report
 ```
 
-**What it covers**: Provenance chain integrity — every `policy.uri` in way frontmatter resolves, every control has justifications, verified dates are within staleness window.
+**What it covers**: Provenance chain integrity — every `policy.uri` in provenance sidecars resolves, every control has justifications, verified dates are within staleness window.
 
 ## When to Run Which
 
 | Scenario | Test |
 |----------|------|
-| Changed `way-match.c` or rebuilt binary | Fixture tests + integration tests |
-| Changed a way's vocabulary or threshold | Integration tests + `/ways-tests` |
-| Changed hook scripts (check-*.sh, inject-*.sh, match-way.sh) | Activation test |
-| Added a new way | Integration tests + `/ways-tests` + activation test |
-| Restructured way directories | All three test layers + symlink/path verification |
-| Added semantic matching to a way | Fixture tests + integration tests + activation test (step 4) |
+| Changed `ways` CLI source code | `make test-sim` |
+| Changed a way's vocabulary or threshold | `/ways-tests score` + `/ways-tests score-all` |
+| Changed locale stubs or active languages | `make test-locales` + multilingual test |
+| Changed hook scripts (check-*.sh, inject-*.sh) | Activation test |
+| Added a new way | `/ways-tests score` + `/ways-tests lint` + activation test |
+| Restructured way directories | All three test layers |
+| Changed embedding engine or model | `tools/way-embed/compare-engines.sh` |
 | Renamed or moved documentation files | Doc-graph |
-| Changed provenance metadata in way frontmatter | Governance verification |
-| Changed policy source documents | Governance verification |
+| Changed provenance metadata | Governance verification |
 | Sanity check after merge | All of the above |

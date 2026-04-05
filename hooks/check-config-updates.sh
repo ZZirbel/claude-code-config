@@ -10,7 +10,7 @@
 #   5. Is CLAUDE_PLUGIN_ROOT set? → plugin install
 #
 # Network calls (git fetch, gh api) are rate-limited to once per hour.
-# Display fires every session if cached state shows "behind".
+# Writes state to cache file; display is handled by `ways show core`.
 
 CLAUDE_DIR="${HOME}/.claude"
 UPSTREAM_REPO="aaronsb/claude-code-config"
@@ -18,7 +18,6 @@ UPSTREAM_URL="https://github.com/${UPSTREAM_REPO}"
 UPSTREAM_MARKER="${CLAUDE_DIR}/.claude-upstream"
 CACHE_FILE="/tmp/.claude-config-update-state-$(id -u)"
 ONE_HOUR=3600
-ONE_DAY=86400
 CURRENT_TIME=$(date +%s)
 
 # --- Helpers ---
@@ -44,81 +43,11 @@ write_cache() {
   mv -f "$tmp" "$CACHE_FILE"
 }
 
-read_cache() {
-  [[ -f "$CACHE_FILE" ]] || return 1
-  CACHED_TYPE=$(sed -n 's/^type=//p' "$CACHE_FILE")
-  CACHED_BEHIND=$(sed -n 's/^behind=//p' "$CACHE_FILE")
-  CACHED_HAS_UPSTREAM=$(sed -n 's/^has_upstream=//p' "$CACHE_FILE")
-  CACHED_FORK_OWNER=$(sed -n 's/^fork_owner=//p' "$CACHE_FILE")
-  return 0
-}
-
-show_clone_notice() {
-  local behind="$1"
-  echo ""
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo "  Update Available — ${behind} commit(s) behind origin/main"
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo ""
-  echo "  cd ~/.claude && git pull"
-  echo ""
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo ""
-}
-
-show_fork_notice() {
-  local has_upstream="$1"
-  echo ""
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo "  Update Available — your fork is behind ${UPSTREAM_REPO}"
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo ""
-  if [[ "$has_upstream" != "true" ]]; then
-    echo "  git -C ~/.claude remote add upstream ${UPSTREAM_URL}"
-  fi
-  echo "  cd ~/.claude && git fetch upstream && git merge upstream/main"
-  echo ""
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo ""
-}
-
-show_plugin_notice() {
-  local installed="$1" latest="$2"
-  echo ""
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo "  Plugin Update Available (v${installed} → v${latest})"
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo ""
-  echo "  /plugin update disciplined-methodology"
-  echo ""
-  echo "  Release notes:"
-  echo "  ${UPSTREAM_URL}/releases/tag/v${latest}"
-  echo ""
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo ""
-}
-
 check_marker_file() {
   [[ -f "$UPSTREAM_MARKER" ]] || return 1
   local declared
   declared=$(head -1 "$UPSTREAM_MARKER" | tr -d '[:space:]')
   [[ "$declared" == "$UPSTREAM_REPO" ]]
-}
-
-show_renamed_clone_notice() {
-  local has_upstream="$1"
-  echo ""
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo "  Update Available — behind ${UPSTREAM_REPO}"
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo ""
-  if [[ "$has_upstream" != "true" ]]; then
-    echo "  git -C ~/.claude remote add upstream ${UPSTREAM_URL}"
-  fi
-  echo "  cd ~/.claude && git fetch upstream && git merge upstream/main"
-  echo ""
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo ""
 }
 
 # Check gh CLI availability and auth status.
@@ -148,25 +77,6 @@ check_gh() {
   return 0
 }
 
-# Show a non-blocking note when gh isn't available (once per day)
-GH_NOTICE_MARKER="/tmp/.claude-gh-notice-$(id -u)"
-
-show_gh_notice() {
-  if [[ -f "$GH_NOTICE_MARKER" ]]; then
-    local last_shown
-    last_shown=$(cat "$GH_NOTICE_MARKER" 2>/dev/null)
-    if [[ -n "$last_shown" ]] && (( CURRENT_TIME - last_shown < ONE_DAY )); then
-      return
-    fi
-  fi
-  echo "$CURRENT_TIME" > "$GH_NOTICE_MARKER"
-  echo ""
-  echo "  Note: Update check skipped — ${GH_ISSUE}"
-  echo "  If you don't use gh as part of your flow, other git platforms have"
-  echo "  similar CLI tools. Use Claude Code to adjust this check for your environment."
-  echo "  (This script: ~/.claude/hooks/check-config-updates.sh)"
-  echo ""
-}
 
 # --- Scenario 1 & 2: Git repo (clone or fork) ---
 
@@ -192,13 +102,6 @@ if git -C "$CLAUDE_DIR" rev-parse --git-dir >/dev/null 2>&1; then
       timeout 10 git -C "$CLAUDE_DIR" fetch origin --quiet 2>/dev/null
       BEHIND=$(git -C "$CLAUDE_DIR" rev-list HEAD..origin/main --count 2>/dev/null || echo 0)
       write_cache "clone" "$BEHIND"
-    else
-      read_cache
-      BEHIND="$CACHED_BEHIND"
-    fi
-
-    if [[ "$BEHIND" =~ ^[0-9]+$ ]] && (( BEHIND > 0 )); then
-      show_clone_notice "$BEHIND"
     fi
     exit 0
 
@@ -281,17 +184,6 @@ fork_owner=${FORK_OWNER}"
       fi
     fi
 
-    # Always read cache for display (covers both fresh-write and cached paths)
-    read_cache
-
-    if [[ "$CACHED_TYPE" == "fork" && "$CACHED_BEHIND" =~ ^[0-9]+$ ]] && (( CACHED_BEHIND > 0 )); then
-      show_fork_notice "$CACHED_HAS_UPSTREAM"
-    elif [[ "$CACHED_TYPE" == "renamed_clone" && "$CACHED_BEHIND" =~ ^[0-9]+$ ]] && (( CACHED_BEHIND > 0 )); then
-      show_renamed_clone_notice "$CACHED_HAS_UPSTREAM"
-    elif [[ "$CACHED_TYPE" == "gh_unavailable" ]]; then
-      GH_ISSUE=$(sed -n 's/^reason=//p' "$CACHE_FILE")
-      show_gh_notice
-    fi
     exit 0
   fi
 fi
@@ -321,15 +213,4 @@ latest=${LATEST_VERSION}"
     fi
   fi
 
-  # Always read cache for display
-  read_cache
-
-  if [[ "$CACHED_TYPE" == "plugin" && "$CACHED_BEHIND" =~ ^[0-9]+$ ]] && (( CACHED_BEHIND > 0 )); then
-    INSTALLED=$(sed -n 's/^installed=//p' "$CACHE_FILE")
-    LATEST=$(sed -n 's/^latest=//p' "$CACHE_FILE")
-    show_plugin_notice "$INSTALLED" "$LATEST"
-  elif [[ "$CACHED_TYPE" == "gh_unavailable" ]]; then
-    GH_ISSUE=$(sed -n 's/^reason=//p' "$CACHE_FILE")
-    show_gh_notice
-  fi
 fi

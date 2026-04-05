@@ -1,8 +1,13 @@
-# ADR-005: Governance Traceability for Ways
+---
+status: Accepted
+date: 2026-02-05
+deciders:
+  - aaronsb
+  - claude
+related: []
+---
 
-Status: Proposed
-Date: 2026-02-05
-Deciders: @aaronsb, @claude
+# ADR-005: Governance Traceability for Ways
 
 ## Context
 

@@ -29,5 +29,5 @@ else
   if [[ "$ADR_COUNT" -gt 0 ]]; then
     echo "**$ADR_COUNT ADR files found** (no ADR tool — read files directly from \`docs/architecture/\`)"
   fi
-  # If no ADRs at all, output nothing — the way.md still provides the general reminder
+  # If no ADRs at all, output nothing — the way file still provides the general reminder
 fi

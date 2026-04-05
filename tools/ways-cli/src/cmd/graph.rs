@@ -1,0 +1,69 @@
+use anyhow::Result;
+use serde_json::json;
+use std::io::{self, BufWriter, Write};
+use std::path::PathBuf;
+
+use crate::frontmatter;
+use crate::scanner;
+
+pub fn run(ways_dir: Option<String>, output: Option<String>) -> Result<()> {
+    let root = ways_dir
+        .map(PathBuf::from)
+        .unwrap_or_else(default_ways_dir);
+
+    let ways = scanner::scan_ways(&root)?;
+
+    let writer: Box<dyn Write> = match output {
+        Some(ref path) => Box::new(std::fs::File::create(path)?),
+        None => Box::new(io::stdout()),
+    };
+    let mut w = BufWriter::new(writer);
+
+    let mut node_count = 0;
+    let mut edge_count = 0;
+
+    for way in &ways {
+        let content = std::fs::read_to_string(&way.path)?;
+        let fm = frontmatter::parse(&way.path)?;
+        let epistemic = frontmatter::extract_epistemic(&content);
+
+        let node = json!({
+            "id": way.id,
+            "domain": way.domain,
+            "epistemic": epistemic,
+            "description": fm.description,
+        });
+        serde_json::to_writer(&mut w, &node)?;
+        w.write_all(b"\n")?;
+        node_count += 1;
+
+        for (target_name, _target_domain, label) in frontmatter::extract_see_also(&content) {
+            let mut edge = json!({
+                "source": way.id,
+                "target": target_name,
+                "type": "see_also",
+            });
+            if !label.is_empty() {
+                edge["label"] = json!(label);
+            }
+            serde_json::to_writer(&mut w, &edge)?;
+            w.write_all(b"\n")?;
+            edge_count += 1;
+        }
+    }
+
+    w.flush()?;
+
+    eprintln!("{node_count} nodes, {edge_count} edges");
+    Ok(())
+}
+
+fn default_ways_dir() -> PathBuf {
+    dirs_next().join("hooks/ways")
+}
+
+fn dirs_next() -> PathBuf {
+    home_dir().join(".claude")
+}
+
+use crate::util::home_dir;

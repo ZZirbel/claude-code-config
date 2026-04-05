@@ -14,13 +14,17 @@
 # Way content is emitted WITHOUT marker checks - subagents get fresh
 # context regardless of what the parent already triggered.
 
+source "$(dirname "$0")/sessions-root.sh"
+
 INPUT=$(cat)
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
+AGENT_ID=$(echo "$INPUT" | jq -r '.agent_id // empty')
+[[ -n "$AGENT_ID" ]] && export CLAUDE_AGENT_ID="$AGENT_ID"
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(echo "$INPUT" | jq -r '.cwd // empty')}"
 
 [[ -z "$SESSION_ID" ]] && exit 0
 
-STASH_DIR="/tmp/.claude-subagent-stash-${SESSION_ID}"
+STASH_DIR="${SESSIONS_ROOT}/${SESSION_ID}/subagent-stash"
 [[ ! -d "$STASH_DIR" ]] && exit 0
 
 # Claim the oldest stash file (FIFO for parallel Task invocations)
@@ -31,36 +35,51 @@ OLDEST=$(ls "$STASH_DIR"/*.json 2>/dev/null | sort | head -1)
 CLAIMED="${OLDEST}.claimed"
 mv "$OLDEST" "$CLAIMED" 2>/dev/null || exit 0
 
-# Read matched way paths, teammate flag, and team name
+# Read matched way paths, channels, teammate flag, and team name
 WAYS=$(jq -r '.ways[]' "$CLAIMED" 2>/dev/null)
+CHANNELS=$(jq -r '.channels // [] | .[]' "$CLAIMED" 2>/dev/null)
 IS_TEAMMATE=$(jq -r '.is_teammate // false' "$CLAIMED" 2>/dev/null)
 TEAM_NAME=$(jq -r '.team_name // empty' "$CLAIMED" 2>/dev/null)
 rm -f "$CLAIMED"
 
+# Build channel lookup array
+declare -a CHANNEL_ARR
+while IFS= read -r ch; do
+  CHANNEL_ARR+=("$ch")
+done <<< "$CHANNELS"
+
 # If this is a teammate spawn, write a marker the teammate's own hooks can detect
 # The marker persists for the teammate's session lifetime
 if [[ "$IS_TEAMMATE" == "true" ]]; then
-  echo "${TEAM_NAME}" > "/tmp/.claude-teammate-${SESSION_ID}"
+  mkdir -p "${SESSIONS_ROOT}/${SESSION_ID}"
+  echo "${TEAM_NAME}" > "${SESSIONS_ROOT}/${SESSION_ID}/teammate"
 fi
 
 [[ -z "$WAYS" ]] && exit 0
 
 # Emit way content for each matched way (bypassing markers)
 CONTEXT=""
+WAY_IDX=0
 
 while IFS= read -r waypath; do
   [[ -z "$waypath" ]] && continue
+  MATCH_CH="${CHANNEL_ARR[$WAY_IDX]:-prompt}"
+  ((WAY_IDX++))
 
   # Resolve way file (project-local > global)
   WAY_FILE=""
   WAY_DIR=""
-  if [[ -f "$PROJECT_DIR/.claude/ways/${waypath}/way.md" ]]; then
-    WAY_FILE="$PROJECT_DIR/.claude/ways/${waypath}/way.md"
-    WAY_DIR="$PROJECT_DIR/.claude/ways/${waypath}"
-  elif [[ -f "${HOME}/.claude/hooks/ways/${waypath}/way.md" ]]; then
-    WAY_FILE="${HOME}/.claude/hooks/ways/${waypath}/way.md"
-    WAY_DIR="${HOME}/.claude/hooks/ways/${waypath}"
-  fi
+  # Find way file — any .md with frontmatter in the way directory
+  for _base in "$PROJECT_DIR/.claude/ways" "${HOME}/.claude/hooks/ways"; do
+    [[ -d "${_base}/${waypath}" ]] || continue
+    for _f in "${_base}/${waypath}"/*.md; do
+      [[ -f "$_f" ]] && head -1 "$_f" 2>/dev/null | grep -q '^---$' && {
+        WAY_FILE="$_f"
+        WAY_DIR="${_base}/${waypath}"
+        break 2
+      }
+    done
+  done
   [[ -z "$WAY_FILE" ]] && continue
 
   # Check domain disabled
@@ -107,9 +126,13 @@ while IFS= read -r waypath; do
     scope="subagent"
     [[ "$IS_TEAMMATE" == "true" ]] && scope="teammate"
     log_args=(event=way_fired way="$waypath" domain="$DOMAIN"
-      trigger="$scope" scope="$scope" project="$PROJECT_DIR" session="$SESSION_ID")
+      trigger="${MATCH_CH}" scope="$scope" project="$PROJECT_DIR" session="$SESSION_ID")
     [[ -n "$TEAM_NAME" ]] && log_args+=(team="$TEAM_NAME")
-    "${HOME}/.claude/hooks/ways/log-event.sh" "${log_args[@]}"
+    # Inline event logging
+    mkdir -p "${HOME}/.claude/stats" 2>/dev/null
+    _args=(--arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)") _obj="ts:\$ts"
+    for _kv in "${log_args[@]}"; do _args+=(--arg "${_kv%%=*}" "${_kv#*=}"); _obj+=",${_kv%%=*}:\$${_kv%%=*}"; done
+    jq -nc "${_args[@]}" "{${_obj}}" >> "${HOME}/.claude/stats/events.jsonl" 2>/dev/null
   fi
 done <<< "$WAYS"
 

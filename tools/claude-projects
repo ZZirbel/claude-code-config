@@ -1,0 +1,716 @@
+#!/usr/bin/env python3
+"""
+claude-projects — enumerate, search, and summarize Claude Code projects
+
+Usage:
+    claude-projects                    # list all projects, most recent first
+    claude-projects list               # same
+    claude-projects list --active      # only projects with sessions
+    claude-projects list --memory      # only projects with memory
+    claude-projects list --stale       # empty projects (no sessions)
+    claude-projects search <query>     # fuzzy search project paths
+    claude-projects show <project>     # detailed view of one project
+    claude-projects stats              # aggregate statistics
+    claude-projects cleanup --dry-run  # show empty projects that could be removed
+    claude-projects cleanup            # remove empty project directories
+
+Install:
+    ln -s ~/.claude/tools/claude-projects ~/.local/bin/claude-projects
+"""
+
+import argparse
+import json
+import os
+import re
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+PROJECTS_DIR = Path.home() / ".claude" / "projects"
+HOME = str(Path.home())
+
+def term_width():
+    """Get terminal width, default 80."""
+    try:
+        return os.get_terminal_size().columns
+    except (ValueError, OSError):
+        return 80
+
+_ANSI_RE = re.compile(r'\033\[[0-9;]*m')
+
+def vlen(s):
+    """Visible length of a string (ignoring ANSI escape codes)."""
+    return len(_ANSI_RE.sub('', s))
+
+def rpad(s, width):
+    """Right-pad string to width, accounting for ANSI codes."""
+    return s + ' ' * max(0, width - vlen(s))
+
+def lpad(s, width):
+    """Left-pad (right-align) string to width, accounting for ANSI codes."""
+    return ' ' * max(0, width - vlen(s)) + s
+
+# ── Colors ──────────────────────────────────────────────────────────────────
+
+USE_COLOR = sys.stdout.isatty()
+
+def c(code, text):
+    return f"\033[{code}m{text}\033[0m" if USE_COLOR else text
+
+def bold(t):   return c("1", t)
+def dim(t):    return c("2", t)
+def cyan(t):   return c("36", t)
+def green(t):  return c("32", t)
+def yellow(t): return c("33", t)
+def red(t):    return c("31", t)
+def mag(t):    return c("35", t)
+
+def as_file_url(display_path):
+    """Convert display path to file:// URL for terminal auto-link detection."""
+    expanded = display_path.replace("~", HOME, 1) if display_path.startswith("~") else display_path
+    return f"file://{expanded}"
+
+# ── Data helpers ────────────────────────────────────────────────────────────
+
+def decode_project_path(dirname):
+    """Best-effort reverse of Claude's path encoding (/ and . → -)."""
+    # Try sessions-index first for the real path
+    idx = PROJECTS_DIR / dirname / "sessions-index.json"
+    if idx.exists():
+        try:
+            data = json.loads(idx.read_text())
+            entries = data.get("entries", [])
+            if entries:
+                pp = entries[0].get("projectPath", "")
+                if pp:
+                    return pp.replace(HOME, "~")
+        except (json.JSONDecodeError, KeyError):
+            pass
+
+    # Fallback: heuristic decode
+    # -home-aaron-Projects-foo → ~/Projects/foo
+    name = dirname.lstrip("-")
+    if name.startswith("home-"):
+        parts = name.split("-")
+        # Skip home-username
+        if len(parts) >= 2:
+            remainder = parts[2:]  # after home-aaron
+            return "~/" + "/".join(remainder) if remainder else "~"
+    return dirname
+
+
+def scan_project(dirname):
+    """Gather metadata for a single project directory."""
+    proj_dir = PROJECTS_DIR / dirname
+    info = {
+        "dirname": dirname,
+        "path": decode_project_path(dirname),
+        "sessions": 0,
+        "jsonl_files": 0,
+        "jsonl_bytes": 0,
+        "has_memory": False,
+        "memory_files": 0,
+        "last_active": None,
+        "first_active": None,
+        "last_summary": None,
+        "last_branch": None,
+        "recent_prompts": [],
+    }
+
+    # Sessions index
+    idx_file = proj_dir / "sessions-index.json"
+    if idx_file.exists():
+        try:
+            data = json.loads(idx_file.read_text())
+            entries = data.get("entries", [])
+            info["sessions"] = len(entries)
+            if entries:
+                # Sort by modified date
+                sorted_entries = sorted(entries, key=lambda e: e.get("modified", ""), reverse=True)
+                latest = sorted_entries[0]
+                info["last_active"] = latest.get("modified", "")[:10]
+                info["last_summary"] = latest.get("summary", "")
+                info["last_branch"] = latest.get("gitBranch", "")
+
+                oldest = sorted_entries[-1]
+                info["first_active"] = oldest.get("created", "")[:10]
+
+                # Recent prompts (last 3 sessions)
+                for e in sorted_entries[:3]:
+                    fp = e.get("firstPrompt", "")
+                    if fp:
+                        info["recent_prompts"].append(fp[:80])
+        except (json.JSONDecodeError, KeyError):
+            pass
+
+    # JSONL files (transcripts)
+    jsonl_files = list(proj_dir.glob("*.jsonl"))
+    info["jsonl_files"] = len(jsonl_files)
+    info["jsonl_bytes"] = sum(f.stat().st_size for f in jsonl_files)
+
+    # If no session index, try to get last active from file mtime
+    if not info["last_active"] and jsonl_files:
+        newest = max(jsonl_files, key=lambda f: f.stat().st_mtime)
+        info["last_active"] = datetime.fromtimestamp(newest.stat().st_mtime).strftime("%Y-%m-%d")
+
+    # Memory
+    mem_dir = proj_dir / "memory"
+    if mem_dir.is_dir():
+        mem_files = [f for f in mem_dir.iterdir() if f.is_file() and f.name != ".gitkeep"]
+        info["has_memory"] = len(mem_files) > 0
+        info["memory_files"] = len(mem_files)
+
+    return info
+
+
+def scan_all():
+    """Scan all project directories."""
+    if not PROJECTS_DIR.exists():
+        return []
+
+    projects = []
+    for d in PROJECTS_DIR.iterdir():
+        if d.is_dir() and not d.name.startswith("."):
+            projects.append(scan_project(d.name))
+
+    # Sort by last active (most recent first), then by name
+    projects.sort(key=lambda p: p.get("last_active") or "0000", reverse=True)
+    return projects
+
+
+def fmt_bytes(n):
+    if n >= 1_000_000_000:
+        return f"{n/1_000_000_000:.1f}G"
+    if n >= 1_000_000:
+        return f"{n/1_000_000:.1f}M"
+    if n >= 1_000:
+        return f"{n/1_000:.0f}K"
+    return f"{n}B"
+
+
+def age_str(date_str):
+    """Convert a date string to a relative age like '3d', '2w', '5mo'."""
+    if not date_str:
+        return ""
+    try:
+        d = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+        if d.tzinfo is None:
+            d = d.replace(tzinfo=timezone.utc)
+        now = datetime.now(timezone.utc)
+        delta = now - d
+        days = delta.days
+        if days == 0:
+            return "today"
+        if days == 1:
+            return "1d"
+        if days < 7:
+            return f"{days}d"
+        if days < 30:
+            return f"{days // 7}w"
+        if days < 365:
+            return f"{days // 30}mo"
+        return f"{days // 365}y"
+    except (ValueError, TypeError):
+        return ""
+
+# ── Commands ────────────────────────────────────────────────────────────────
+
+def cmd_list(args):
+    projects = scan_all()
+
+    if args.active:
+        projects = [p for p in projects if p["sessions"] > 0 or p["jsonl_files"] > 0]
+    elif args.memory:
+        projects = [p for p in projects if p["has_memory"]]
+    elif args.stale:
+        projects = [p for p in projects if p["sessions"] == 0 and p["jsonl_files"] == 0]
+
+    if not projects:
+        print("No matching projects found.")
+        return
+
+    # Dynamic column layout based on terminal width
+    tw = term_width()
+    # Fixed columns: 2 indent + Sessions(8) + Size(6) + Last(7) + Memory(6) + spacing(5) = 34
+    fixed = 36
+    path_w = max(20, tw - fixed)
+
+    # Header
+    print(f"\n{bold('Claude Code Projects')}  ({len(projects)} shown)\n")
+    print(f"  {'Project':<{path_w}} {'Sessions':>8} {'Size':>6} {'Last':>7} {'Memory':>6}")
+    print(f"  {'─' * path_w} {'─' * 8} {'─' * 6} {'─' * 7} {'─' * 6}")
+
+    show_urls = getattr(args, "urls", False)
+
+    for p in projects:
+        path = p["path"]
+        if len(path) > path_w:
+            path = "…" + path[-(path_w - 1):]
+
+        sess = str(p["sessions"]) if p["sessions"] else dim(str(p["jsonl_files"]) + "t") if p["jsonl_files"] else dim("–")
+        size = fmt_bytes(p["jsonl_bytes"]) if p["jsonl_bytes"] else dim("–")
+        age = age_str(p["last_active"]) if p["last_active"] else dim("–")
+        mem = green("●") if p["has_memory"] else dim("·")
+
+        # Color age
+        if age in ("today", "1d"):
+            age = green(age)
+        elif age and age[-1] in ("d", "w"):
+            age = cyan(age)
+        elif age and age[-1] == "o":
+            age = yellow(age)
+        elif age:
+            age = dim(age)
+
+        if show_urls:
+            # Two-line format: clickable URL + metadata
+            print(f"  {as_file_url(p['path'])}")
+            print(f"    {lpad(sess, 8)} {lpad(size, 6)} {lpad(age, 7)} {lpad(mem, 6)}")
+        else:
+            print(f"  {rpad(path, path_w)} {lpad(sess, 8)} {lpad(size, 6)} {lpad(age, 7)} {lpad(mem, 6)}")
+
+    print()
+
+
+def cmd_search(args):
+    query = args.query.lower()
+    projects = scan_all()
+    deep = getattr(args, "deep", False)
+
+    matches = []
+    for p in projects:
+        score = 0
+        context_snippets = []
+        path_lower = p["path"].lower()
+        dirname_lower = p["dirname"].lower()
+
+        # Exact substring
+        if query in path_lower or query in dirname_lower:
+            score += 10
+
+        # Word match
+        for word in query.split():
+            if word in path_lower:
+                score += 5
+
+        # Summary match (search all summaries from sessions-index)
+        idx_file = PROJECTS_DIR / p["dirname"] / "sessions-index.json"
+        if idx_file.exists():
+            try:
+                data = json.loads(idx_file.read_text())
+                for entry in data.get("entries", []):
+                    summary = (entry.get("summary") or "").lower()
+                    first_prompt = (entry.get("firstPrompt") or "").lower()
+                    if query in summary:
+                        score += 5
+                        context_snippets.append(entry.get("summary", "")[:80])
+                    elif query in first_prompt:
+                        score += 3
+                        context_snippets.append(entry.get("firstPrompt", "")[:80])
+            except (json.JSONDecodeError, KeyError):
+                pass
+        else:
+            # Fallback: check recent prompts
+            for prompt in p.get("recent_prompts", []):
+                if query in prompt.lower():
+                    score += 2
+                    context_snippets.append(prompt[:80])
+                    break
+
+        # Deep search: grep into transcript content
+        if deep and score == 0:
+            import subprocess
+            proj_dir = PROJECTS_DIR / p["dirname"]
+            try:
+                result = subprocess.run(
+                    ["grep", "-r", "-l", "-i", query, str(proj_dir)],
+                    capture_output=True, text=True, timeout=5
+                )
+                if result.returncode == 0:
+                    hit_count = len(result.stdout.strip().split("\n"))
+                    score += min(hit_count, 5)  # cap deep match score
+                    # Get a snippet from the first matching file
+                    first_hit = result.stdout.strip().split("\n")[0]
+                    if first_hit.endswith(".jsonl"):
+                        snip = subprocess.run(
+                            ["grep", "-i", "-m", "1", "-o", f".{{0,40}}{query}.{{0,40}}", first_hit],
+                            capture_output=True, text=True, timeout=3
+                        )
+                        if snip.stdout.strip():
+                            context_snippets.append(f"…{snip.stdout.strip()[:80]}…")
+            except (subprocess.TimeoutExpired, OSError):
+                pass
+
+        if score > 0:
+            matches.append((score, p, context_snippets))
+
+    matches.sort(key=lambda x: x[0], reverse=True)
+
+    if not matches:
+        print(f"No projects matching '{args.query}'" +
+              (" (try --deep to search transcript content)" if not deep else ""))
+        return
+
+    mode = bold("Deep search") if deep else bold("Search")
+    print(f"\n{mode}: {args.query}  ({len(matches)} matches)\n")
+    for score, p, snippets in matches[:15]:
+        path = p["path"]
+        sess = f"{p['sessions']}s" if p["sessions"] else f"{p['jsonl_files']}t" if p["jsonl_files"] else "–"
+        age = age_str(p["last_active"]) or "–"
+        print(f"  {cyan(as_file_url(p['path']))}")
+        print(f"    {dim(sess)} · {dim(age)}")
+        for snip in snippets[:2]:
+            print(f"    {dim('›')} {snip}")
+    print()
+
+
+def cmd_show(args):
+    query = args.project.lower()
+    projects = scan_all()
+
+    # Find best match
+    match = None
+    for p in projects:
+        if query in p["path"].lower() or query in p["dirname"].lower():
+            match = p
+            break
+
+    if not match:
+        print(f"No project matching '{args.project}'")
+        return
+
+    p = match
+    print(f"\n{bold(as_file_url(p['path']))}")
+    print(f"  {dim('Dir:')} {p['dirname']}")
+    print()
+
+    if p["first_active"]:
+        print(f"  {dim('First session:')} {p['first_active']}")
+    if p["last_active"]:
+        print(f"  {dim('Last active:')}  {p['last_active']} ({age_str(p['last_active'])})")
+    if p["last_branch"]:
+        print(f"  {dim('Last branch:')}  {p['last_branch']}")
+    print()
+
+    print(f"  {dim('Sessions:')}     {p['sessions']}")
+    print(f"  {dim('Transcripts:')}  {p['jsonl_files']}  ({fmt_bytes(p['jsonl_bytes'])})")
+    print(f"  {dim('Memory:')}       {'yes' if p['has_memory'] else 'no'}" +
+          (f" ({p['memory_files']} files)" if p['memory_files'] else ""))
+    print()
+
+    if p.get("last_summary"):
+        print(f"  {dim('Last summary:')} {p['last_summary']}")
+        print()
+
+    if p.get("recent_prompts"):
+        print(f"  {dim('Recent first prompts:')}")
+        for prompt in p["recent_prompts"]:
+            print(f"    {dim('›')} {prompt}")
+        print()
+
+    # Show session list from index if available
+    idx_file = PROJECTS_DIR / p["dirname"] / "sessions-index.json"
+    if idx_file.exists():
+        try:
+            data = json.loads(idx_file.read_text())
+            entries = sorted(data.get("entries", []),
+                           key=lambda e: e.get("modified", ""), reverse=True)
+            if entries:
+                print(f"  {dim('Sessions:')}")
+                for e in entries[:10]:
+                    date = e.get("modified", "")[:10]
+                    msgs = e.get("messageCount", "?")
+                    branch = e.get("gitBranch", "")
+                    summary = e.get("summary", "")[:50]
+                    sidechain = " ⑂" if e.get("isSidechain") else ""
+                    print(f"    {dim(date)}  {msgs:>3} msgs  {dim(branch):<20}{sidechain}")
+                    if summary:
+                        print(f"      {dim(summary)}")
+                if len(entries) > 10:
+                    print(f"    {dim(f'… +{len(entries) - 10} more')}")
+                print()
+        except (json.JSONDecodeError, KeyError):
+            pass
+
+
+def cmd_stats(args):
+    projects = scan_all()
+
+    total = len(projects)
+    with_sessions = sum(1 for p in projects if p["sessions"] > 0)
+    with_transcripts = sum(1 for p in projects if p["jsonl_files"] > 0)
+    with_memory = sum(1 for p in projects if p["has_memory"])
+    empty = sum(1 for p in projects if p["sessions"] == 0 and p["jsonl_files"] == 0)
+    total_sessions = sum(p["sessions"] for p in projects)
+    total_transcripts = sum(p["jsonl_files"] for p in projects)
+    total_bytes = sum(p["jsonl_bytes"] for p in projects)
+
+    print(f"\n{bold('Claude Code Project Statistics')}\n")
+    print(f"  Projects:          {total}")
+    print(f"    with sessions:   {with_sessions}")
+    print(f"    with transcripts:{with_transcripts}")
+    print(f"    with memory:     {with_memory}")
+    print(f"    empty:           {yellow(str(empty))}")
+    print()
+    print(f"  Total sessions:    {total_sessions}")
+    print(f"  Total transcripts: {total_transcripts}")
+    print(f"  Total disk:        {fmt_bytes(total_bytes)}")
+    print()
+
+    # Top projects by size
+    by_size = sorted(projects, key=lambda p: p["jsonl_bytes"], reverse=True)[:10]
+    print(f"  {dim('Top by disk usage:')}")
+    for p in by_size:
+        if p["jsonl_bytes"] == 0:
+            break
+        print(f"    {fmt_bytes(p['jsonl_bytes']):>6}  {p['path']}")
+    print()
+
+    # Most active
+    by_sessions = sorted(projects, key=lambda p: p["sessions"], reverse=True)[:10]
+    print(f"  {dim('Top by session count:')}")
+    for p in by_sessions:
+        if p["sessions"] == 0:
+            break
+        print(f"    {p['sessions']:>4}  {p['path']}")
+    print()
+
+
+def cmd_cleanup(args):
+    projects = scan_all()
+    empty = [p for p in projects if p["sessions"] == 0 and p["jsonl_files"] == 0]
+
+    if not empty:
+        print("No empty projects to clean up.")
+        return
+
+    print(f"\n{bold('Empty projects')} ({len(empty)} found)")
+    print(f"  {dim('These are metadata entries in ~/.claude/projects/, NOT your actual project directories.')}\n")
+    for p in empty:
+        print(f"  {dim(p['path'])}  {dim('→')}  {dim(str(PROJECTS_DIR / p['dirname']))}")
+
+    if args.dry_run:
+        print(f"\n  {dim('(dry run — pass without --dry-run to remove)')}")
+        return
+
+    print()
+    confirm = input(f"  Remove {len(empty)} empty entries from ~/.claude/projects/? [y/N] ")
+    if confirm.lower() != "y":
+        print("  Cancelled.")
+        return
+
+    removed = 0
+    for p in empty:
+        proj_dir = PROJECTS_DIR / p["dirname"]
+        try:
+            # Only remove if truly empty (no files at all, or just empty subdirs)
+            contents = list(proj_dir.rglob("*"))
+            files = [c for c in contents if c.is_file()]
+            if not files:
+                import shutil
+                shutil.rmtree(proj_dir)
+                removed += 1
+                print(f"  {dim('removed')} {p['path']}")
+            else:
+                print(f"  {yellow('skipped')} {p['path']} (has {len(files)} files)")
+        except OSError as e:
+            print(f"  {red('error')} {p['path']}: {e}")
+
+    print(f"\n  Removed {removed} directories.")
+
+def cmd_hygiene(args):
+    """Session hygiene: find orphaned transcripts, oversized sessions, disk hogs."""
+    projects = scan_all()
+    import shutil
+
+    total_disk = sum(p["jsonl_bytes"] for p in projects)
+    issues = []
+
+    for p in projects:
+        proj_dir = PROJECTS_DIR / p["dirname"]
+
+        # Orphaned transcripts: JSONL files not in sessions-index
+        idx_file = proj_dir / "sessions-index.json"
+        indexed_sessions = set()
+        if idx_file.exists():
+            try:
+                data = json.loads(idx_file.read_text())
+                for entry in data.get("entries", []):
+                    sid = entry.get("sessionId", "")
+                    if sid:
+                        indexed_sessions.add(sid)
+            except (json.JSONDecodeError, KeyError):
+                pass
+
+        jsonl_files = list(proj_dir.glob("*.jsonl"))
+        for jf in jsonl_files:
+            sid = jf.stem
+            size = jf.stat().st_size
+            if sid not in indexed_sessions and indexed_sessions:
+                issues.append({
+                    "type": "orphan",
+                    "project": p["path"],
+                    "file": jf.name,
+                    "size": size,
+                    "path": jf,
+                })
+
+            # Oversized transcripts (> 10MB)
+            if size > 10_000_000:
+                issues.append({
+                    "type": "large",
+                    "project": p["path"],
+                    "file": jf.name,
+                    "size": size,
+                    "path": jf,
+                })
+
+        # Empty session dirs (worktree artifacts)
+        for d in proj_dir.iterdir():
+            if d.is_dir() and d.name != "memory":
+                contents = list(d.iterdir())
+                if not contents:
+                    issues.append({
+                        "type": "empty_dir",
+                        "project": p["path"],
+                        "file": d.name,
+                        "size": 0,
+                        "path": d,
+                    })
+
+    if not issues:
+        print(f"\n{green('All clean!')} No hygiene issues found across {len(projects)} projects.\n")
+        return
+
+    # Group by type
+    orphans = [i for i in issues if i["type"] == "orphan"]
+    large = [i for i in issues if i["type"] == "large"]
+    empty_dirs = [i for i in issues if i["type"] == "empty_dir"]
+
+    print(f"\n{bold('Session Hygiene Report')}\n")
+    print(f"  Total disk usage: {fmt_bytes(total_disk)}")
+    print(f"  Projects scanned: {len(projects)}")
+    print()
+
+    if large:
+        large.sort(key=lambda x: x["size"], reverse=True)
+        large_total = sum(i["size"] for i in large)
+        print(f"  {yellow('Large transcripts')} (>10MB): {len(large)}  ({fmt_bytes(large_total)} total)")
+        for i in large[:10]:
+            print(f"    {fmt_bytes(i['size']):>6}  {i['project']}")
+            print(f"           {dim(i['file'])}")
+        if len(large) > 10:
+            print(f"    {dim(f'… +{len(large) - 10} more')}")
+        print()
+
+    if orphans:
+        orphan_total = sum(i["size"] for i in orphans)
+        print(f"  {yellow('Orphaned transcripts')} (not in sessions-index): {len(orphans)}  ({fmt_bytes(orphan_total)})")
+        # Group by project
+        by_proj = {}
+        for i in orphans:
+            by_proj.setdefault(i["project"], []).append(i)
+        for proj, items in sorted(by_proj.items()):
+            proj_total = sum(i["size"] for i in items)
+            print(f"    {proj}  ({len(items)} files, {fmt_bytes(proj_total)})")
+        print()
+
+    if empty_dirs:
+        print(f"  {dim('Empty session dirs')}: {len(empty_dirs)}")
+        print()
+
+    if args.dry_run:
+        reclaimable = sum(i["size"] for i in orphans)
+        print(f"  Reclaimable from orphans: {fmt_bytes(reclaimable)}")
+        print(f"  {dim('(pass without --dry-run to clean up)')}")
+        return
+
+    # Interactive cleanup
+    if orphans:
+        orphan_total = sum(i["size"] for i in orphans)
+        confirm = input(f"  Remove {len(orphans)} orphaned transcripts from ~/.claude/projects/ ({fmt_bytes(orphan_total)})? [y/N] ")
+        if confirm.lower() == "y":
+            removed = 0
+            freed = 0
+            for i in orphans:
+                try:
+                    i["path"].unlink()
+                    removed += 1
+                    freed += i["size"]
+                except OSError as e:
+                    print(f"  {red('error')} {i['path']}: {e}")
+            print(f"  Removed {removed} files, freed {fmt_bytes(freed)}")
+
+    if empty_dirs:
+        confirm = input(f"  Remove {len(empty_dirs)} empty session directories? [y/N] ")
+        if confirm.lower() == "y":
+            for i in empty_dirs:
+                try:
+                    i["path"].rmdir()
+                except OSError:
+                    pass
+            print(f"  Cleaned up {len(empty_dirs)} directories")
+
+    print()
+
+
+# ── Main ────────────────────────────────────────────────────────────────────
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog="claude-projects",
+        description="Enumerate, search, and summarize Claude Code projects",
+    )
+    sub = parser.add_subparsers(dest="command")
+
+    # list
+    p_list = sub.add_parser("list", aliases=["ls"], help="List projects")
+    p_list.add_argument("--active", action="store_true", help="Only projects with sessions")
+    p_list.add_argument("--memory", action="store_true", help="Only projects with memory")
+    p_list.add_argument("--stale", action="store_true", help="Only empty projects")
+    p_list.add_argument("--urls", action="store_true", help="Show clickable file:// URLs")
+
+    # search
+    p_search = sub.add_parser("search", aliases=["s", "find"], help="Search projects")
+    p_search.add_argument("query", help="Search term")
+    p_search.add_argument("--deep", action="store_true", help="Also search transcript content (slower)")
+
+    # show
+    p_show = sub.add_parser("show", aliases=["info"], help="Show project details")
+    p_show.add_argument("project", help="Project path or name fragment")
+
+    # stats
+    sub.add_parser("stats", help="Aggregate statistics")
+
+    # cleanup
+    p_clean = sub.add_parser("cleanup", help="Remove empty project directories")
+    p_clean.add_argument("--dry-run", action="store_true", help="Show what would be removed")
+
+    # hygiene
+    p_hyg = sub.add_parser("hygiene", help="Session hygiene: orphans, large files, disk usage")
+    p_hyg.add_argument("--dry-run", action="store_true", help="Report only, don't remove")
+
+    args = parser.parse_args()
+
+    if args.command in ("list", "ls", None):
+        if args.command is None:
+            # Default: list with no filters
+            args.active = False
+            args.memory = False
+            args.stale = False
+            args.urls = False
+        cmd_list(args)
+    elif args.command in ("search", "s", "find"):
+        cmd_search(args)
+    elif args.command in ("show", "info"):
+        cmd_show(args)
+    elif args.command == "stats":
+        cmd_stats(args)
+    elif args.command == "cleanup":
+        cmd_cleanup(args)
+    elif args.command == "hygiene":
+        cmd_hygiene(args)
+
+
+if __name__ == "__main__":
+    main()

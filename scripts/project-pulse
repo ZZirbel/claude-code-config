@@ -1,0 +1,342 @@
+#!/bin/bash
+# Project Pulse — epoch-mapped project awareness tool
+#
+# Compares this repo's commits/tags against Claude Code upstream releases,
+# or reconciles ADR statuses against shipped code.
+#
+# Usage:
+#   project-pulse                     # upstream mode, default window
+#   project-pulse --inward            # ADR reconciliation mode
+#   project-pulse --since 2026-03-01  # custom start date
+#   project-pulse --range 2026-02-01 2026-03-01
+#   project-pulse --full              # entire history
+#
+# Requires: gh (GitHub CLI), git, jq
+# ADR-106: Project Pulse — Epoch-Mapped Project Awareness
+
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")"
+WATERMARK_FILE="$REPO_ROOT/.claude/pulse-watermark"
+UPSTREAM_REPO="anthropics/claude-code"
+
+# ── Argument parsing ──────────────────────────────────────────────
+
+MODE="upstream"
+SINCE=""
+UNTIL=""
+FULL=false
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --inward)   MODE="inward"; shift ;;
+        --since)    SINCE="$2"; shift 2 ;;
+        --range)    SINCE="$2"; UNTIL="$3"; shift 3 ;;
+        --full)     FULL=true; shift ;;
+        --help|-h)
+            sed -n '2,/^$/{ s/^# //; s/^#//; p }' "$0"
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1" >&2
+            exit 1
+            ;;
+    esac
+done
+
+# ── Dependency checks ─────────────────────────────────────────────
+
+for cmd in gh git jq; do
+    if ! command -v "$cmd" &>/dev/null; then
+        echo "Error: $cmd is required but not found" >&2
+        exit 1
+    fi
+done
+
+# ── Helper functions ──────────────────────────────────────────────
+
+# Get the default window start: last tag, or watermark, or 2 weeks ago
+default_since() {
+    # Try last tag
+    local last_tag
+    last_tag=$(git tag --sort=-creatordate --format='%(creatordate:iso-strict)' | head -1 2>/dev/null || true)
+    if [[ -n "$last_tag" ]]; then
+        echo "$last_tag"
+        return
+    fi
+
+    # Try watermark
+    if [[ -f "$WATERMARK_FILE" ]]; then
+        jq -r '.date' "$WATERMARK_FILE" 2>/dev/null && return
+    fi
+
+    # Fall back to 2 weeks ago
+    date -d '14 days ago' '+%Y-%m-%d' 2>/dev/null || date -v-14d '+%Y-%m-%d'
+}
+
+# ISO date to epoch seconds
+to_epoch() {
+    date -d "$1" '+%s' 2>/dev/null || date -jf '%Y-%m-%d' "$1" '+%s' 2>/dev/null || date -jf '%Y-%m-%dT%H:%M:%SZ' "$1" '+%s' 2>/dev/null || echo "0"
+}
+
+# ── Upstream mode ─────────────────────────────────────────────────
+
+upstream_mode() {
+    local since_date="$1"
+    local until_date="$2"
+
+    # Feathering: go 2 releases before the since_date
+    local feather_count=2
+
+    # Fetch upstream releases
+    local releases
+    releases=$(gh api repos/"$UPSTREAM_REPO"/releases --paginate --jq \
+        '.[] | {tag: .tag_name, date: .published_at, body: .body}' 2>/dev/null)
+
+    if [[ -z "$releases" ]]; then
+        echo "Error: Could not fetch releases from $UPSTREAM_REPO" >&2
+        exit 1
+    fi
+
+    # Fetch our commits
+    local git_since_arg=""
+    local git_until_arg=""
+    if [[ "$FULL" != "true" ]]; then
+        [[ -n "$since_date" ]] && git_since_arg="--since=$since_date"
+        [[ -n "$until_date" ]] && git_until_arg="--until=$until_date"
+    fi
+
+    local our_commits
+    our_commits=$(git log --format='{"hash":"%h","date":"%aI","subject":"%s"}' \
+        $git_since_arg $git_until_arg 2>/dev/null | jq -s '.')
+
+    # Fetch our tags
+    local our_tags
+    our_tags=$(git tag --sort=-creatordate \
+        --format='{"tag":"%(refname:short)","date":"%(creatordate:iso-strict)"}' 2>/dev/null | jq -s '.')
+
+    # Build the epoch mapping as JSON
+    local mapping
+    mapping=$(echo "$releases" | jq -s --argjson commits "$our_commits" --argjson tags "$our_tags" \
+        --arg since "$since_date" --arg until "$until_date" --arg full "$FULL" '
+        # Sort releases by date
+        (. | sort_by(.date)) as $rels |
+
+        # Filter releases to window (with feathering)
+        (if $full == "true" then $rels
+         else
+            # Find releases in window
+            ($rels | map(select(
+                ($since == "" or .date >= $since) and
+                ($until == "" or .date <= $until)
+            ))) as $in_window |
+            # Find index of earliest in-window release
+            (($rels | to_entries | map(select(.value.date >= $since)) | .[0].key // 0) - 2 | if . < 0 then 0 else . end) as $start |
+            $rels[$start:]
+         end
+        ) as $windowed_rels |
+
+        # Map our commits to upstream epochs
+        ($commits | map(
+            . as $commit |
+            ($windowed_rels | map(select(.date <= $commit.date)) | last // null) as $current_upstream |
+            {
+                our_hash: $commit.hash,
+                our_date: $commit.date,
+                our_subject: $commit.subject,
+                upstream_at: ($current_upstream.tag // "before-window"),
+                upstream_date: ($current_upstream.date // null)
+            }
+        )) as $epoch_map |
+
+        # Compute deltas
+        ($epoch_map | [., (.[1:] + [null])] | transpose | map(
+            .[0] as $curr | .[1] as $next |
+            ($windowed_rels | map(select(
+                .date > ($curr.upstream_date // "") and
+                .date <= ($next.our_date // "9999")
+            )) | length) as $delta |
+            $curr + {upstream_delta: $delta}
+        )) as $with_deltas |
+
+        {
+            upstream_releases: $windowed_rels,
+            our_commits: $commits,
+            our_tags: $tags,
+            epoch_mapping: $with_deltas
+        }
+    ')
+
+    # ── Output ────────────────────────────────────────────────────
+
+    echo "# Project Pulse — Upstream Comparison"
+    echo ""
+    echo "Generated: $(date -Iseconds)"
+    if [[ "$FULL" == "true" ]]; then
+        echo "Window: full history"
+    else
+        echo "Window: ${since_date:-default} → ${until_date:-now}"
+    fi
+    echo ""
+
+    # Upstream releases in window
+    local rel_count
+    rel_count=$(echo "$mapping" | jq '.upstream_releases | length')
+    echo "## Upstream: Claude Code ($rel_count releases)"
+    echo ""
+    echo "$mapping" | jq -r '.upstream_releases[] |
+        "### \(.tag) (\(.date[:10]))\n\(.body)\n"'
+
+    # Our commits in window
+    local commit_count
+    commit_count=$(echo "$mapping" | jq '.our_commits | length')
+    echo "## Our Project ($commit_count commits)"
+    echo ""
+    echo "$mapping" | jq -r '.our_commits[] |
+        "- `\(.hash)` \(.date[:10]) \(.subject)"'
+    echo ""
+
+    # Our tags
+    local tag_list
+    tag_list=$(echo "$mapping" | jq -r '.our_tags[] | "- \(.tag) (\(.date[:10]))"')
+    if [[ -n "$tag_list" ]]; then
+        echo "## Our Tags"
+        echo ""
+        echo "$tag_list"
+        echo ""
+    fi
+
+    # Epoch mapping
+    echo "## Epoch Mapping"
+    echo ""
+    echo "| Our Commit | Date | Upstream At | Delta |"
+    echo "|------------|------|-------------|-------|"
+    echo "$mapping" | jq -r '.epoch_mapping[] |
+        "| `\(.our_hash)` \(.our_subject[:40]) | \(.our_date[:10]) | \(.upstream_at) | +\(.upstream_delta) |"'
+    echo ""
+
+    # Highlight high-delta periods
+    local high_deltas
+    high_deltas=$(echo "$mapping" | jq '[.epoch_mapping[] | select(.upstream_delta > 2)]')
+    local high_count
+    high_count=$(echo "$high_deltas" | jq 'length')
+    if [[ "$high_count" -gt 0 ]]; then
+        echo "## Attention: High-Delta Periods"
+        echo ""
+        echo "$high_count periods where 3+ upstream releases shipped between our commits:"
+        echo ""
+        echo "$high_deltas" | jq -r '.[] |
+            "- Between `\(.our_hash)` (\(.our_date[:10])) — \(.upstream_delta) upstream releases passed (at \(.upstream_at))"'
+        echo ""
+    fi
+
+    # Write watermark
+    jq -n \
+        --arg date "$(date -Iseconds)" \
+        --arg head "$(git rev-parse --short HEAD)" \
+        --arg upstream "$(echo "$mapping" | jq -r '.upstream_releases[-1].tag // "unknown"')" \
+        '{date: $date, our_head: $head, upstream_latest: $upstream}' \
+        > "$WATERMARK_FILE"
+}
+
+# ── Inward mode ───────────────────────────────────────────────────
+
+inward_mode() {
+    local adr_dir="$REPO_ROOT/docs/architecture"
+
+    if [[ ! -d "$adr_dir" ]]; then
+        echo "Error: No docs/architecture/ directory found" >&2
+        exit 1
+    fi
+
+    echo "# Project Pulse — ADR Reconciliation"
+    echo ""
+    echo "Generated: $(date -Iseconds)"
+    echo ""
+
+    echo "| ADR | Status | Referencing Commits | Branches | Assessment |"
+    echo "|-----|--------|--------------------:|----------|------------|"
+
+    # Find all ADR files
+    find "$adr_dir" -name 'ADR-*.md' -type f | sort | while read -r adr_file; do
+        local filename
+        filename=$(basename "$adr_file" .md)
+
+        # Extract ADR number
+        local adr_num
+        adr_num=$(echo "$filename" | grep -oP 'ADR-\d+' || true)
+        [[ -z "$adr_num" ]] && continue
+
+        # Extract status from frontmatter
+        local adr_status
+        adr_status=$(awk 'NR==1&&/^---$/{p=1;next} p&&/^---$/{exit} p&&/^status:/{gsub(/^status: */,"");print;exit}' "$adr_file")
+
+        # Extract title
+        local title
+        title=$(grep -m1 '^# ' "$adr_file" | sed 's/^# //')
+
+        # Count referencing commits (search for ADR number in messages)
+        local commit_count
+        commit_count=$(git log --all --oneline --grep="$adr_num" 2>/dev/null | wc -l | tr -d ' ')
+
+        # Search for branches referencing this ADR (case-insensitive)
+        local adr_lower
+        adr_lower=$(echo "$adr_num" | tr '[:upper:]' '[:lower:]' | tr '-' '-')
+        local branches
+        branches=$(git branch -a 2>/dev/null | grep -i "${adr_num}\|${adr_lower}" | sed 's/^[* ]*//' | tr '\n' ', ' | sed 's/,$//' || true)
+
+        # Assess
+        local assessment=""
+        if [[ "$adr_status" == "Accepted" && "$commit_count" -eq 0 ]]; then
+            assessment="Accepted but no referencing commits"
+        elif [[ "$adr_status" == "Draft" && "$commit_count" -gt 3 ]]; then
+            assessment="Draft with $commit_count commits — promote?"
+        elif [[ "$adr_status" == "Proposed" && "$commit_count" -gt 3 ]]; then
+            assessment="Proposed with $commit_count commits — promote?"
+        elif [[ "$adr_status" == "Accepted" && "$commit_count" -gt 0 ]]; then
+            assessment="OK"
+        elif [[ "$adr_status" == "Draft" || "$adr_status" == "Proposed" ]]; then
+            if [[ "$commit_count" -gt 0 ]]; then
+                assessment="In progress ($commit_count commits)"
+            else
+                assessment="Dormant"
+            fi
+        elif [[ "$adr_status" == "Deprecated" ]]; then
+            assessment="Deprecated"
+        else
+            assessment="$adr_status"
+        fi
+
+        printf "| %s | %s | %s | %s | %s |\n" \
+            "$adr_num" "$adr_status" "$commit_count" "${branches:-—}" "$assessment"
+    done
+
+    echo ""
+
+    # Summary stats
+    local total accepted draft proposed deprecated
+    total=$(find "$adr_dir" -name 'ADR-*.md' -type f | wc -l | tr -d ' ')
+    accepted=$(find "$adr_dir" -name 'ADR-*.md' -type f -exec grep -l '^status: Accepted' {} \; 2>/dev/null | wc -l | tr -d ' ')
+    draft=$(find "$adr_dir" -name 'ADR-*.md' -type f -exec grep -l '^status: Draft' {} \; 2>/dev/null | wc -l | tr -d ' ')
+    proposed=$(find "$adr_dir" -name 'ADR-*.md' -type f -exec grep -l '^status: Proposed' {} \; 2>/dev/null | wc -l | tr -d ' ')
+    deprecated=$(find "$adr_dir" -name 'ADR-*.md' -type f -exec grep -l '^status: Deprecated' {} \; 2>/dev/null | wc -l | tr -d ' ')
+
+    echo "## Summary"
+    echo ""
+    echo "- Total ADRs: $total"
+    echo "- Accepted: $accepted"
+    echo "- Draft: $draft"
+    echo "- Proposed: $proposed"
+    echo "- Deprecated: $deprecated"
+}
+
+# ── Main ──────────────────────────────────────────────────────────
+
+if [[ "$FULL" != "true" && -z "$SINCE" ]]; then
+    SINCE=$(default_since)
+fi
+
+case "$MODE" in
+    upstream)   upstream_mode "$SINCE" "$UNTIL" ;;
+    inward)     inward_mode ;;
+esac

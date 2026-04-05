@@ -10,18 +10,18 @@
 
 ```bash
 # See what's covered
-bash governance/governance.sh
+ways governance report
 
 # Trace a single way end-to-end
-bash governance/governance.sh --trace softwaredev/security
+ways governance trace softwaredev/security
 
 # Query by control framework
-bash governance/governance.sh --control OWASP
+ways governance control OWASP
 ```
 
 For adding provenance to your own ways, see [provenance.md](../docs/hooks-and-ways/provenance.md).
 
-> **Current state:** Governance output is ephemeral — reports go to stdout, manifests to local files. There is no CI integration or tracked output. The provenance metadata lives in way frontmatter and the reporting tools work, but the pipeline between them is run-on-demand.
+> **Current state:** Governance output is ephemeral — reports go to stdout. The provenance metadata lives in way frontmatter and the `ways` CLI queries it on demand.
 
 ---
 
@@ -33,7 +33,7 @@ Every organization with AI agents faces the same question from compliance: *"How
 
 The usual answer involves expensive GRC platforms, manual attestation spreadsheets, or the honest shrug of "we told them to." None of these are satisfying. The GRC platform costs six figures and still can't look inside the agent's context window. The spreadsheet is stale before the ink dries. The shrug is accurate but doesn't pass audit.
 
-This directory contains a different answer: the policies are in the code, the code traces back to the policies, and you can verify the chain with a bash script. And because it all lives in git, every change to every policy and every way already has cryptographic hashing, immutable history, blame attribution, and timestamped provenance — for free.
+This directory contains a different answer: the policies are in the code, the code traces back to the policies, and you can verify the chain with a single command. And because it all lives in git, every change to every policy and every way already has cryptographic hashing, immutable history, blame attribution, and timestamped provenance — for free.
 
 ## How It Works
 
@@ -74,7 +74,7 @@ Control Requirement     CM-3: Configuration Change Control
        ↓
 Policy Document         code-lifecycle.md: "Atomic commits, conventional format"
        ↓
-Way File                commits/way.md: 30 lines of directive guidance
+Way File                commits/commits.md: 30 lines of directive guidance
        ↓
 Agent Context           Injected when git commit triggers
 ```
@@ -85,35 +85,34 @@ Each layer compresses the one above it. The regulatory framework is hundreds of 
 
 | File | Purpose |
 |------|---------|
-| `governance.sh` | The governance operator — unified CLI for all queries |
-| `provenance-scan.py` | Scan all ways, extract provenance, generate traceability manifest |
-| `provenance-verify.sh` | Coverage report — policy sources, control references, gaps |
-
-A symlink at the repo root (`governance-report`) provides convenient access.
+| `policies/` | Policy source documents — the human-readable interpretation layer |
+| `provenance-scan.py` | Legacy scanner (superseded by `ways provenance`) |
 
 ### The governance operator
 
+All governance queries are handled by the `ways` CLI:
+
 ```bash
 # Coverage report
-bash governance/governance.sh
+ways governance report
 
 # Trace a single way end-to-end (controls + justifications + firing stats)
-bash governance/governance.sh --trace softwaredev/security
+ways governance trace softwaredev/security
 
 # Query by control
-bash governance/governance.sh --control OWASP
+ways governance control OWASP
 
 # Flat traceability matrix (the spreadsheet auditors want)
-bash governance/governance.sh --matrix
+ways governance matrix
 
 # Validate provenance integrity (the audit of the audit)
-bash governance/governance.sh --lint
+ways governance lint
 
 # Cross-reference provenance with way firing stats
-bash governance/governance.sh --active
+ways governance active
 
 # Any mode outputs JSON with --json
-bash governance/governance.sh --matrix --json
+ways governance matrix --json
 ```
 
 ### Justifications
@@ -128,23 +127,16 @@ controls:
       - Parameterized queries required as default for all database access
 ```
 
-The `--matrix` mode flattens these into rows for spreadsheet export. The `--lint` mode validates that every control has justifications, every policy URI points to a real file, and every verified date is well-formed. The linter is committed and versioned — it's the governance system auditing its own integrity.
+The `matrix` mode flattens these into rows for spreadsheet export. The `lint` mode validates that every control has justifications, every policy URI points to a real file, and every verified date is well-formed. The linter is committed and versioned — it's the governance system auditing its own integrity.
 
 ### Generate the manifest
 
 ```bash
-python3 governance/provenance-scan.py -o provenance-manifest.json
+ways provenance
+ways provenance --json
 ```
 
-Produces a JSON artifact with per-way provenance data and inverted indices — policy → implementing ways, control → addressing ways. An auditor can query it with `jq`.
-
-### Cross-reference with an external audit ledger
-
-```bash
-bash governance/provenance-verify.sh --ledger /path/to/audit-ledger.json
-```
-
-If your compliance team maintains a separate repo with control inventories and ADRs, the verify script can cross-reference their control IDs against your ways and report coverage gaps.
+Produces a JSON manifest with per-way provenance data and inverted indices — policy → implementing ways, control → addressing ways. An auditor can query it with `jq`.
 
 ## Real Standards, Not Theater
 
@@ -164,11 +156,11 @@ These aren't decorative. An auditor familiar with NIST 800-53 can read the commi
 This directory is designed to be separable — a perforated pop-out. To use it standalone:
 
 1. Copy `governance/` to a new repo
-2. Set `WAYS_DIR` in the scripts to wherever your ways live
+2. Set `WAYS_DIR` to wherever your ways live
 3. Add `provenance:` blocks to your ways referencing your own policy documents
-4. Optionally connect to an external audit ledger for cross-repo control verification
+4. Run `ways governance report` to verify the chain
 
-The tools need Python 3 and bash + jq. No other dependencies.
+The `ways` binary is the only dependency.
 
 Your compliance repo owns the policies. Your ways repo owns the guidance. This directory bridges them — and the bridge is verifiable.
 

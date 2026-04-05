@@ -1,6 +1,6 @@
 # Provenance and Governance Traceability
 
-Ways are compiled policy. A human reads a policy document, interprets it for the agent context, and writes a way.md file — compressed, directive, stripped of rationale. The guidance that reaches the agent is the object code. The policy document is the source.
+Ways are compiled policy. A human reads a policy document, interprets it for the agent context, and writes a way file — compressed, directive, stripped of rationale. The guidance that reaches the agent is the object code. The policy document is the source.
 
 This page documents how to make that compilation traceable. For running governance reports, see [governance/README.md](../../governance/README.md).
 
@@ -24,7 +24,7 @@ provenance:
 ---
 ```
 
-Then verify it's picked up: `bash governance/governance.sh --trace softwaredev/commits`
+Then verify it's picked up: `ways governance trace softwaredev/commits`
 
 ## The Full Chain
 
@@ -35,7 +35,7 @@ Control Requirement     (NIST SP 800-53 CM-3, OWASP A03:Injection...)
        ↓
 Policy Document         (ADR, governance doc, internal standard)
        ↓
-Way File                (way.md — compiled guidance, context-optimized)
+Way File                ({name}.md — compiled guidance, context-optimized)
        ↓
 Agent Context           (injected at runtime when triggers match)
 ```
@@ -48,7 +48,7 @@ Each layer compresses the one above it. The regulatory framework is hundreds of 
 |---------|---------------|------------|
 | Source code | `.c` files | Policy documents |
 | Compiler | `gcc` | Human authoring process |
-| Object code | `.o` files | `way.md` files |
+| Object code | `.o` files | `{name}.md` way files |
 | Debug symbols | DWARF / PDB | `provenance:` frontmatter block |
 | Symbol table | `.map` file | `provenance-manifest.json` |
 
@@ -112,14 +112,14 @@ The manifest aggregates provenance across all ways into a single JSON artifact w
 ## Running the Coverage Report
 
 ```bash
-# Basic report
-bash ~/.claude/governance/provenance-verify.sh
+# Coverage report
+ways governance report
 
-# With cross-repo audit ledger
-bash ~/.claude/governance/provenance-verify.sh --ledger /path/to/audit-ledger.json
+# Full governance lint
+ways governance lint
 
 # Machine-readable
-bash ~/.claude/governance/provenance-verify.sh --json
+ways governance report --json
 ```
 
 The report shows which ways have provenance, which policy documents are referenced, which controls are covered, and where gaps exist.
@@ -131,9 +131,9 @@ In an enterprise, policy documents and way implementations typically live in sep
 ```
 compliance-repo/              your-claude-config/
 ├── docs/architecture/        ├── hooks/ways/
-│   ├── ADR-150.md           │   ├── softwaredev/delivery/commits/way.md
+│   ├── ADR-150.md           │   ├── softwaredev/delivery/commits/commits.md
 │   └── ADR-200.md           │   │   (provenance: → ADR-150)
-├── audit-ledger.json        │   └── softwaredev/code/security/way.md
+├── audit-ledger.json        │   └── softwaredev/code/security/security.md
 └── controls.xlsx            └── provenance-manifest.json
 ```
 

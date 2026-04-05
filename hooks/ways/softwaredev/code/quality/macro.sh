@@ -6,9 +6,14 @@
 git rev-parse --is-inside-work-tree &>/dev/null || exit 0
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WAY_FILE="${SCRIPT_DIR}/way.md"
+# Find the way file in this directory (any .md with frontmatter)
+WAY_FILE=""
+for _f in "${SCRIPT_DIR}"/*.md; do
+  [[ -f "$_f" ]] && [[ "$_f" != *.check.md ]] && head -1 "$_f" 2>/dev/null | grep -q '^---$' && { WAY_FILE="$_f"; break; }
+done
+[[ -z "$WAY_FILE" ]] && exit 0
 
-# Read exclusion pattern from way.md frontmatter, or use default
+# Read exclusion pattern from way frontmatter, or use default
 DEFAULT_EXCLUDE='\.md$|\.lock$|\.min\.(js|css)$|\.generated\.|\.bundle\.|vendor/|node_modules/|dist/|build/|__pycache__/'
 EXCLUDE_PATTERN=$(awk '/^scan_exclude:/{print $2; exit}' "$WAY_FILE" 2>/dev/null)
 EXCLUDE_PATTERN="${EXCLUDE_PATTERN:-$DEFAULT_EXCLUDE}"

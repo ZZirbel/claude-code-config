@@ -4,9 +4,8 @@
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-${PROJECT_DIR:-.}}"
 
 # Context budget
-SCRIPT="${HOME}/.claude/scripts/context-usage.sh"
-if [[ -x "$SCRIPT" ]]; then
-  JSON=$("$SCRIPT" --json "$PROJECT_DIR" 2>/dev/null)
+if command -v ways &>/dev/null; then
+  JSON=$(ways context --json 2>/dev/null)
   if [[ -n "$JSON" ]]; then
     REMAINING=$(echo "$JSON" | jq -r '.tokens_remaining')
     PCT=$(echo "$JSON" | jq -r '.pct_remaining')

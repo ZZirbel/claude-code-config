@@ -1,15 +1,47 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "env": {
-    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
+    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "99"
   },
   "includeCoAuthoredBy": false,
   "permissions": {
     "allow": [
       "Edit(~/.claude/**)",
-      "Read(~/.claude/**)",
+      "Read",
       "Write(~/.claude/**)",
-      "Bash(~/.claude/hooks/ways/list-triggered.sh:*)"
+      "Bash(cat:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(less:*)",
+      "Bash(grep:*)",
+      "Bash(rg:*)",
+      "Bash(find:*)",
+      "Bash(ls:*)",
+      "Bash(tree:*)",
+      "Bash(du:*)",
+      "Bash(df:*)",
+      "Bash(wc:*)",
+      "Bash(file:*)",
+      "Bash(stat:*)",
+      "Bash(diff:*)",
+      "Bash(which:*)",
+      "Bash(type:*)",
+      "Bash(pwd:*)",
+      "Bash(echo:*)",
+      "Bash(awk:*)",
+      "Bash(sed:*)",
+      "Bash(sort:*)",
+      "Bash(uniq:*)",
+      "Bash(cut:*)",
+      "Bash(tr:*)",
+      "Bash(xargs:*)",
+      "Bash(tee:*)",
+      "Bash(uname:*)",
+      "Bash(realpath:*)",
+      "Bash(dirname:*)",
+      "Bash(basename:*)",
+      "Bash(test:*)"
     ],
     "defaultMode": "default"
   },
@@ -20,19 +52,27 @@
         "hooks": [
           {
             "type": "command",
+            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/check-setup.sh\"'"
+          },
+          {
+            "type": "command",
             "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/clear-markers.sh\"'"
           },
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/show-core.sh\"'"
-          },
-          {
-            "type": "command",
-            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/init-project-ways.sh\"'"
-          },
-          {
-            "type": "command",
             "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/check-config-updates.sh\"'"
+          },
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/check-state.sh\"'"
+          },
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/bin/ways\" init'"
+          },
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/bin/ways\" corpus --if-stale --quiet'"
           }
         ]
       },
@@ -45,7 +85,7 @@
           },
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/show-core.sh\"'"
+            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/check-state.sh\"'"
           }
         ]
       },
@@ -54,7 +94,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/show-core.sh\"'"
+            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/check-state.sh\"'"
           }
         ]
       },
@@ -67,11 +107,11 @@
           },
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/show-core.sh\"'"
+            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/check-state.sh\"'"
           },
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/init-project-ways.sh\"'"
+            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/bin/ways\" init'"
           }
         ]
       }
@@ -157,7 +197,17 @@
     "clangd-lsp@claude-plugins-official": true,
     "code-simplifier@claude-plugins-official": true,
     "rust-analyzer-lsp@claude-plugins-official": true,
-    "frontend-design@claude-plugins-official": true
+    "frontend-design@claude-plugins-official": true,
+    "ralph-loop@claude-plugins-official": false,
+    "gopls-lsp@claude-plugins-official": true
+  },
+  "extraKnownMarketplaces": {
+    "knowledge-work-plugins": {
+      "source": {
+        "source": "github",
+        "repo": "anthropics/knowledge-work-plugins"
+      }
+    }
   },
   "alwaysThinkingEnabled": true
 }

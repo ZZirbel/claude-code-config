@@ -53,11 +53,9 @@ threshold: 2.0
 
 ### Degradation chain
 
-Semantic matching uses a three-tier degradation chain:
+Semantic matching uses BM25 scoring built into the `ways` binary. It scores description+vocabulary against the prompt with Porter2 stemming and IDF weighting.
 
-1. **BM25 binary** (`~/.claude/bin/way-match`) — fast, preferred. Scores description+vocabulary against prompt with Porter2 stemming and IDF weighting.
-2. **Gzip NCD fallback** — if the binary isn't available, falls back to Normalized Compression Distance using `gzip`. Measures structural similarity between texts. Uses a fixed threshold (0.58) since NCD and BM25 scales don't map cleanly.
-3. **Skip** — if neither BM25 nor gzip+bc are available, semantic matching is silently skipped. Pattern matching still works.
+If the `ways` binary is unavailable, semantic matching is silently skipped and pattern matching still works. Run `make setup` to install.
 
 ### Vocabulary design
 

@@ -1,38 +1,39 @@
+#Requires -Version 5.1
 # Stop hook: Analyze Claude's response for topic awareness
 #
 # Reads the transcript after Claude responds, extracts topics,
 # and writes state for the next UserPromptSubmit to use.
-#
-# This enables ways to trigger based on what Claude discussed,
-# not just what the user asked.
 
-param()
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-# Read JSON from stdin
 $inputJson = $input | Out-String
 try {
     $data = $inputJson | ConvertFrom-Json
     $sessionId = $data.session_id
-    $transcriptPath = $data.transcript_path
+    $agentId = $data.agent_id
+    $transcript = $data.transcript_path
     $stopActive = $data.stop_hook_active
 } catch {
     exit 0
 }
 
+if (-not [string]::IsNullOrEmpty($agentId)) {
+    $env:CLAUDE_AGENT_ID = $agentId
+}
+
 # Prevent infinite loops
-if ($stopActive -eq $true) { exit 0 }
+if ($stopActive -eq $true -or $stopActive -eq "true") { exit 0 }
 
 # Need transcript
-if (-not $transcriptPath -or -not (Test-Path $transcriptPath)) { exit 0 }
+if ([string]::IsNullOrEmpty($transcript) -or -not (Test-Path $transcript)) { exit 0 }
 
 $stateFile = Join-Path $env:TEMP "claude-response-topics-$sessionId"
 
 # Extract last assistant message from transcript (JSONL format)
-try {
-    $lines = Get-Content $transcriptPath -Tail 100 -ErrorAction SilentlyContinue
-    $lastResponse = ""
-
-    foreach ($line in ($lines | Where-Object { $_ -match '"type":"assistant"' })) {
+$lastLines = Get-Content $transcript -Tail 100 -ErrorAction SilentlyContinue
+$lastResponse = ""
+foreach ($line in $lastLines) {
+    if ($line -match '"type":"assistant"' -or $line -match '"type": "assistant"') {
         try {
             $msg = $line | ConvertFrom-Json
             foreach ($content in $msg.message.content) {
@@ -42,39 +43,39 @@ try {
             }
         } catch {}
     }
+}
 
-    if (-not $lastResponse) { exit 0 }
+if ([string]::IsNullOrEmpty($lastResponse)) { exit 0 }
 
-    # Limit to first 2000 chars
-    if ($lastResponse.Length -gt 2000) {
-        $lastResponse = $lastResponse.Substring(0, 2000)
-    }
-} catch {
-    exit 0
+# Truncate to 2000 chars
+if ($lastResponse.Length -gt 2000) {
+    $lastResponse = $lastResponse.Substring(0, 2000)
 }
 
 # Extract potential topics (simple keyword extraction)
-$keywords = @("api", "test", "debug", "config", "security", "auth", "database",
-              "migration", "deploy", "git", "commit", "pr", "issue", "error",
-              "hook", "trigger", "way", "todo", "context", "token", "model", "prompt")
+$topicKeywords = @(
+    'api', 'test', 'debug', 'config', 'security', 'auth', 'database',
+    'migration', 'deploy', 'git', 'commit', 'pr', 'issue', 'error',
+    'hook', 'trigger', 'way', 'todo', 'context', 'token', 'model', 'prompt'
+)
 
-$topics = @()
-$words = $lastResponse.ToLower() -split '\W+' | Where-Object { $_ }
-
-foreach ($keyword in $keywords) {
-    if ($words -contains $keyword) {
-        $topics += $keyword
+$lowerResponse = $lastResponse.ToLower()
+$foundTopics = @()
+foreach ($keyword in $topicKeywords) {
+    if ($lowerResponse -match "\b$keyword\b") {
+        $foundTopics += $keyword
     }
 }
 
-$topicsStr = ($topics | Select-Object -Unique | Select-Object -First 10) -join " "
+$topics = ($foundTopics | Select-Object -Unique | Select-Object -First 10) -join ' '
 
 # Write state for next turn
-if ($topicsStr) {
+if (-not [string]::IsNullOrEmpty($topics)) {
     $state = @{
-        timestamp = (Get-Date).ToString("o")
-        topics = $topicsStr
+        timestamp       = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+        topics          = $topics
         response_length = $lastResponse.Length
-    }
-    $state | ConvertTo-Json -Compress | Set-Content $stateFile -Encoding UTF8
+    } | ConvertTo-Json -Compress
+
+    Set-Content -Path $stateFile -Value $state -Force -ErrorAction SilentlyContinue
 }

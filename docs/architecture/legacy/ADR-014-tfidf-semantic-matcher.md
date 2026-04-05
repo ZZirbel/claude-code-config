@@ -1,8 +1,14 @@
-# ADR-014: TF-IDF/BM25 Binary for Semantic Way Matching
+---
+status: Accepted
+date: 2026-02-16
+deciders:
+  - aaronsb
+  - claude
+related:
+  - ADR-013
+---
 
-Status: Proposed
-Date: 2026-02-16
-Deciders: @aaron, @claude
+# ADR-014: TF-IDF/BM25 Binary for Semantic Way Matching
 
 ## Context
 

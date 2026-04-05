@@ -1,0 +1,90 @@
+name: Build way-embed
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/way-embed/**'
+      - '.github/workflows/build-way-embed.yml'
+  pull_request:
+    paths:
+      - 'tools/way-embed/**'
+      - '.github/workflows/build-way-embed.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-x86_64
+          - os: ubuntu-24.04-arm
+            platform: linux-aarch64
+          - os: macos-latest
+            platform: darwin-x86_64
+            cmake_extra: -DCMAKE_OSX_ARCHITECTURES=x86_64 -DGGML_NATIVE=OFF
+          - os: macos-latest
+            platform: darwin-arm64
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            sudo apt-get update && sudo apt-get install -y cmake g++
+          fi
+          # macOS runners have cmake and clang pre-installed
+
+      - name: Build way-embed
+        working-directory: tools/way-embed
+        run: |
+          mkdir -p build ../../bin
+          cd build
+          cmake -DCMAKE_BUILD_TYPE=Release ${{ matrix.cmake_extra }} ..
+          cmake --build . --target way-embed -j$(nproc 2>/dev/null || sysctl -n hw.ncpu)
+          cd ..
+          cp build/way-embed ../../bin/way-embed-${{ matrix.platform }}
+
+      - name: Smoke test
+        if: ${{ !matrix.cmake_extra }}
+        run: |
+          bin/way-embed-${{ matrix.platform }} --version
+
+      - name: Verify binary exists (cross-compiled)
+        if: ${{ matrix.cmake_extra }}
+        run: |
+          file bin/way-embed-${{ matrix.platform }}
+          ls -lh bin/way-embed-${{ matrix.platform }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: way-embed-${{ matrix.platform }}
+          path: bin/way-embed-${{ matrix.platform }}
+
+  # Collect all platform binaries into one artifact
+  collect:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: binaries
+          merge-multiple: true
+
+      - name: Generate checksums
+        run: |
+          cd binaries
+          sha256sum way-embed-* > checksums.txt
+          cat checksums.txt
+          ls -lh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: way-embed-all-platforms
+          path: binaries/

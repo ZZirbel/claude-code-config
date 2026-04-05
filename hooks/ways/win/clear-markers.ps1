@@ -1,12 +1,14 @@
+#Requires -Version 5.1
 # Clear way markers for fresh session
 # Called on SessionStart and after compaction
 #
 # Reads session_id from stdin JSON input (Claude Code hook format)
-# Clears ALL markers so guidance can trigger fresh in the new session
+# Clears this session's state directory only - other sessions stay intact
 
-param()
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-# Read JSON from stdin
+. "$PSScriptRoot\sessions-root.ps1"
+
 $inputJson = $input | Out-String
 try {
     $data = $inputJson | ConvertFrom-Json
@@ -15,26 +17,26 @@ try {
     $sessionId = ""
 }
 
-# Clear all markers (session IDs change on restart anyway)
-$tempPath = $env:TEMP
-
-# Clear way markers
-Get-ChildItem -Path $tempPath -Filter ".claude-way-*" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
-
-# Clear core markers
-Get-ChildItem -Path $tempPath -Filter ".claude-core-*" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
-
-# Clear tasks-active markers
-Get-ChildItem -Path $tempPath -Filter ".claude-tasks-active-*" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
-
-# Clear subagent stash directories
-Get-ChildItem -Path $tempPath -Directory -Filter ".claude-subagent-stash-*" -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+# Clear session state
+if (-not [string]::IsNullOrEmpty($sessionId)) {
+    $sessionDir = Join-Path $script:SESSIONS_ROOT $sessionId
+    Remove-Item $sessionDir -Recurse -Force -ErrorAction SilentlyContinue
+} else {
+    # No session ID - legacy fallback, clear everything
+    Remove-Item $script:SESSIONS_ROOT -Recurse -Force -ErrorAction SilentlyContinue
+}
 
 # Log session event
-$logScript = Join-Path $PSScriptRoot "log-event.ps1"
+$statsDir = Join-Path $env:USERPROFILE ".claude\stats"
+New-Item $statsDir -ItemType Directory -Force -ErrorAction SilentlyContinue | Out-Null
 $projectDir = if ($env:CLAUDE_PROJECT_DIR) { $env:CLAUDE_PROJECT_DIR } else { $PWD.Path }
-$session = if ($sessionId) { $sessionId } else { "unknown" }
+$session = if (-not [string]::IsNullOrEmpty($sessionId)) { $sessionId } else { "unknown" }
 
-if (Test-Path $logScript) {
-    & $logScript "event=session_start" "project=$projectDir" "session=$session"
-}
+$logEntry = @{
+    ts      = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+    event   = "session_start"
+    project = $projectDir
+    session = $session
+} | ConvertTo-Json -Compress
+
+Add-Content -Path (Join-Path $statsDir "events.jsonl") -Value $logEntry -ErrorAction SilentlyContinue
