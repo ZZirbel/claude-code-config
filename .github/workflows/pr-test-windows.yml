@@ -105,9 +105,21 @@ jobs:
           Import-Module Pester
           Write-Host "Pester version: $((Get-Module Pester).Version)"
 
+      - name: Set up Claude config directory
+        shell: pwsh
+        run: |
+          # Link ~/.claude to the repo checkout so hook scripts can find ways/
+          $target = (Get-Location).Path
+          $link = "$env:USERPROFILE\.claude"
+          if (Test-Path $link) {
+            Remove-Item $link -Force -Recurse
+          }
+          New-Item -ItemType Junction -Path $link -Target $target | Out-Null
+          Write-Host "Created junction: $link -> $target"
+          Write-Host "Verify hooks exist: $(Test-Path "$link\hooks\ways\win\check-prompt.ps1")"
+
       - name: Run Pester tests
         shell: pwsh
-        continue-on-error: true
         run: |
           $config = New-PesterConfiguration
           $config.Run.Path = "./tests/pester"
