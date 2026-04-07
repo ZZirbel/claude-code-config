@@ -1,4 +1,4 @@
-{
+﻿{
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "env": {
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
@@ -52,27 +52,27 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/check-setup.sh\"'"
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"C:/Users/zanzi/.claude/hooks/ways/win/check-setup.ps1\"'"
           },
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/clear-markers.sh\"'"
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"C:/Users/zanzi/.claude/hooks/ways/win/clear-markers.ps1\"'"
           },
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/check-config-updates.sh\"'"
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"C:/Users/zanzi/.claude/hooks/check-config-updates.ps1\"'"
           },
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/check-state.sh\"'"
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"C:/Users/zanzi/.claude/hooks/ways/win/check-state.ps1\"'"
           },
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/bin/ways\" init'"
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"C:/Users/zanzi/.claude/bin/ways\" init'"
           },
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/bin/ways\" corpus --if-stale --quiet'"
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"C:/Users/zanzi/.claude/bin/ways\" corpus --if-stale --quiet'"
           }
         ]
       },
@@ -81,11 +81,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/clear-markers.sh\"'"
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"C:/Users/zanzi/.claude/hooks/ways/win/clear-markers.ps1\"'"
           },
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/check-state.sh\"'"
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"C:/Users/zanzi/.claude/hooks/ways/win/check-state.ps1\"'"
           }
         ]
       },
@@ -94,7 +94,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/check-state.sh\"'"
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"C:/Users/zanzi/.claude/hooks/ways/win/check-state.ps1\"'"
           }
         ]
       },
@@ -103,15 +103,15 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/clear-markers.sh\"'"
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"C:/Users/zanzi/.claude/hooks/ways/win/clear-markers.ps1\"'"
           },
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/check-state.sh\"'"
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"C:/Users/zanzi/.claude/hooks/ways/win/check-state.ps1\"'"
           },
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/bin/ways\" init'"
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"C:/Users/zanzi/.claude/bin/ways\" init'"
           }
         ]
       }
@@ -122,7 +122,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/check-file-pre.sh\"'"
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"C:/Users/zanzi/.claude/hooks/ways/win/check-file-pre.ps1\"'"
           }
         ]
       },
@@ -131,7 +131,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/check-bash-pre.sh\"'"
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"C:/Users/zanzi/.claude/hooks/ways/win/check-bash-pre.ps1\"'"
           }
         ]
       },
@@ -140,7 +140,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/mark-tasks-active.sh\"'"
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"C:/Users/zanzi/.claude/hooks/ways/win/mark-tasks-active.ps1\"'"
           }
         ]
       },
@@ -149,7 +149,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/check-task-pre.sh\"'"
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"C:/Users/zanzi/.claude/hooks/ways/win/check-task-pre.ps1\"'"
           }
         ]
       }
@@ -159,11 +159,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/check-prompt.sh\"'"
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"C:/Users/zanzi/.claude/hooks/ways/win/check-prompt.ps1\"'"
           },
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/check-state.sh\"'"
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"C:/Users/zanzi/.claude/hooks/ways/win/check-state.ps1\"'"
           }
         ]
       }
@@ -173,7 +173,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/inject-subagent.sh\"'"
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"C:/Users/zanzi/.claude/hooks/ways/win/inject-subagent.ps1\"'"
           }
         ]
       }
@@ -183,7 +183,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -Command 'bash \"$env:USERPROFILE/.claude/hooks/ways/check-response.sh\"'"
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"C:/Users/zanzi/.claude/hooks/ways/win/check-response.ps1\"'"
           }
         ]
       }
@@ -191,8 +191,9 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"$env:USERPROFILE/.claude/statusline.ps1\""
+    "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:/Users/zanzi/.claude/statusline.ps1\""
   },
+  "alwaysThinkingEnabled": true,
   "enabledPlugins": {
     "clangd-lsp@claude-plugins-official": true,
     "code-simplifier@claude-plugins-official": true,
@@ -208,6 +209,6 @@
         "repo": "anthropics/knowledge-work-plugins"
       }
     }
-  },
-  "alwaysThinkingEnabled": true
+  }
 }
+
