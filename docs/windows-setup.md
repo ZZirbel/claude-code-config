@@ -7,12 +7,31 @@ This guide walks you through setting up claude-code-config on Windows with full 
 - **Windows 10/11** (64-bit)
 - **PowerShell 5.1+** (included with Windows)
 - **Git for Windows** (includes Git Bash)
+- **GitHub CLI** (`gh`) — required for `make setup` to download the `ways` binary
 - **Claude Code CLI** (`npm install -g @anthropic-ai/claude-code`)
 
-### Optional but Recommended
+### Optional
 
-- **GitHub CLI** (`gh`) for PR automation
-- **Pester** for running tests (`Install-Module Pester -Force`)
+- **GNU make** — required for `make setup` / `make update` workflow (see [Installing make](#installing-make))
+- **Pester** — for running tests (`Install-Module Pester -Force`)
+
+## Installing make
+
+`make` is required to run `make setup` and `make update` as documented in the CLAUDE.md workflow.
+
+**Recommended: GnuWin32 via winget**
+
+```powershell
+winget install GnuWin32.Make
+```
+
+This installs make to `C:\Program Files (x86)\GnuWin32\bin`. Add it to your Git Bash PATH permanently by adding this line to `~/.bashrc`:
+
+```bash
+export PATH="$PATH:/c/Program Files (x86)/GnuWin32/bin"
+```
+
+> **Note:** The GnuWin32 path contains spaces and parentheses. This works for top-level `make` targets (`make setup`, `make ways`, `make update`) but breaks the optional embedding engine step (`make -C tools/way-embed setup`) due to a recursive make path expansion issue. The core `ways` binary and corpus generation work correctly. See [Embedding Engine](#embedding-engine) below.
 
 ## Installation Options
 
@@ -43,26 +62,37 @@ Open PowerShell as Administrator:
 New-Item -ItemType SymbolicLink -Path "$env:USERPROFILE\.claude" -Target "$env:USERPROFILE\GitHub\claude-code-config"
 ```
 
-#### Step 4: Activate Windows settings
+#### Step 4: Generate settings
 
 ```powershell
 cd "$env:USERPROFILE\.claude"
-Copy-Item "settings.windows.json" "settings.json" -Force
-Write-Host "Windows PowerShell hooks activated"
+# The ClaudeConfigManager module generates settings.json from the Windows template
+Import-Module .\scripts\ClaudeConfigManager.psm1
+New-ClaudeSettings -Force
 ```
 
-#### Step 5: Verify installation
+#### Step 5: Install the ways binary
+
+From Git Bash:
+
+```bash
+cd ~/.claude && make setup
+# or without make:
+bash tools/ways-cli/download-ways.sh
+bin/ways.exe corpus --quiet
+```
+
+#### Step 6: Verify installation
 
 ```powershell
-# Test binary
-./bin/way-match --version
+# Binary works
+& "$env:USERPROFILE\.claude\bin\ways.exe" --version
 
-# Test hooks directory
-Test-Path "$env:USERPROFILE\.claude\hooks\ways\win"
+# Corpus generated
+Test-Path "$env:LOCALAPPDATA\claude-ways\user\ways-corpus.jsonl"
 
-# Run tests
-Install-Module Pester -Force -Scope CurrentUser
-Invoke-Pester -Path .\tests\pester -Output Minimal
+# Hooks exist
+(Get-ChildItem "$env:USERPROFILE\.claude\hooks\ways\win\*.ps1").Count
 ```
 
 ### Option B: Copy Approach (No Admin Required)
@@ -70,34 +100,30 @@ Invoke-Pester -Path .\tests\pester -Output Minimal
 If you can't create symlinks, copy the repo contents to `~/.claude`:
 
 ```powershell
-# Clone to temp location
 git clone https://github.com/ZZirbel/claude-code-config "$env:TEMP\claude-code-config"
-
-# Copy to .claude (preserving your existing settings if any)
 robocopy "$env:TEMP\claude-code-config" "$env:USERPROFILE\.claude" /MIR /XD .git
-
-# Copy Windows settings
-Copy-Item "$env:USERPROFILE\.claude\settings.windows.json" "$env:USERPROFILE\.claude\settings.json" -Force
-
-# Cleanup
+Import-Module "$env:USERPROFILE\.claude\scripts\ClaudeConfigManager.psm1"
+New-ClaudeSettings -Force
 Remove-Item -Recurse -Force "$env:TEMP\claude-code-config"
 ```
 
-**Note:** With this approach, you'll need to manually sync updates.
+Then follow Steps 5–6 from Option A.
+
+**Note:** With this approach, run `ccupdate` to sync future updates.
 
 ## Configuration
 
-### Activating Windows PowerShell Hooks
+### Settings Management
 
-The repository includes two settings files:
-- `settings.json` - Bash-based hooks (default, for Unix)
-- `settings.windows.json` - PowerShell-based hooks (for Windows)
+Settings are managed via `ClaudeConfigManager.psm1`:
 
-To use PowerShell hooks, copy the Windows settings:
+| Command | Purpose |
+|---------|---------|
+| `New-ClaudeSettings -Force` | Regenerate `settings.json` from `settings.windows.json` template |
+| `ccstatus` | Show config health and git status |
+| `ccupdate` | Pull latest changes and regenerate settings |
 
-```powershell
-Copy-Item "$env:USERPROFILE\.claude\settings.windows.json" "$env:USERPROFILE\.claude\settings.json" -Force
-```
+`settings.windows.json` is the source of truth — it uses `$env:USERPROFILE` placeholders. `New-ClaudeSettings` resolves these to absolute paths and writes `settings.json`.
 
 ### Disabling Specific Way Domains
 
@@ -109,73 +135,42 @@ Edit `ways.json` to disable domains you don't need:
 }
 ```
 
-### Customizing Ways
-
-Create project-specific ways in your project's `.claude/ways/` directory:
-
-```powershell
-# In your project root
-mkdir -p .claude/ways/custom
-```
-
 ## Updating
 
-### With Symlink Setup
-
 ```powershell
-cd "$env:USERPROFILE\.claude"
-git pull origin main
-
-# If upstream has changes
-.\scripts\Sync-Upstream.ps1
+Import-Module "$env:USERPROFILE\.claude\scripts\ClaudeConfigManager.psm1"
+ccupdate
 ```
 
-### With Copy Setup
+`ccupdate` pulls from origin, regenerates `settings.json`, and re-runs `ways corpus`. If the upstream sync workflow has created a pending PR (script changes requiring PowerShell porting), review it before merging.
 
-```powershell
-# Re-clone and copy
-git clone https://github.com/ZZirbel/claude-code-config "$env:TEMP\claude-code-config"
-robocopy "$env:TEMP\claude-code-config" "$env:USERPROFILE\.claude" /MIR /XD .git /XF settings.json ways.json
-Remove-Item -Recurse -Force "$env:TEMP\claude-code-config"
-```
+## Embedding Engine
 
-## Scheduled Auto-Updates (Optional)
+The embedding engine improves matching accuracy from 91% (BM25) to 98% (semantic). It is optional — the system works fully without it.
 
-Create a scheduled task to check for updates daily:
+Installing it requires `make -C tools/way-embed setup`, which currently fails on Windows when `make` is installed via GnuWin32 (path-with-spaces issue). Workaround options:
 
-```powershell
-$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument @"
--NoProfile -ExecutionPolicy Bypass -Command "
-Set-Location '$env:USERPROFILE\.claude'
-git fetch origin main
-\$behind = git rev-list HEAD..origin/main --count
-if (\$behind -gt 0) {
-    Write-Host 'Updates available: ' + \$behind + ' commits behind'
-}
-"
-"@
-
-$trigger = New-ScheduledTaskTrigger -Daily -At 9am
-
-Register-ScheduledTask -TaskName "Claude Config Update Check" -Action $action -Trigger $trigger -Description "Check for claude-code-config updates"
-```
+1. **Accept BM25** (91% accuracy) — adequate for most use cases
+2. **Install make via MSYS2** — places make in a clean path (`C:\msys64\usr\bin\make.exe`)
+3. **Track**: ZZirbel/claude-code-config#3 — Windows embedding engine support is a tracked improvement
 
 ## Verifying the Installation
 
 ### Quick Smoke Test
 
-```powershell
-# 1. Binary works
-./bin/way-match pair --description "test" --vocabulary "test" --query "test" --threshold 0.1
-# Should exit 0 (match) or 1 (no match), not error
+From Git Bash:
 
-# 2. Settings are valid
-Get-Content settings.json | ConvertFrom-Json | Out-Null
-# Should not error
+```bash
+cd ~/.claude
 
-# 3. PowerShell hooks exist
-(Get-ChildItem hooks/ways/win/*.ps1).Count
-# Should show 10+ scripts
+# 1. Binary runs
+bin/ways.exe --version
+
+# 2. Matching works
+bin/ways.exe match "write a unit test"
+
+# 3. Corpus is present
+bin/ways.exe corpus --if-stale --quiet && echo "corpus OK"
 ```
 
 ### Full Test Suite
@@ -187,7 +182,19 @@ Invoke-Pester -Path .\tests\pester -Output Detailed
 
 ## Troubleshooting
 
-### "Cannot create symbolic link" Error
+### `ways` binary not found / hooks inactive at startup
+
+Run setup:
+
+```bash
+# From Git Bash in ~/.claude
+bash tools/ways-cli/download-ways.sh
+bin/ways.exe corpus --quiet
+```
+
+The `check-setup.ps1` hook emits a warning at session start if the binary is missing. Once installed the warning stops.
+
+### "Cannot create symbolic link" error
 
 You need Administrator privileges for symlinks. Either:
 1. Run PowerShell as Administrator
@@ -200,30 +207,18 @@ You need Administrator privileges for symlinks. Either:
 Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
 ```
 
-### "way-match binary not found or won't run"
-
-The APE binary should work on Windows, but may need adjustments:
-
-```powershell
-# Try with explicit path
-& "$env:USERPROFILE\.claude\bin\way-match" --version
-
-# If that fails, the APE may need .exe extension
-Copy-Item "$env:USERPROFILE\.claude\bin\way-match" "$env:USERPROFILE\.claude\bin\way-match.exe"
-```
-
 ### Hooks not firing
 
-1. Verify settings.json is the Windows version:
+1. Verify `settings.json` contains PowerShell hooks:
    ```powershell
    Get-Content settings.json | Select-String "powershell.exe"
    # Should show matches
    ```
 
-2. Check Claude Code is using your config:
+2. Regenerate settings if needed:
    ```powershell
-   claude --version
-   # Verify it's picking up ~/.claude
+   Import-Module .\scripts\ClaudeConfigManager.psm1
+   New-ClaudeSettings -Force
    ```
 
 3. Test a hook manually:
@@ -231,38 +226,55 @@ Copy-Item "$env:USERPROFILE\.claude\bin\way-match" "$env:USERPROFILE\.claude\bin
    '{"prompt":"test","session_id":"test"}' | & hooks/ways/win/check-prompt.ps1
    ```
 
-### Git Bash vs PowerShell conflicts
+### make: command not found
 
-If you have Git Bash, some commands might use bash instead of PowerShell. The hooks are designed to use PowerShell directly via `settings.windows.json`. Make sure you're using the Windows settings file.
+Install GnuWin32 make and add to Git Bash PATH:
+
+```bash
+# Add to ~/.bashrc
+export PATH="$PATH:/c/Program Files (x86)/GnuWin32/bin"
+```
 
 ## File Structure After Installation
 
 ```
 ~/.claude/
-├── settings.json          (copy of settings.windows.json)
-├── settings.windows.json  (PowerShell hooks config)
-├── ways.json              (domain enable/disable config)
-├── CLAUDE.md              (project instructions)
-├── pc-refactor.md         (refactoring instructions for Claude)
+├── settings.json              (generated by New-ClaudeSettings)
+├── settings.windows.json      (PowerShell hooks template — source of truth)
+├── ways.json                  (domain enable/disable config)
+├── CLAUDE.md                  (project instructions)
+├── pc-refactor.md             (bash→PowerShell refactoring patterns)
 ├── bin/
-│   └── way-match          (BM25 matching binary)
+│   └── ways.exe               (ways CLI binary — downloaded by make setup)
 ├── hooks/
+│   ├── check-config-updates.ps1
 │   └── ways/
-│       ├── *.sh           (bash scripts - reference)
-│       ├── win/           (PowerShell equivalents)
+│       ├── *.sh               (bash scripts — upstream reference)
+│       ├── win/               (PowerShell equivalents)
 │       │   ├── check-prompt.ps1
 │       │   ├── check-bash-pre.ps1
-│       │   └── ...
-│       ├── core.md        (base guidance)
-│       ├── softwaredev/   (software dev ways)
-│       ├── meta/          (system ways)
-│       └── itops/         (IT ops ways)
+│       │   ├── check-file-pre.ps1
+│       │   ├── check-setup.ps1
+│       │   ├── check-state.ps1
+│       │   ├── check-task-pre.ps1
+│       │   ├── check-response.ps1
+│       │   ├── clear-markers.ps1
+│       │   ├── inject-subagent.ps1
+│       │   ├── mark-tasks-active.ps1
+│       │   └── require-ways.ps1
+│       ├── core.md            (base guidance)
+│       ├── softwaredev/       (software dev ways)
+│       ├── meta/              (system ways)
+│       └── itops/             (IT ops ways)
 ├── scripts/
-│   └── Sync-Upstream.ps1  (upstream sync script)
+│   └── ClaudeConfigManager.psm1
 ├── tests/
-│   └── pester/            (PowerShell tests)
+│   └── pester/                (PowerShell tests)
+├── tools/
+│   └── ways-cli/
+│       └── download-ways.sh   (binary download script)
 └── docs/
-    └── windows-setup.md   (this file)
+    └── windows-setup.md       (this file)
 ```
 
 ## Getting Help
