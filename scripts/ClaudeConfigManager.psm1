@@ -353,7 +353,16 @@ function Update-ClaudeConfig {
     }
     if (Test-Path $waysBin) {
         Write-Host "  Regenerating ways corpus..." -ForegroundColor DarkGray
-        & $waysBin corpus --quiet 2>&1 | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray }
+        $corpusOutput = & $waysBin corpus 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "  Ways corpus ready." -ForegroundColor Green
+        } else {
+            Write-Host "  Ways corpus generation failed (exit $LASTEXITCODE):" -ForegroundColor Red
+            $corpusOutput | ForEach-Object { Write-Host "    $_" -ForegroundColor Red }
+            Write-Host "  Semantic matching will be inactive until resolved." -ForegroundColor Yellow
+        }
+    } else {
+        Write-Host "  Ways binary not found — run: bash tools/ways-cli/download-ways.sh" -ForegroundColor Yellow
     }
 
     Write-Host ""
