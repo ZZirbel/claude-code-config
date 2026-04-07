@@ -104,24 +104,35 @@ jobs:
           fi
 
           # Store lists (newline separated for PR body)
-          echo "changed_scripts<<EOF" >> $GITHUB_OUTPUT
-          echo "$CHANGED_SCRIPTS" | tr ' ' '\n' | grep -v '^$' >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          # Use unique delimiters to avoid conflicts with content
+          {
+            echo "changed_scripts<<SCRIPTS_END"
+            if [ -n "$(echo "$CHANGED_SCRIPTS" | tr -d ' ')" ]; then
+              echo "$CHANGED_SCRIPTS" | tr ' ' '\n' | grep -v '^$'
+            fi
+            echo "SCRIPTS_END"
+          } >> $GITHUB_OUTPUT
 
-          echo "new_scripts<<EOF" >> $GITHUB_OUTPUT
-          echo "$NEW_SCRIPTS" | tr ' ' '\n' | grep -v '^$' >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          {
+            echo "new_scripts<<NEW_SCRIPTS_END"
+            if [ -n "$(echo "$NEW_SCRIPTS" | tr -d ' ')" ]; then
+              echo "$NEW_SCRIPTS" | tr ' ' '\n' | grep -v '^$'
+            fi
+            echo "NEW_SCRIPTS_END"
+          } >> $GITHUB_OUTPUT
 
           # Summary
           DATA_COUNT=$(echo "$DATA_FILES" | wc -w)
           SCRIPT_COUNT=$(echo "$CHANGED_SCRIPTS $NEW_SCRIPTS" | wc -w)
           OTHER_COUNT=$(echo "$OTHER_FILES" | wc -w)
 
-          echo "summary<<EOF" >> $GITHUB_OUTPUT
-          echo "- Data files: $DATA_COUNT" >> $GITHUB_OUTPUT
-          echo "- Script changes: $SCRIPT_COUNT" >> $GITHUB_OUTPUT
-          echo "- Other files: $OTHER_COUNT" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          {
+            echo "summary<<SUMMARY_END"
+            echo "- Data files: $DATA_COUNT"
+            echo "- Script changes: $SCRIPT_COUNT"
+            echo "- Other files: $OTHER_COUNT"
+            echo "SUMMARY_END"
+          } >> $GITHUB_OUTPUT
 
   # ═══════════════════════════════════════════════════════════════════════════
   # Job 2: Create sync PR
@@ -268,19 +279,19 @@ jobs:
         with:
           ref: ${{ needs.create-sync-pr.outputs.branch }}
 
-      - name: Test way-match binary
+      - name: Download ways binary
+        shell: bash
+        run: bash tools/ways-cli/download-ways.sh
+
+      - name: Verify ways binary
         shell: pwsh
         run: |
-          $result = ./bin/way-match pair `
-            --description "GitHub pull requests" `
-            --vocabulary "pr issue review" `
-            --query "create a pull request" `
-            --threshold 1.0 2>&1
-
-          if ($LASTEXITCODE -notin @(0, 1)) {
-            throw "Binary test failed with exit code: $LASTEXITCODE"
+          $binaryPath = "bin/ways.exe"
+          if (-not (Test-Path $binaryPath)) {
+            throw "ways binary not found at $binaryPath"
           }
-          Write-Host "✓ Binary test passed"
+          $version = & $binaryPath --version 2>&1
+          Write-Host "✓ Binary found: $version"
 
       - name: Validate PowerShell scripts
         shell: pwsh

@@ -22,33 +22,20 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Verify way-match binary exists
+      - name: Download ways binary
+        shell: bash
+        run: bash tools/ways-cli/download-ways.sh
+
+      - name: Verify ways binary
         shell: pwsh
         run: |
-          $binaryPath = "bin/way-match"
+          $binaryPath = "bin/ways.exe"
           if (-not (Test-Path $binaryPath)) {
-            Write-Error "way-match binary not found at $binaryPath"
+            Write-Error "ways binary not found at $binaryPath"
             exit 1
           }
-          Write-Host "Binary found at $binaryPath"
-
-      - name: Test way-match binary execution
-        shell: pwsh
-        continue-on-error: true
-        run: |
-          # APE (Cosmopolitan) binary may not run on all CI environments
-          $result = ./bin/way-match pair `
-            --description "test description" `
-            --vocabulary "test vocab" `
-            --query "test query" `
-            --threshold 0.1 2>&1
-
-          if ($LASTEXITCODE -notin @(0, 1)) {
-            Write-Warning "Binary execution failed (exit code: $LASTEXITCODE) - this is expected on some CI runners"
-            Write-Warning "The way-match binary uses Cosmopolitan (APE) which may not work in GitHub Actions"
-          } else {
-            Write-Host "Binary execution successful (exit code: $LASTEXITCODE)"
-          }
+          $version = & $binaryPath --version 2>&1
+          Write-Host "Binary found: $version"
 
       - name: Validate settings.windows.json
         shell: pwsh
