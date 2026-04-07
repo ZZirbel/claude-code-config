@@ -353,12 +353,22 @@ function Update-ClaudeConfig {
     }
     if (Test-Path $waysBin) {
         Write-Host "  Regenerating ways corpus..." -ForegroundColor DarkGray
-        & $waysBin corpus
-        if ($LASTEXITCODE -eq 0) {
-            Write-Host "  Ways corpus ready." -ForegroundColor Green
-        } else {
-            Write-Host "  Ways corpus generation failed (exit $LASTEXITCODE)." -ForegroundColor Red
-            Write-Host "  Semantic matching will be inactive until resolved." -ForegroundColor Yellow
+        # ways binary uses HOME to locate way files and cache dir.
+        # Set HOME so it works correctly when invoked from PowerShell.
+        $savedHome = $env:HOME
+        $env:HOME = $env:USERPROFILE
+        Push-Location $script:ConfigDir
+        try {
+            & $waysBin corpus
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "  Ways corpus ready." -ForegroundColor Green
+            } else {
+                Write-Host "  Ways corpus generation failed (exit $LASTEXITCODE)." -ForegroundColor Red
+                Write-Host "  Semantic matching will be inactive until resolved." -ForegroundColor Yellow
+            }
+        } finally {
+            Pop-Location
+            $env:HOME = $savedHome
         }
     } else {
         Write-Host "  Ways binary not found." -ForegroundColor Yellow
