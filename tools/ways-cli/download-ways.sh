@@ -13,12 +13,21 @@ set -euo pipefail
 
 # Platform detection
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+case "$OS" in
+  mingw*|msys*|cygwin*) OS="windows" ;;
+esac
 ARCH=$(uname -m | sed 's/arm64/aarch64/')
 PLATFORM="${OS}-${ARCH}"
 
-GH_REPO="aaronsb/claude-code-config"
+GH_REPO="${WAYS_REPO:-ZZirbel/claude-code-config}"
 RELEASE_TAG="${WAYS_RELEASE:-latest}"
-BIN_NAME="ways-${PLATFORM}"
+
+# Windows binary has .exe extension
+if [[ "$OS" == "windows" ]]; then
+  BIN_NAME="ways-${PLATFORM}.exe"
+else
+  BIN_NAME="ways-${PLATFORM}"
+fi
 
 # Default output: repo bin/ directory
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -38,7 +47,7 @@ while [[ $# -gt 0 ]]; do
       echo "  output-dir     Override output directory (default: bin/)"
       echo ""
       echo "Platform: ${PLATFORM}"
-      echo "Available: linux-x86_64, linux-aarch64, darwin-x86_64, darwin-arm64"
+      echo "Available: linux-x86_64, linux-aarch64, darwin-x86_64, darwin-arm64, windows-x86_64"
       exit 0 ;;
     *)
       OUTPUT_DIR="$1"
@@ -46,7 +55,11 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-OUTPUT_FILE="${OUTPUT_DIR}/ways"
+if [[ "$OS" == "windows" ]]; then
+  OUTPUT_FILE="${OUTPUT_DIR}/ways.exe"
+else
+  OUTPUT_FILE="${OUTPUT_DIR}/ways"
+fi
 PLATFORM_FILE="${OUTPUT_DIR}/${BIN_NAME}"
 
 # Check if already present and working
@@ -126,9 +139,13 @@ else
 fi
 
 # Make executable and install
-chmod +x "$PLATFORM_FILE"
+if [[ "$OS" != "windows" ]]; then
+  chmod +x "$PLATFORM_FILE"
+fi
 cp "$PLATFORM_FILE" "$OUTPUT_FILE"
-chmod +x "$OUTPUT_FILE"
+if [[ "$OS" != "windows" ]]; then
+  chmod +x "$OUTPUT_FILE"
+fi
 
 # Verify it runs
 if "$OUTPUT_FILE" --version >/dev/null 2>&1; then
