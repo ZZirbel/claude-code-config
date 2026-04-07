@@ -72,7 +72,7 @@
           },
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"$env:USERPROFILE\\.claude\\bin\\ways\" corpus --if-stale --quiet'"
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"$env:USERPROFILE\\.claude\\bin\\ways\" corpus --quiet'"
           }
         ]
       },

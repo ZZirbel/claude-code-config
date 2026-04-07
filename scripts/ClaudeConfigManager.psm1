@@ -346,6 +346,16 @@ function Update-ClaudeConfig {
     Write-Host "  Regenerating settings.json from template..." -ForegroundColor DarkGray
     New-ClaudeSettings -Force
 
+    # Regenerate ways corpus so semantic matching is current after update
+    $waysBin = Join-Path $script:ConfigDir "bin\ways.exe"
+    if (-not (Test-Path $waysBin)) {
+        $waysBin = Join-Path $script:ConfigDir "bin\ways"
+    }
+    if (Test-Path $waysBin) {
+        Write-Host "  Regenerating ways corpus..." -ForegroundColor DarkGray
+        & $waysBin corpus --quiet 2>&1 | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray }
+    }
+
     Write-Host ""
 }
 

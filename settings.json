@@ -72,7 +72,7 @@
           },
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"C:/Users/zanzi/.claude/bin/ways\" corpus --if-stale --quiet'"
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '& \"C:/Users/zanzi/.claude/bin/ways\" corpus --quiet'"
           }
         ]
       },
