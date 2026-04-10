@@ -225,7 +225,7 @@ jobs:
           Generated: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
           EOF
 
-          git add SYNC_REVIEW_REQUIRED.md
+          git add -f SYNC_REVIEW_REQUIRED.md
           git commit -m "chore: flag scripts requiring PowerShell port" --allow-empty
 
       - name: Push branch
