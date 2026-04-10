@@ -340,7 +340,8 @@ jobs:
     needs: [detect-changes, create-sync-pr, test-windows]
     if: |
       needs.detect-changes.outputs.data_files_only == 'true' &&
-      github.event.inputs.auto_merge != 'false'
+      github.event.inputs.auto_merge != 'false' &&
+      needs.create-sync-pr.outputs.pr_number != ''
     runs-on: ubuntu-latest
 
     steps:
@@ -368,7 +369,7 @@ jobs:
   notify-review:
     name: Request Manual Review
     needs: [detect-changes, create-sync-pr, test-windows]
-    if: needs.detect-changes.outputs.data_files_only == 'false'
+    if: needs.detect-changes.outputs.data_files_only == 'false' && needs.create-sync-pr.outputs.pr_number != ''
     runs-on: ubuntu-latest
 
     steps:
