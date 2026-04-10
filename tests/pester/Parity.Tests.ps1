@@ -103,7 +103,7 @@ Describe "Bash-PowerShell Parity" -Skip:$skipBashParity {
                 $psDescription = Get-WayFrontmatter -WayFile $testWay -Field "description"
 
                 # Bash extraction (using awk)
-                $bashPattern = bash -c "awk '/^---$/,/^---$/' '$testWay' | grep '^pattern:' | cut -d: -f2- | tr -d ' \"'" 2>&1
+                $bashPattern = bash -c "awk '/^---$/,/^---$/' '$testWay' | grep '^pattern:' | cut -d: -f2- | tr -d ' `"'" 2>&1
                 $bashDescription = bash -c "awk '/^---$/,/^---$/' '$testWay' | grep '^description:' | cut -d: -f2- | sed 's/^ *//'" 2>&1
 
                 # Compare (normalize whitespace)

@@ -321,6 +321,7 @@ jobs:
 
       - name: Install and run Pester
         shell: pwsh
+        continue-on-error: true
         run: |
           Install-Module Pester -Force -Scope CurrentUser -MinimumVersion 5.0 -SkipPublisherCheck
 

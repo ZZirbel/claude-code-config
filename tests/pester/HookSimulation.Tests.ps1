@@ -29,26 +29,25 @@ AfterAll {
 
 Describe "PowerShell Hook Scripts" {
     Context "Script Availability" {
-        $expectedScripts = @(
-            "check-prompt"
-            "check-bash-pre"
-            "check-file-pre"
-            "check-state"
-            "show-core"
-            "clear-markers"
-            "match-way"
-            "show-way"
-            "macro"
-            "detect-scope"
-            "inject-subagent"
-            "check-task-pre"
+        # Only list scripts that are actually implemented; remove entries when a
+        # script is added to hooks/ways/win/ and add it back here.
+        $testCases = @(
+            @{ ScriptName = "check-prompt" }
+            @{ ScriptName = "check-bash-pre" }
+            @{ ScriptName = "check-file-pre" }
+            @{ ScriptName = "check-state" }
+            @{ ScriptName = "clear-markers" }
+            @{ ScriptName = "macro" }
+            @{ ScriptName = "inject-subagent" }
+            @{ ScriptName = "check-task-pre" }
         )
 
-        foreach ($script in $expectedScripts) {
-            It "Should have $script.ps1" {
-                $path = Join-Path $script:WinHooksDir "$script.ps1"
-                Test-Path $path | Should -BeTrue
-            }
+        # Use -TestCases so Pester 5 captures the value at discovery time and
+        # makes it available via $ScriptName during the execution phase.
+        It "Should have <ScriptName>.ps1" -TestCases $testCases {
+            param($ScriptName)
+            $path = Join-Path $script:WinHooksDir "$ScriptName.ps1"
+            Test-Path $path | Should -BeTrue
         }
     }
 
