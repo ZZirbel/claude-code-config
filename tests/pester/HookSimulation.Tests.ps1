@@ -17,6 +17,9 @@ $script:WinHooksDir = Get-WinHooksDir
 BeforeAll {
     $script:TempDir = New-TestMarkerDir
     $env:CLAUDE_TEST_TEMP = $script:TempDir
+    # Re-initialize here so $script: scope is available during the execution phase,
+    # not just during Pester discovery (where the file-scope assignment runs).
+    $script:WinHooksDir = Get-WinHooksDir
 }
 
 AfterAll {

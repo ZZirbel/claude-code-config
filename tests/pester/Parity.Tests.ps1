@@ -33,7 +33,8 @@ if (-not $script:BashAvailable) {
     Write-Warning "Bash not available - parity tests will be skipped"
 }
 
-Describe "Bash-PowerShell Parity" -Skip:(-not $script:BashAvailable) {
+$skipBashParity = -not $script:BashAvailable
+Describe "Bash-PowerShell Parity" -Skip:$skipBashParity {
     Context "macro.sh vs macro.ps1" {
         It "Should produce similar ways table structure" {
             $bashScript = Join-Path $script:HooksDir "macro.sh"
