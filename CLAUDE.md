@@ -12,6 +12,11 @@ This approach ensures guidance stays active in the conversation window rather th
 
 See `hooks/ways/core.md` for the base guidance and `hooks/ways/*.md` for contextual instructions.
 
+## Writing Style
+
+- **Never use em dashes (—)** in anything written for me: documents, repo files, HTML, PR titles and bodies, Linear issues, commit messages, and chat replies. Use a comma, colon, parentheses, or a plain hyphen instead. Check every draft for "—" before writing or publishing it, including titles and table cells.
+- Exception: never edit an existing machine identifier that depends on one (for example a CI check name like "Gate 1 — Schema (HARD)").
+
 ## Windows/PC Configuration
 
 This fork includes full Windows PowerShell support. Key files:
